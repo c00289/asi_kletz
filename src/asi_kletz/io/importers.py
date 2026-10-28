@@ -56,8 +56,14 @@ def _require_file(path: str | Path) -> Path:
 
 
 def _collect(
-    summaries: list[dict[str, Any]], path: Path, fmt: str, extra_warnings: list[str] | None = None
+    brain: Brain, summaries: list[dict[str, Any]], path: Path, fmt: str, extra_warnings: list[str] | None = None
 ) -> dict[str, Any]:
+    """The import's result; every entity is loaded and the calculated fields recomputed by now, so a row that
+    carried a calculated value the tool disagrees with is warned about here, once per entity."""
+    for summary in summaries:
+        warning = brain.service(summary["entity"]).calculated_warning(summary)
+        if warning:
+            summary["warnings"].append(warning)
     return {
         "format": fmt,
         "path": str(path),
@@ -84,15 +90,16 @@ class JsonImporter(Importer):
         else:
             raise NotFound(f"{file.name} is not an ASI Kletz dump (no 'entity' or 'entities' key)")
         summaries, warnings = [], []
-        for name, rows in sections.items():
-            if name not in brain.registry:
-                warnings.append(f"skipped unknown entity {name!r}")
-                continue
-            schema = brain.registry.get(name)
-            if wanted and schema.name not in wanted:
-                continue
-            summaries.append(brain.service(schema.name).load_rows(rows, mode, actor))
-        return _collect(summaries, file, self.format, warnings)
+        with brain.schedule.deferred():  # the plan's calculated fields: once, after every entity is in
+            for name, rows in sections.items():
+                if name not in brain.registry:
+                    warnings.append(f"skipped unknown entity {name!r}")
+                    continue
+                schema = brain.registry.get(name)
+                if wanted and schema.name not in wanted:
+                    continue
+                summaries.append(brain.service(schema.name).load_rows(rows, mode, actor))
+        return _collect(brain, summaries, file, self.format, warnings)
 
 
 def normalise_header(value: Any) -> str:
@@ -128,26 +135,27 @@ class ExcelImporter(Importer):
             by_name = {normalise_header(ws.title): ws for ws in wb.worksheets}
             schemas = [brain.registry.get(e) for e in entities] if entities else list(brain.registry)
             summaries, warnings = [], []
-            for schema in schemas:
-                ws = by_name.get(normalise_header(schema.sheet))
-                if ws is None:
-                    warnings.append(f"{schema.name}: sheet {schema.sheet!r} not found in workbook")
-                    continue
-                rows_iter = ws.iter_rows(values_only=True)
-                headers = list(next(rows_iter, ()))
-                mapping, unmapped = map_columns(schema, headers)
-                if not mapping:
-                    warnings.append(f"{schema.name}: no recognised headers on sheet {schema.sheet!r}")
-                    continue
-                if unmapped:
-                    warnings.append(f"{schema.name}: ignored column(s) {', '.join(unmapped)}")
-                rows: list[dict[str, Any]] = []
-                for raw in rows_iter:
-                    record = {name: (raw[idx] if idx < len(raw) else None) for name, idx in mapping.items()}
-                    if all(v is None or (isinstance(v, str) and not v.strip()) for v in record.values()):
+            with brain.schedule.deferred():  # the plan's calculated fields: once, after every sheet is in
+                for schema in schemas:
+                    ws = by_name.get(normalise_header(schema.sheet))
+                    if ws is None:
+                        warnings.append(f"{schema.name}: sheet {schema.sheet!r} not found in workbook")
                         continue
-                    rows.append(record)
-                summaries.append(brain.service(schema.name).load_rows(rows, mode, actor))
+                    rows_iter = ws.iter_rows(values_only=True)
+                    headers = list(next(rows_iter, ()))
+                    mapping, unmapped = map_columns(schema, headers)
+                    if not mapping:
+                        warnings.append(f"{schema.name}: no recognised headers on sheet {schema.sheet!r}")
+                        continue
+                    if unmapped:
+                        warnings.append(f"{schema.name}: ignored column(s) {', '.join(unmapped)}")
+                    rows: list[dict[str, Any]] = []
+                    for raw in rows_iter:
+                        record = {name: (raw[idx] if idx < len(raw) else None) for name, idx in mapping.items()}
+                        if all(v is None or (isinstance(v, str) and not v.strip()) for v in record.values()):
+                            continue
+                        rows.append(record)
+                    summaries.append(brain.service(schema.name).load_rows(rows, mode, actor))
         finally:
             wb.close()
-        return _collect(summaries, file, self.format, warnings)
+        return _collect(brain, summaries, file, self.format, warnings)

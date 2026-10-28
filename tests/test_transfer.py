@@ -181,3 +181,58 @@ def test_source_workbook_columns_match_the_schema():
         headers.pop()
     assert headers == [f.header for f in default_registry.get(PLAN).source_fields]
     assert len(headers) == 63
+
+
+def test_the_files_carry_points_and_the_import_recalculates_sprint_and_deadline(seeded, tmp_path):
+    """0.11.0: points and defaults travel; sprint and deadline are the tool's, warned about once when a file
+    disagrees; a Done row keeps the file's deadline as history."""
+    from tests.conftest import SEED_WEIGHTS
+
+    assert seeded.execute("create", entity="sprint", data={
+        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-10", "status": "Active",
+    }).ok
+    assert seeded.execute("plan", action="weights", what="load", file=str(SEED_WEIGHTS)).ok
+    assert seeded.execute("update", entity=PLAN, id=2, set=["points=4"]).ok
+    rows = seeded.execute("list", entity=PLAN).data
+    assert [(r["points"], r["default_points"], r["sprint"], r["deadline"]) for r in rows] == [
+        (None, 5, None, "Phase 1 exit"), (4, 3, 2, "2026-11-10"), (None, 2, 2, "2026-11-10"),
+    ]
+    dump = tmp_path / "plan.json"
+    assert seeded.execute("dump", entity=PLAN, out=str(dump)).ok
+    dumped = json.loads(dump.read_text(encoding="utf-8"))["rows"]
+    assert all(k in dumped[0] for k in ("points", "default_points", "sprint", "deadline"))  # JSON carries everything
+    assert dumped[1]["sprint"] == 2 and dumped[1]["deadline"] == "2026-11-10"
+    workbook = seeded.execute("export", format="excel", out=str(tmp_path / "plan.xlsx")).data["path"]
+    ws = load_workbook(workbook)["Safety Plan"]
+    assert [ws.cell(row=3, column=c).value for c in (5, 6, 7, 65)] == [4, 3, 2, "2026-11-10"]  # a TEXT field
+    assert ws.cell(row=2, column=65).value == "Phase 1 exit"  # the Done row's history, in the deadline column
+
+    with Brain(tmp_path / "fresh.db") as other:
+        # the workbook brings its Sprints sheet: the chain arrives with the plan, the recompute runs once after
+        # every sheet, and the file's sprint and deadline agree with it, so nothing is warned about
+        result = other.execute("import", format="excel", path=workbook, mode="replace")
+        assert result.ok, result.errors
+        assert result.warnings == []
+        rows = other.execute("list", entity=PLAN).data
+        assert [(r["points"], r["default_points"], r["sprint"], r["deadline"]) for r in rows] == [
+            (None, 5, None, "Phase 1 exit"), (4, 3, 2, "2026-11-10"), (None, 2, 2, "2026-11-10"),
+        ]
+        # a dump whose rows carry another sprint and deadline: warned about once, the calculated values stay
+        for row in dumped[1:]:
+            row["sprint"], row["deadline"] = 99, "2099-01-01"
+        dumped[0]["deadline"] = "Phase 1 exit (revised)"  # a Done row's deadline is history: taken as is
+        forged = tmp_path / "forged.json"
+        forged.write_text(json.dumps({"entity": PLAN, "rows": dumped}), encoding="utf-8")
+        again = other.execute("load", path=str(forged), mode="merge")
+        assert again.ok and again.warnings == [
+            f"{PLAN}: 2 row(s) carried a sprint or deadline that differs from the calculated value; "
+            "the file's values were ignored"
+        ]
+        rows = other.execute("list", entity=PLAN).data
+        assert [(r["sprint"], r["deadline"]) for r in rows] == [
+            (None, "Phase 1 exit (revised)"), (2, "2026-11-10"), (2, "2026-11-10"),
+        ]
+        same = other.execute("load", path=str(dump), mode="merge")  # the original dump agrees: no warning
+        assert same.ok and same.warnings == []
+        with_sheet = other.execute("import", format="excel", path=workbook, mode="merge", entity=PLAN)
+        assert with_sheet.ok and with_sheet.warnings == []  # one sheet of the same workbook: still agrees

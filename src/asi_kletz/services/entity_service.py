@@ -154,6 +154,10 @@ class EntityService:
         stored one, which is how a sibling's cached rows take this tool's uids); otherwise the row is
         inserted keeping the file's uid when present (every mode) and the file's id in merge mode. A row
         without a uid (a 0.8.x file) keeps the stored uid on an update and gets a fresh one on an insert.
+        A calculated field (the plan's ``sprint`` and ``deadline``, 0.11.0) is never taken from the file on a
+        row that is not Done: the tool recomputes it after the load (the ``after`` hook) and the importer
+        warns once, through ``calculated_warning``, when the file's values differed; a Done row keeps the
+        file's values, they are history.
         Rows are validated one by one; a bad row is reported and skipped, never fatal.
         """
         if mode not in LOAD_MODES:
@@ -179,9 +183,12 @@ class EntityService:
                     summary["skipped"] += 1
                     continue
                 summary["warnings"].extend(f"row {index}: {w}" for w in warnings)
-                ignored = {s.name: clean.pop(s.name) for s in calculated if clean.get(s.name) not in (None, "")}
-                for spec in calculated:
-                    clean.pop(spec.name, None)
+                if calculated and clean.get("status") == "Done":
+                    ignored = {}  # the past keeps what the file says (a free-text deadline is history)
+                else:
+                    ignored = {s.name: clean.pop(s.name) for s in calculated if clean.get(s.name) not in (None, "")}
+                    for spec in calculated:
+                        clean.pop(spec.name, None)
                 row_id = raw.get("id")
                 uid = clean.get(UID) if has_uid else None
                 by_uid = self.repo.get_by_uid(uid) if uid else None
@@ -203,23 +210,28 @@ class EntityService:
                     summary["inserted"] += 1
                 if ignored:
                     carried.append((written, ignored))
-            if self.after is not None:
-                self.after("load", None)  # the recompute, so the file's calculated values can be compared
-            if carried:
-                differing = 0
-                for written, ignored in carried:
-                    row = self.repo.get(written) or {}
-                    if any(str(row.get(k) or "") != str(v) for k, v in ignored.items()):
-                        differing += 1
-                if differing:
-                    names = " or ".join(s.name for s in calculated)
-                    summary["warnings"].append(
-                        f"{differing} row(s) carried a {names} that differs from the calculated value; "
-                        "the file's values were ignored"
-                    )
+            summary["ignored"] = carried  # the importer compares them once every entity is loaded and recomputed
             self.storage.audit(
                 actor, f"load:{mode}", self.schema.name, None,
                 {k: summary[k] for k in ("inserted", "updated", "deleted", "skipped")},
             )
         self.events.publish("entity.loaded", entity=self.schema.name, actor=actor, summary=summary)
+        if self.after is not None:
+            self.after("load", None)
         return summary
+
+    def calculated_warning(self, summary: dict[str, Any]) -> str | None:
+        """After the load and its recompute: one line when rows carried a calculated value that differs from
+        the stored (calculated) one, or ``None``."""
+        differing = 0
+        for written, ignored in summary.get("ignored", ()):
+            row = self.repo.get(written) or {}
+            if any(str(row.get(k) or "") != str(v) for k, v in ignored.items()):
+                differing += 1
+        if not differing:
+            return None
+        names = " or ".join(s.name for s in self.schema.calculated_fields)
+        return (
+            f"{differing} row(s) carried a {names} that differs from the calculated value; "
+            "the file's values were ignored"
+        )
