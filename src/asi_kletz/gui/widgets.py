@@ -117,6 +117,75 @@ class UrlWidget(EntryWidget):
             webbrowser.open(url)
 
 
+class ReadOnlyWidget(EntryWidget):
+    """An entry in state ``readonly``: a calculated field or a loader's, shown so it can be selected and
+    copied, never typed into; the form never sends it (``EntityScreen.form_data``)."""
+
+    def build(self) -> None:
+        if self.spec.type is FieldType.INT:
+            self.options.setdefault("width", 10)
+        super().build()
+        self.entry.configure(state="readonly")
+
+
+PLACEHOLDER_COLOUR = "grey55"
+
+
+class PointsWidget(EntryWidget):
+    """The Points entry (owner, 2026-10-28): the row's default greyed as a placeholder while empty; the moment the
+    typed value differs from the default a caption beside it says ``default 3``; clearing the entry returns to
+    the default (``get()`` is ``None``). ``set_default`` hands it the row's default before ``set``."""
+
+    def build(self) -> None:
+        self.options.setdefault("width", 10)
+        super().build()
+        self.default: int | None = None
+        self.showing_placeholder = False
+        self.caption_var = tk.StringVar()
+        self.caption = ttk.Label(self, textvariable=self.caption_var, style="Muted.TLabel")
+        self.caption.pack(side="left", padx=(6, 0))
+        self.entry.bind("<FocusIn>", lambda e: self._hide_placeholder(), add="+")
+        self.entry.bind("<FocusOut>", lambda e: self._show_placeholder_if_empty(), add="+")
+        self.var.trace_add("write", lambda *_: self._refresh_caption())
+
+    def set_default(self, value: Any) -> None:
+        """The number the placeholder and the caption name; ``None`` when there is none."""
+        self.default = int(value) if value not in (None, "") else None
+        self._show_placeholder_if_empty()
+        self._refresh_caption()
+
+    def _show_placeholder_if_empty(self) -> None:
+        if self.default is not None and not self.showing_placeholder and not self.var.get().strip():
+            self.showing_placeholder = True
+            self.var.set(str(self.default))
+            self.entry.configure(foreground=PLACEHOLDER_COLOUR)
+
+    def _hide_placeholder(self) -> None:
+        if self.showing_placeholder:
+            self.showing_placeholder = False
+            self.var.set("")
+            self.entry.configure(foreground="")
+
+    def get(self) -> Any:
+        if self.showing_placeholder:
+            return None
+        text = self.var.get().strip()
+        return text or None
+
+    def set(self, value: Any) -> None:
+        self._hide_placeholder()
+        self.var.set("" if value is None else str(value))
+        self._show_placeholder_if_empty()
+        self._refresh_caption()
+
+    def _refresh_caption(self) -> None:
+        typed = self.get()
+        if self.default is not None and typed is not None and typed != str(self.default):
+            self.caption_var.set(f"default {self.default}")
+        else:
+            self.caption_var.set("")
+
+
 class EnumWidget(FieldWidget):
     def build(self) -> None:
         self.var = tk.StringVar()
@@ -159,6 +228,10 @@ class WidgetFactory:
     def create(self, master: tk.Misc, spec: FieldSpec, **options: Any) -> FieldWidget:
         if spec.hidden:  # a hidden field (the uid) has no widget: the form skips it, a caller asking for one is wrong
             raise ValueError(f"field {spec.name!r} is hidden and has no widget")
+        if spec.calculated or spec.readonly:  # shown, copyable, never typed into
+            return ReadOnlyWidget(master, spec, self.lookups, **options)
+        if spec.default_from:  # the Points entry: the default as a placeholder, a caption when the value differs
+            return PointsWidget(master, spec, self.lookups, **options)
         if spec.type is FieldType.INT:
             options.setdefault("width", 10)
         return self._registry[spec.type](master, spec, self.lookups, **options)

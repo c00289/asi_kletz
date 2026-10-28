@@ -1898,3 +1898,55 @@ def test_holidays_screen_lists_the_loaded_rows_without_a_frozen_column(window, s
     assert screen.form_box.cget("text") == "Holiday details · row 1" and screen.widgets["status"].get() == "assumed"
     assert set(screen.widgets) == {"date", "name", "status", "note"}
     assert window.status_text() == "Holiday 1 selected"
+
+
+# -- points on the Safety Plan form (0.11.0): the default as a placeholder, a caption, read-only calculated fields
+
+
+def test_points_entry_shows_the_default_and_names_it_when_the_value_differs(window, seeded):
+    from asi_kletz.gui.widgets import PLACEHOLDER_COLOUR, PointsWidget, ReadOnlyWidget
+    from tests.conftest import SEED_WEIGHTS
+
+    assert seeded.execute("create", entity="sprint", data={
+        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-10", "status": "Active",
+    }).ok
+    screen = window.show("safety_plan")
+    points = screen.widgets["points"]
+    assert isinstance(points, PointsWidget)
+    for name in ("default_points", "sprint", "deadline"):
+        widget = screen.widgets[name]
+        assert isinstance(widget, ReadOnlyWidget) and str(widget.entry.cget("state")) == "readonly"
+    assert screen.columns[2:6] == ["deliverable", "points", "default_points", "sprint"]  # the table shows all four
+    screen.select(2)
+    # no default yet: the floor (2) greyed as the placeholder; nothing is sent
+    assert points.showing_placeholder and points.entry.get() == "2" and points.get() is None
+    assert str(points.entry.cget("foreground")) == PLACEHOLDER_COLOUR and points.caption_var.get() == ""
+    assert screen.widgets["sprint"].get() == "2" and screen.widgets["deadline"].get() == "2026-11-10"
+    assert "points" in screen.form_data() and not {"default_points", "sprint", "deadline"} & set(screen.form_data())
+    # the panel's default arrives: the placeholder names it
+    assert seeded.execute("plan", action="weights", what="load", file=str(SEED_WEIGHTS)).ok
+    screen.refresh()
+    screen.select(2)
+    assert points.showing_placeholder and points.entry.get() == "3" and screen.widgets["default_points"].get() == "3"
+    # typing a different number: the caption says what the default is; the default itself shows no caption
+    points.set("5")
+    assert not points.showing_placeholder and points.get() == "5" and points.caption_var.get() == "default 3"
+    assert str(points.entry.cget("foreground")) != PLACEHOLDER_COLOUR
+    points.set("3")
+    assert points.caption_var.get() == "" and points.get() == "3"
+    points.set("7")
+    screen.save()
+    assert seeded.execute("get", entity=PLAN, id=2).data["points"] == 7
+    assert screen.widgets["deadline"].get() == "2026-11-10" and points.caption_var.get() == "default 3"
+    # clearing returns to the default: the placeholder is back and the save stores None
+    points.set("")
+    assert points.showing_placeholder and points.entry.get() == "3" and points.get() is None
+    screen.save()
+    assert seeded.execute("get", entity=PLAN, id=2).data["points"] is None
+    # a new row shows the floor as its placeholder
+    screen.new()
+    assert points.showing_placeholder and points.entry.get() == "2" and points.get() is None
+    # the Matrix is unchanged: flags only
+    matrix = window.show("safety_plan_matrix")
+    flag_prefixes = ("loc", "ref", "author", "verify", "reviewer")
+    assert all(c == "plan" or c.split("_")[0] in flag_prefixes for c in matrix.tree["columns"])

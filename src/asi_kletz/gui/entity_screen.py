@@ -24,7 +24,7 @@ from .screens import (
     stack,
     style_group_rows,
 )
-from .widgets import FieldWidget, WidgetFactory
+from .widgets import FieldWidget, PointsWidget, WidgetFactory
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
@@ -329,9 +329,19 @@ class EntityScreen(Screen):
             return
         self.selected_id = row_id
         self.form_box.configure(text=self.details_title(row_id))
+        self._hand_defaults(row)
         for name, widget in self.widgets.items():
             widget.set(row.get(name))
         self.window.set_status(f"{self.schema.label} {row_id} selected")
+
+    def _hand_defaults(self, row: dict[str, Any] | None) -> None:
+        """A field with ``default_from`` (points) shows that field's value as its placeholder: the row's default,
+        else the floor from kletz.toml (``Brain.default_points``)."""
+        for name, widget in self.widgets.items():
+            spec = self.schema.field(name)
+            if spec.default_from and isinstance(widget, PointsWidget):
+                value = (row or {}).get(spec.default_from)
+                widget.set_default(value if value not in (None, "") else self.brain.default_points)
 
     def form_data(self) -> dict[str, Any]:
         """What Save sends: the editable fields only (a calculated field or a loader's is shown, never sent)."""
@@ -343,6 +353,7 @@ class EntityScreen(Screen):
         self.selected_id = None
         self.form_box.configure(text=self.details_title(None))
         self.tree.selection_remove(*self.tree.selection())
+        self._hand_defaults(None)
         for widget in self.widgets.values():
             widget.clear()
         if self.widgets:
