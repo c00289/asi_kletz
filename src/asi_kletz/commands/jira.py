@@ -20,10 +20,11 @@ class JiraCommand(Command):
     verb = "jira"
     help = (
         "Jira through asi_hopper, read only: live <jql> fetch for the JIRA Live Data window, "
-        "comments <key> for its comments view."
+        "comments <key> for its comments view, login to sign in to Atlassian in the browser (clears the stored "
+        "session first)."
     )
     arguments = (
-        Argument("action", "live | comments", required=True, choices=("live", "comments")),
+        Argument("action", "live | comments | login", required=True, choices=("live", "comments", "login")),
         Argument("key", "Issue key for `comments`, e.g. HWL-2572"),
         Argument("jql", f"JQL for `live` (default: jira_live_jql in kletz.toml, else: {LIVE_JQL})", flag=True),
         Argument("limit", "For `live`: most issues to fetch (default 2000)", flag=True, type="int", default=LIVE_LIMIT),
@@ -32,6 +33,8 @@ class JiraCommand(Command):
     def run(self, ctx: Context, args: dict[str, Any]) -> Result:
         if args["action"] == "comments":
             return Result.success(ctx.brain.jira.comments(args.get("key")))
+        if args["action"] == "login":
+            return Result.success(ctx.brain.jira.login())
         limit = args.get("limit")
         limit = LIVE_LIMIT if limit is None else int(limit)  # 0 is a value, not an absence
         data = ctx.brain.jira.live(args.get("jql"), limit)

@@ -703,12 +703,14 @@ class FakeRun:
 
     def __init__(self, window) -> None:
         self.window = window
-        self.calls: dict[str, int] = {"live": 0, "comments": 0}
+        self.calls: dict[str, int] = {"live": 0, "comments": 0, "login": 0}
         self.args: list[dict] = []
         self.threads: list[threading.Thread] = []
         self.started = threading.Event()
         self.gate: threading.Event | None = None
         self.failure: str | None = None
+        self.live_failures: list[str] = []  # one failure per `live` call, consumed in order, then SAMPLE
+        self.login_failure: str | None = None
         self.comments: dict = COMMENTS
 
     def __call__(self, verb, **args) -> Result:
@@ -722,7 +724,13 @@ class FakeRun:
             assert self.gate.wait(5.0), "the test never opened the gate"
         if self.failure:
             return Result.failure(self.failure, verb=verb)
+        if args["action"] == "login":
+            if self.login_failure:
+                return Result.failure(self.login_failure, verb=verb)
+            return Result.success({"signed_in": True, "account": {"display_name": "Roy Mendoza"}}, verb=verb)
         if args["action"] == "live":
+            if self.live_failures:
+                return Result.failure(self.live_failures.pop(0), verb=verb)
             return Result.success(SAMPLE, verb=verb)
         return Result.success(self.comments, verb=verb)
 
@@ -772,7 +780,7 @@ def _callback_errors(window, monkeypatch) -> list:
 def test_live_screen_does_not_connect_on_first_show(window, live, seeded):
     assert "jira_live_autofetch" not in seeded.config  # the default is in play, not a key
     screen = window.show("jira_live")
-    assert live.calls == {"live": 0, "comments": 0} and window.jira_live is None and not screen.fetching
+    assert live.calls == {"live": 0, "comments": 0, "login": 0} and window.jira_live is None and not screen.fetching
     assert screen.status_var.get() == "No fetch yet · press Refresh" and _keys(screen) == []
     assert "disabled" not in screen.refresh_button.state() and screen.count_var.get() == "0 of 0 issues"
     window.show("dashboard")
@@ -792,7 +800,7 @@ def test_live_screen_fetches_once_on_first_show_when_autofetch_is_on(window, liv
     monkeypatch.setitem(seeded.config, "jira_live_autofetch", True)
     screen = window.show("jira_live")
     assert screen.wait_fetch().ok  # the fetch started on show; a fast worker may be applied already
-    assert live.calls == {"live": 1, "comments": 0} and live.args[0] == {"action": "live"}
+    assert live.calls == {"live": 1, "comments": 0, "login": 0} and live.args[0] == {"action": "live"}
     assert window.jira_live.data is SAMPLE and len(_keys(screen)) == 5
     assert re.match(r"^5 issues · fetched \d\d:\d\d · project = HWL", screen.status_var.get())
     assert screen.count_var.get() == "5 of 5 issues" and window.status_text() == "Jira: 5 issues fetched"
@@ -805,13 +813,68 @@ def test_live_screen_fetches_once_on_first_show_when_autofetch_is_on(window, liv
 def test_live_screen_refresh_and_a_failure_after_a_success(window, live):
     screen = _fetched(window)
     assert live.calls["live"] == 1 and len(_keys(screen)) == 5
-    live.failure = NO_SESSION
+    live.failure = "Jira read failed: boom"  # a rejected session would sign in instead (0.11.1)
     assert screen.fetch()
     result = screen.wait_fetch()
-    assert not result.ok and live.calls["live"] == 2
+    assert not result.ok and live.calls["live"] == 2 and live.calls["login"] == 0
     assert len(_keys(screen)) == 5 and window.jira_live.ok  # the old rows stay
-    assert window.status_text().startswith("Error: no Atlassian session")
+    assert window.status_text().startswith("Error: Jira read failed")
     assert re.match(r"^5 issues · fetched", screen.status_var.get())  # the label describes the rows shown
+
+
+def test_refresh_on_a_rejected_session_signs_in_then_fetches(window, live):
+    """Owner, 2026-10-28: Refresh runs the sign-in itself (the browser opens) instead of asking for a command."""
+    screen = window.show("jira_live")
+    live.live_failures = [NO_SESSION]
+    assert screen.fetch()
+    result = screen.wait_fetch()
+    assert result is not None and result.ok and len(_keys(screen)) == len(SAMPLE["issues"])
+    assert live.calls == {"live": 2, "comments": 0, "login": 1}
+    assert [a["action"] for a in live.args] == ["live", "login", "live"]
+    assert all(t is not threading.main_thread() for t in live.threads)  # the sign-in ran off the Tk thread too
+    assert window.jira_live is result and not screen._login_tried
+    assert str(screen.refresh_button.state()) == "()" or "disabled" not in screen.refresh_button.state()
+
+
+def test_refresh_sign_in_failure_shows_the_reason_and_offers_refresh(window, live):
+    screen = window.show("jira_live")
+    live.live_failures = [NO_SESSION]
+    live.login_failure = "Sign-in failed: the browser was closed"
+    assert screen.fetch()
+    screen.wait_fetch()
+    assert live.calls == {"live": 1, "comments": 0, "login": 1}
+    assert screen.status_var.get() == "Sign-in failed: the browser was closed · press Refresh"
+    assert window.status_text().startswith("Error: Sign-in failed")
+    assert window.jira_live is None and "disabled" not in screen.refresh_button.state()
+    # the next Refresh may sign in again: one sign-in per Refresh, not per session
+    live.live_failures = [NO_SESSION]
+    live.login_failure = None
+    assert screen.fetch() and screen.wait_fetch().ok and live.calls["login"] == 2
+
+
+def test_a_second_rejection_in_the_same_refresh_is_offline_not_a_loop(window, live):
+    screen = window.show("jira_live")
+    live.live_failures = [NO_SESSION, NO_SESSION]
+    assert screen.fetch()
+    result = screen.wait_fetch()
+    assert result is not None and not result.ok and live.calls == {"live": 2, "comments": 0, "login": 1}
+    assert screen.status_var.get().startswith("Offline: no Atlassian session")
+
+
+def test_the_first_show_fetch_never_signs_in(seeded, monkeypatch):
+    """The opt-in first-show fetch is not a person pressing Refresh: a rejected session is reported, no browser."""
+    monkeypatch.setitem(seeded.config, "jira_live_autofetch", True)
+    win = _themes_window(seeded)
+    try:
+        fake = FakeRun(win)
+        fake.live_failures = [NO_SESSION]
+        monkeypatch.setattr(win, "execute_quiet", fake)
+        screen = win.show("jira_live")
+        assert not screen.wait_fetch().ok
+        assert fake.calls == {"live": 1, "comments": 0, "login": 0}
+        assert screen.status_var.get().startswith("Offline: no Atlassian session")
+    finally:
+        win.close()
 
 
 def test_live_screen_first_fetch_fails_offline(seeded, monkeypatch):

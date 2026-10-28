@@ -113,6 +113,7 @@ class BackgroundFetch:
 
     def __init__(self, window: MainWindow, verb: str, **args: Any) -> None:
         self.verb = verb
+        self.args = dict(args)
         self.result: Result | None = None
         self.thread = threading.Thread(
             target=self._run, args=(window, args), daemon=True, name=f"asi-kletz {verb} {args.get('action', '')}"
@@ -146,6 +147,8 @@ class JiraLiveScreen(Screen):
         # the fetch in flight, its poll and the last Result applied (None between fetches / before any)
         self._fetch: BackgroundFetch | None = None
         self._poll_job: str | None = None
+        self._user_fetch = False  # the fetch in flight was asked for by a person (Refresh), not the first show
+        self._login_tried = False  # one sign-in per Refresh: a second rejection shows Offline
         self.last_fetch: Result | None = None
 
         toolbar = ttk.Frame(self)
@@ -226,20 +229,35 @@ class JiraLiveScreen(Screen):
     def fetching(self) -> bool:
         return self._fetch is not None
 
-    def fetch(self) -> bool:
+    def fetch(self, *, user: bool = True, after_login: bool = False) -> bool:
         """The Refresh button: start one ``jira live`` on a worker thread. ``False`` when one already runs.
 
         The Result is applied by ``_apply`` on the Tk thread once the poll sees it; the button is
-        disabled meanwhile, and a second call (F5, a stray click) is ignored, not queued.
+        disabled meanwhile, and a second call (F5, a stray click) is ignored, not queued. ``user``
+        says a person pressed Refresh: only then may a rejected session turn into a sign-in
+        (``_sign_in``); the opt-in first-show fetch never opens a browser.
         """
         if self._fetch is not None:
             return False
+        self._user_fetch = user
+        if not after_login:
+            self._login_tried = False  # one sign-in per Refresh a person presses
         self._fetch = BackgroundFetch(self.window, "jira", action="live").start()
         self.status_var.set(f"Fetching Jira … up to {LIVE_LIMIT} issues, this can take a minute")
         self.window.set_status("Fetching Jira …")
         self.refresh_button.state(["disabled"])
         self._poll()
         return True
+
+    def _sign_in(self) -> None:
+        """A Refresh met a rejected session: run ``jira login`` on the worker (the browser opens for the
+        approval), then fetch again. Once per Refresh: a second rejection shows Offline as before."""
+        self._login_tried = True
+        self._fetch = BackgroundFetch(self.window, "jira", action="login").start()
+        self.status_var.set("Signing in to Atlassian … approve in the browser, the fetch follows")
+        self.window.set_status("Signing in to Atlassian …")
+        self.refresh_button.state(["disabled"])
+        self._poll()
 
     def _poll(self) -> None:
         self._poll_job = None
@@ -250,10 +268,37 @@ class JiraLiveScreen(Screen):
             self._poll_job = self.after(POLL_MS, self._poll)
             return
         self._fetch = None
+        if fetch.verb == "jira" and fetch.args.get("action") == "login":
+            self._apply_login(fetch.result)  # type: ignore[arg-type]
+            return
         self._apply(fetch.result)  # type: ignore[arg-type]  # `done` means it is set
 
+    def _apply_login(self, result: Result) -> None:
+        """The sign-in's Result, on the Tk thread: signed in means the Refresh goes on; failed means Offline."""
+        if result.ok:
+            account = (result.data or {}).get("account") or {}
+            who = account.get("display_name") or account.get("name") or account.get("account_id") or "Atlassian"
+            self.window.set_status(f"Signed in to Atlassian as {who}; fetching …")
+            self.fetch(user=True, after_login=True)
+            return
+        self.refresh_button.state(["!disabled"])
+        self.window.report_quiet(result)
+        first = result.errors[0] if result.errors else "unknown error"
+        self.status_var.set(f"{first} · press Refresh")
+        self.last_fetch = result  # the Result applied last, for whoever waits on the Refresh
+
     def _apply(self, result: Result) -> None:
-        """A fetched Result, on the Tk thread: a failure after a success keeps the rows."""
+        """A fetched Result, on the Tk thread: a failure after a success keeps the rows.
+
+        A rejected session on a Refresh a person pressed becomes one sign-in (``_sign_in``) and the
+        Result is held back until the fetch after it; the first-show fetch, and a second rejection
+        in the same Refresh, show Offline as before.
+        """
+        if not result.ok and self._user_fetch and not self._login_tried and self._is_rejected(result):
+            self._sign_in()
+            return
+        if result.ok:
+            self._login_tried = False  # a fetch that succeeds ends the Refresh cleanly
         self.refresh_button.state(["!disabled"])
         self.window.report_quiet(result)  # `Error: ...` / `Warning: ...` in the status bar, no dialog
         if result.ok or self.window.jira_live is None:
@@ -262,6 +307,11 @@ class JiraLiveScreen(Screen):
             self.window.set_status(f"Jira: {result.data['count']} issues fetched")
         self.last_fetch = result
         self.refresh()
+
+    @staticmethod
+    def _is_rejected(result: Result) -> bool:
+        """asi_hopper's ``AuthRequired`` text, passed through by the ``jira`` verb as the error."""
+        return any("no Atlassian session" in e for e in result.errors)
 
     def wait_fetch(self, timeout: float = WAIT_FETCH_TIMEOUT) -> Result | None:
         """Test helper: pump the Tk loop until the fetch in flight is applied; the Result applied last."""
@@ -302,7 +352,7 @@ class JiraLiveScreen(Screen):
         """A repaint; the one fetch on first show only when kletz.toml says ``jira_live_autofetch = true``."""
         self.refresh()  # "No fetch yet · press Refresh" until the engineer asks
         if self.window.jira_live is None and self.brain.config.get("jira_live_autofetch", AUTOFETCH_DEFAULT) is True:
-            self.fetch()
+            self.fetch(user=False)  # the opt-in first fetch: a rejected session is reported, never a browser
 
     # -- filters and sorting --------------------------------------------
     def _rebuild_filters(self) -> None:

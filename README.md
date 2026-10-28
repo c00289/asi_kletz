@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.11.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.11.1**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,15 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.11.1
+
+**Refresh signs you in.** When a Refresh on the JIRA Live Data screen meets a rejected Atlassian
+session, the window no longer tells you to run a command: it clears the stale session, runs the
+sign-in itself on the worker thread (the browser opens for your approval), and then fetches. One
+sign-in per Refresh; a second rejection shows Offline as before, and the opt-in first-show fetch
+never opens a browser. The same door on the command line is `asi-kletz jira login`. Needs
+asi_hopper 0.1.5.
 
 ## What is in 0.11.0
 
@@ -530,9 +539,11 @@ returns `{key, summary, url, status, fetched_at, count, comments: [{id, author, 
 updated, body}]}` and publishes nothing. The JQL is `--jql`, else `jira_live_jql` in
 `kletz.toml`, else `project = HWL AND (assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) ORDER BY updated DESC`; the window fetches only on Refresh
 unless `jira_live_autofetch = true`, which makes the first show in a session fetch once (opt-in
-since 0.7.4; it was the default before). A missing Atlassian session is
-reported, never a browser window: the status bar says `Error: no Atlassian session ...; run
-asi-hopper auth login once` and the screen says `Offline` until the next Refresh.
+since 0.7.4; it was the default before). A rejected Atlassian session on a Refresh you pressed
+becomes a sign-in (since 0.11.1): the stored session is cleared, the browser opens for your
+approval, the status line says `Signing in to Atlassian …`, and the fetch follows; one sign-in per
+Refresh, a second rejection says `Offline` until the next Refresh, and the first-show fetch never
+opens a browser. `asi-kletz jira login` does the same from the command line.
 
 Kletz ships no `hopper.toml`: asi_hopper reads `$ASI_HOPPER_CONFIG`, else `./hopper.toml`. The
 recommended setup is one `hopper.toml` in the `asi_hopper` folder, named by `ASI_HOPPER_CONFIG`

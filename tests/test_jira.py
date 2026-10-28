@@ -243,7 +243,7 @@ def test_verb_registration_and_schema(brain):
     signature = next(c for c in brain.execute("schema").data["commands"] if c["verb"] == "jira")
     by_name = {a["name"]: a for a in signature["arguments"]}
     assert list(by_name) == ["action", "key", "jql", "limit"]
-    assert by_name["action"]["choices"] == ["live", "comments"] and by_name["action"]["required"]
+    assert by_name["action"]["choices"] == ["live", "comments", "login"] and by_name["action"]["required"]
     assert by_name["key"]["flag"] is False
     assert by_name["limit"]["type"] == "int" and by_name["limit"]["default"] == LIVE_LIMIT == 2000
     assert by_name["jql"]["flag"] is True and LIVE_JQL in by_name["jql"]["help"]
@@ -296,3 +296,49 @@ def test_comments_newest_first_with_a_stub(brain, monkeypatch):
     _stub(brain, monkeypatch, StubHopper(fail=AuthRequired(LOGIN_HINT)))
     denied = brain.execute("jira", action="comments", key="HWL-9")
     assert not denied.ok and denied.errors[0] == LOGIN_HINT
+
+
+def test_login_clears_the_session_then_signs_in_in_the_browser(brain, monkeypatch):
+    """``jira login``: `auth logout` then `auth login` in one step, through one interactive Hopper."""
+    import asi_hopper
+    from asi_hopper.errors import AuthRequired, GatewayError
+
+    events: list[str] = []
+
+    class _Store:
+        def clear(self) -> None:
+            events.append("clear")
+
+    class _Interactive:
+        def __init__(self, *, fail: Exception | None = None) -> None:
+            self.fail = fail
+
+        def session_store(self):
+            return _Store()
+
+        def whoami(self):
+            events.append("whoami")
+            if self.fail is not None:
+                raise self.fail
+            return {"account_id": "a1", "display_name": "Roy Mendoza"}
+
+        def close(self) -> None:
+            events.append("close")
+
+    made: list[dict] = []
+
+    def hopper(**kwargs):
+        made.append(kwargs)
+        return _Interactive(fail=kwargs.pop("_fail", None))
+
+    monkeypatch.setattr(asi_hopper, "Hopper", hopper)
+    result = brain.execute("jira", action="login")
+    assert result.ok and result.data["signed_in"] is True and result.data["account"]["account_id"] == "a1"
+    assert made == [{"interactive": True}] and events == ["clear", "whoami", "close"]
+
+    monkeypatch.setattr(asi_hopper, "Hopper", lambda **kw: _Interactive(fail=AuthRequired("the browser was closed")))
+    result = brain.execute("jira", action="login")
+    assert not result.ok and result.errors[0] == "Sign-in failed: the browser was closed"
+    monkeypatch.setattr(asi_hopper, "Hopper", lambda **kw: _Interactive(fail=GatewayError("boom")))
+    result = brain.execute("jira", action="login")
+    assert not result.ok and result.errors[0] == "Sign-in failed: boom"

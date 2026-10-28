@@ -130,6 +130,32 @@ class JiraService:
             "fetched_at": _now(), "count": len(items), "comments": items,
         }
 
+    def login(self) -> dict[str, Any]:
+        """Sign in to Atlassian in the browser, once, because a person asked (Refresh on a rejected
+        session, or ``jira login``): the window never connects on its own.
+
+        The stored session is cleared first: a rejected session keeps a stale client registration
+        that the next sign-in would reuse (asi_hopper 0.1.5, `auth status`), so this is `auth logout`
+        then `auth login` in one step. One interactive Hopper opens the consent page and waits for
+        the approval; the caller runs this off the UI thread, as it runs the fetches.
+        """
+        try:
+            from asi_hopper import Hopper
+            from asi_hopper.errors import AuthRequired, HopperError
+        except ImportError:
+            raise CommandError(INSTALL_HINT) from None
+        hopper = Hopper(interactive=True)
+        try:
+            hopper.session_store().clear()
+            account = hopper.whoami()
+        except AuthRequired as exc:
+            raise CommandError(f"Sign-in failed: {exc}") from None
+        except HopperError as exc:
+            raise CommandError(f"Sign-in failed: {exc}") from None
+        finally:
+            hopper.close()
+        return {"signed_in": True, "account": account, "signed_in_at": _now()}
+
     @staticmethod
     def _guard(call: Callable[[], Any]) -> Any:
         """Hopper's errors become command errors: the login hint as is, everything else prefixed."""

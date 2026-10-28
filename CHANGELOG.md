@@ -12,6 +12,33 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.11.1] - 2026-10-28
+
+The owner, 2026-10-28, on the JIRA Live Data screen's "could not connect" (a rejected Atlassian
+session, asi_hopper 0.1.5): "what if the refresh action included running the command so the user
+doesn't have to; if the tool could open the browser window, bonus." Schema version unchanged (5).
+
+### Added
+- **`jira login`** (`services/jira_service.py:JiraService.login`, `commands/jira.py`): clears the
+  stored Atlassian session (a rejected one keeps a stale client registration) and opens one
+  interactive asi_hopper, whose OAuth flow opens the browser and waits for the approval; the
+  account comes back. A failure is `Sign-in failed: <reason>`.
+- **Refresh signs in on a rejected session** (`gui/jira_live_screen.py`): `fetch(user=True)` marks a
+  person's Refresh; when its `jira live` fails with asi_hopper's "no Atlassian session" text,
+  `_sign_in` runs `jira login` on the worker thread (`BackgroundFetch` now keeps its `args`, so the
+  poll tells a login from a fetch), the status line says `Signing in to Atlassian … approve in the
+  browser, the fetch follows`, and `_apply_login` starts the fetch again on success or shows
+  `Sign-in failed: … · press Refresh`. One sign-in per Refresh (`_login_tried`, reset by a fetch
+  that succeeds); the opt-in first-show fetch calls `fetch(user=False)` and never opens a browser,
+  which keeps the family's "never connects on its own" rule.
+
+### Tests
+- `test_login_clears_the_session_then_signs_in_in_the_browser` (service, with a fake interactive
+  Hopper), `test_refresh_on_a_rejected_session_signs_in_then_fetches`,
+  `test_refresh_sign_in_failure_shows_the_reason_and_offers_refresh`,
+  `test_a_second_rejection_in_the_same_refresh_is_offline_not_a_loop`,
+  `test_the_first_show_fetch_never_signs_in`; `FakeRun` answers `login` and can fail `live` per call.
+
 ## [0.11.0] - 2026-10-28
 
 Points on the Safety Plan, and a sprint and a deadline calculated from them: `docs/plan-points-plan.md`,
