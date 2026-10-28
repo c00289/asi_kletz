@@ -12,6 +12,108 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.11.0] - 2026-10-28
+
+Points on the Safety Plan, and a sprint and a deadline calculated from them: `docs/plan-points-plan.md`,
+implemented in four commits, one per phase. The owner, 2026-10-28: "the safety plan row details screen must
+have a space to put in the number of points in a sprint; this means that the expected duration and deadline
+can now be updated with real data, becoming read only: the expected duration and deadline field is now a
+calculated field; another calculated field would be sprint, which tells you which sprint this deadline belongs
+to; when displaying the number of points switch to some default value enforced globally, and if the user adds
+or removes points the GUI tells you there is a default number of points and what that is." Schema version
+4 → 5. The sprint rule (10 business days, 8 points fixed, consecutive sprints) is honoured as in 0.10.0.
+
+### Added
+- **Three fields on `safety_plan_row`, after the deliverable** (`schema/definitions.py`): `points` (INT,
+  `Points`, editable, a positive integer, empty means the default), `default_points` (INT, `Default points`,
+  set by `plan weights load` only), `sprint` (INT, `Sprint`, calculated). `deadline` keeps its name and the
+  owner's header `Expected Duration/Deadline` (the import maps by it) and is calculated: the end date of the
+  sprint in which the deliverable's last point lands. `FieldSpec.calculated`, `readonly`, `source` and
+  `default_from`; `FieldSpec.editable`; `EntitySchema.editable_fields`, `calculated_fields`, `source_fields`.
+  `DEFAULT_POINTS = 2`, the floor; `default_points` in `kletz.toml` overrides it (`Brain.default_points`, in
+  `status`, in `kletz.example.toml`).
+- **The scheduler** (`generate/plan_schedule.py`, pure): `schedule(rows, sprints, items, floor)` walks the
+  plan in plan order over the chain (the Active sprint, else the first Planned, and every later one that is
+  not Closed), each sprint's free capacity being `capacity_of` minus the points of its committed items that
+  are not Carried; weight is `points`, else `default_points`, else the floor; a Done row keeps what it has;
+  Blocked, Alternative and Out-of-Scope get nothing; a deliverable with a sprint item (kind Deliverable,
+  `plan_row`) in sprint n never finishes before n; the weight is poured into successive sprints and the
+  finishing sprint's `end` is the deadline; when the chain runs out the row gets nothing and a warning names
+  it (`row 12 "FTA/FMEA analysis" needs 8 more point(s): the sprint chain ends at Sprint 77; run sprint plan`).
+- **The recompute** (`services/plan_schedule_service.py`): writes `sprint` and `deadline` where they changed,
+  through the repository, one audit entry `schedule` with the count and the warnings, the event
+  `plan.scheduled`; idempotent. It runs through `EntityService.after`, a new hook called once after a
+  committed create, update, delete or `load_rows`, attached by `Brain.service` to the plan, sprint and
+  sprint-item services; `sprint close`, `sprint plan` and `holiday load` run inside
+  `PlanScheduleService.deferred()` and recompute once; `Brain.__init__` recomputes once on open
+  (`migration["scheduled"]`). The recompute's writes fire no hook and a flag refuses re-entry.
+- **The `plan` verb** (`commands/plan.py`): `plan schedule` recomputes and prints the table (id, order,
+  deliverable, points, default, weight, source, sprint, deadline, status, warnings, unscheduled); `plan
+  weights load <file>` sets `default_points` from a JSON list of `{id, order, deliverable, points[, uid]}`,
+  matching by uid when the file has one, else by id, audited once as `weights`, reporting `set`,
+  `unchanged`, `unmatched`, then recomputes.
+- **The panel's record**: `docs/deliverable-points.md`, copied unchanged (three estimators, a fourth
+  deciding; 174 points), and `data/deliverable-points.json`, its machine form (48 rows: id, order,
+  deliverable, points). The README says where the defaults came from and that re-running the panel is a diff
+  against the record.
+- **The form** (`gui/widgets.py`, `gui/entity_screen.py`): `PointsWidget` shows the row's default greyed as
+  a placeholder while empty (the row's `default_points`, else the floor), says `default 3` beside the entry
+  the moment the typed value differs, and returns to the default when cleared (`points = None`);
+  `ReadOnlyWidget` (an entry in state `readonly`, copyable) for Default points, Sprint and Deadline;
+  `form_data` sends the editable fields only; `_hand_defaults` gives the Points entry the row's default on
+  select and the floor on New. The table shows the four columns, fitted as usual; the Matrix is unchanged.
+
+### Changed
+- **`deadline` and `sprint` are refused by hand** (`PlanScheduleService.guard`, the plan service's guard):
+  `update safety_plan_row n --set deadline=... / sprint=...` and a create carrying either answer `deadline
+  and sprint are calculated from points and the sprint chain`; `--set default_points=` answers
+  `default_points is set by plan weights load (the estimation panel's record)`; `points` must be a positive
+  integer, empty clears it.
+- **The files** (`services/entity_service.py:load_rows`): the workbook and the dump carry the four fields;
+  the import takes `points` and `default_points`, strips `sprint` and `deadline` from every row that is not
+  Done, recomputes, and warns once when a file value differed (`2 row(s) carried a sprint or deadline that
+  differs from the calculated value; the file's values were ignored`); a Done row keeps the file's deadline,
+  it is history (the owner's `Phase 1 exit`).
+- **The owner's sheet test** (`test_source_workbook_columns_match_the_schema`) compares the sheet's headers
+  with `source_fields` (the 63 columns of the source sheet: not the uid, not the three new fields) and drops
+  a trailing `uid` header, which the sheet carries since the 0.9.x export wrote it hidden.
+- The document's "Open deliverables without a date" paragraph no longer calls the deadline free text: such a
+  row is one the sprint chain does not reach.
+- The seeded test fixture writes row 1's `Phase 1 exit` through the repository, the way an import does;
+  tests that wrote `deadline` as a free field write `work_product_location` or `gate_reviewer` instead.
+
+### Deviations from the plan, and what the design got wrong once it met the code
+- **A Done row keeps the file's deadline on import.** The brief said the import ignores `sprint` and
+  `deadline` outright; a Done row has no calculated value (the scheduler leaves the past alone), so ignoring
+  the file would erase the owner's `Phase 1 exit` on every import. The import keeps them on Done rows and
+  strips them on the rest.
+- **A create carries every field.** `coerce_row` fills the absent fields with `None` on a create, so a guard
+  that refuses the presence of `deadline` refused every create; the guard refuses a value on a create and a
+  presence on an update.
+- **The committed item's points double count.** A deliverable's own sprint item (kind Deliverable, 4 points
+  in Sprint 3) both pins the deliverable to Sprint 3 and takes 4 of its 8 points, so a 7-point deliverable
+  pinned there finishes in Sprint 4. The brief asked for both rules; the plan's open question 1 records the
+  alternative (subtract the item's points from the deliverable's weight) for the owner's call after the first
+  schedule is read.
+- **The owner's sheet carries the uid column.** The sheet regenerated by 0.9.x has the hidden `uid` last; the
+  source-columns test drops it before comparing.
+- **`form_data` moved into phase 1.** The form sent the calculated values and every save was refused the
+  moment the guard existed; the editable-fields rule (phase 3 of the plan) shipped in the phase 1 commit, the
+  widgets in phase 3.
+- `generate/plan_schedule.py` and `services/plan_schedule_service.py` are the names the plan left open;
+  `EntityService.after` is the hook the recompute needed (the plan allowed either the bus or a hook).
+
+### Tests
+- 285 → 298: the scheduler (plan order, a deliverable spanning two sprints, a committed item pinning
+  the start, Done consuming nothing, the excluded statuses, capacity minus committed points, the chain running
+  out, the weight sources, the chain's start); the recompute after a points change, an item, a close, a plan, a
+  delete, with one audit entry per change and none when nothing moved; the refused `deadline`, `sprint`,
+  `default_points` and non-positive points; `plan weights load` on the seeded fixture (3 set, 45 unmatched, a
+  second load unchanged) and by uid before id; the files (67 headers, points and defaults kept, the one import
+  warning, a Done row's history, the dump carrying everything); the form (placeholder, caption, clearing, the
+  read-only fields, `form_data`, New, the Matrix unchanged); the 0.8.4 fixture opening with the three columns
+  added and a first recompute that writes nothing.
+
 ## [0.10.0] - 2026-10-28
 
 The sprint planner, holidays and the capacity rule: `docs/sprint-planner-plan.md`, implemented in four

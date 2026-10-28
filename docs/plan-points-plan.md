@@ -1,6 +1,6 @@
 # ASI Kletz — Plan: points on the Safety Plan, calculated sprint and deadline
 
-**Status:** Decided 2026-10-28; to be implemented as asi_kletz 0.11.0 (schema version 4 → 5)
+**Status:** Implemented 2026-10-28 (asi_kletz 0.11.0); deviations in the CHANGELOG entry
 **Written:** 2026-10-28
 **Owner:** FuSa engineer
 **Target version:** asi_kletz 0.11.0 (after 0.10.0; three new fields on `safety_plan_row`, one new verb; Kletz
@@ -238,3 +238,5 @@ README.md, CHANGELOG.md, docs/plan.md, pyproject.toml, docs/plan-points-plan.md 
 ## 9. Change log
 
 - 2026-10-28: written, decided.
+- 2026-10-28: implemented as asi_kletz 0.11.0 in four commits (one per phase); every deviation and what the
+  design got wrong once it met the code are in `CHANGELOG.md`, section `[0.11.0]`.

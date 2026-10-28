@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.10.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.11.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,25 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.11.0
+
+**Points on the Safety Plan, and a calculated sprint and deadline** (`docs/plan-points-plan.md`, the owner's
+ask of 2026-10-28; schema version 5). Three fields after the deliverable: **Points** (the weight in sprint
+points, editable, a deliverable may span sprints), **Default points** (the estimation panel's consensus, set
+by `plan weights load data/deliverable-points.json`, see [Where the defaults came from](#where-the-defaults-came-from))
+and **Sprint** (calculated: the sprint in which the deliverable's last point lands); **Expected
+Duration/Deadline** keeps its name and header but is calculated now, the end date of that sprint. The
+scheduler (`generate/plan_schedule.py`, pure) walks the plan in plan order from the Active sprint, pours each
+deliverable's weight (points, else the default, else `default_points` in `kletz.toml`, 2) into successive
+sprints at 8 points each minus the sprint's committed items, never finishes a deliverable before the sprint
+that holds its sprint item, leaves Done rows alone and gives Blocked, Alternative and Out-of-Scope rows
+nothing; when the chain runs out the row has no deadline and the tool says so. The recompute runs after
+every change that can move the answer (a plan row, a sprint, a sprint item, a close, a plan, a holiday load)
+and once on open; `update --set deadline=` or `sprint=` is refused. `plan schedule` prints the table. The
+form's Points entry shows the row's default greyed while empty and says `default 3` the moment the typed
+value differs; Default points, Sprint and Deadline are read-only, copyable. The workbook carries the four
+columns; the import takes points and defaults and recalculates the rest, warning once when a file disagrees.
 
 ## What is in 0.10.0
 
@@ -216,7 +235,12 @@ Everything of 0.1.0 plus diagrams and documents (see Diagrams and documents).
   - **Safety Plan**: sortable, searchable table of every column of the source sheet in source
     order (flags as check-mark columns headed by the source title; a `Columns` box narrows the
     flags to one group; a clicked heading is named in the status bar) with a form below; flag
-    groups rendered as checkbox grids; New / Save / Delete / Duplicate / Refresh. Since 0.9.0 no
+    groups rendered as checkbox grids; New / Save / Delete / Duplicate / Refresh. Since 0.11.0 the
+    table and the form carry **Points** (editable: the row's default greyed as the placeholder while
+    empty, a `default n` caption the moment the value differs, clearing returns to the default),
+    **Default points** (the estimation panel's, read-only), **Sprint** and **Expected
+    Duration/Deadline** (calculated, read-only: where the deliverable's last point lands and that
+    sprint's end). Since 0.9.0 no
     table shows `id`, `order` or the hidden `uid`: the id is in the details frame's title
     (`Safety Plan Row details · row 2`) and the status bar, `order` is a field of the form and the
     default sort. Since 0.7.2 the identity column stays put while the rest scrolls sideways (since
@@ -373,6 +397,19 @@ row id, a Jira issue by key, a Meeting, a Question or Other, with points, target
 status line as last published, status To Do / In Progress / Done / Carried) and a **week** (one row
 per section of a `WEEK OF` block: Note, Outcomes, Issues, Jira; the prose verbatim). Weeks run
 Monday to Sunday.
+
+### Where the defaults came from
+
+The default points per deliverable are the consensus of an estimation panel that ran on 2026-10-28:
+three estimator agents each weighed all 48 deliverables independently (the whole plan, the Phase 2
+tracker and the Sprint 2 commitments in front of them, never each other's answers), a fourth decided
+per row (the median, moved off only for a better-grounded reason, with the reason written down). The
+record is `docs/deliverable-points.md` (every row's three estimates, the consensus and the reason;
+174 points in all, a little under 22 sprints of the FuSa engineer's productive days) and its machine
+form is `data/deliverable-points.json` (`{id, order, deliverable, points}`), which
+`asi-kletz plan weights load data/deliverable-points.json` writes into `default_points`, matching rows
+by uid when the file carries one, else by id. Re-running the panel is a diff against that record, not a
+replacement: a changed consensus is a new row in the record and a new load.
 
 ### Sprints
 
@@ -696,7 +733,9 @@ The export writes a workbook with one sheet per entity (`Safety Plan`, `Sprints`
 `Weekly Status`, `Holidays`). Point `workbook` at a file of its own, never at a workbook that holds
 other sheets you want to keep. `tracker_title`, `tracker_byline`, `tracker_scope`,
 `tracker_jira_scope` (text) and `sprint_days` (an integer, business days) are the Weekly Activity
-Tracker's settings (see Weekly Activity Tracker); all are optional. `sprint_capacity` is no setting
+Tracker's settings (see Weekly Activity Tracker); all are optional. `default_points` (an integer,
+default 2) is the floor a Safety Plan row weighs when it has neither its own points nor the estimation
+panel's default. `sprint_capacity` is no setting
 since 0.10.0: capacity is the rule (8, fixed), and the key, when present, is ignored with a warning
 that `status` reports (`config_warnings`).
 
