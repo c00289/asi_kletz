@@ -5,12 +5,14 @@ Importing this module registers the entities and their lookups with the default 
 Column labels are the exact workbook headers so the Excel export reproduces the familiar sheet
 and the Excel import can read it back. ``ALL_ENTITIES`` lists the registered entities in order:
 the list is the design, not a cap (the one-table rule was retired in 0.8.0 by the tracker plan).
+Since 0.9.0 every entity ends with the hidden ``uid`` (``fields.uid_field``): the trace of a row
+across files and databases, never a column on a screen.
 """
 
 from __future__ import annotations
 
 from .entity import EntitySchema, flag_fields
-from .fields import FieldSpec, FieldType
+from .fields import FieldSpec, FieldType, uid_field
 from .lookups import default_lookups
 from .registry import register_entity
 
@@ -80,6 +82,7 @@ SAFETY_PLAN_ROW = register_entity(EntitySchema(
         FieldSpec("deadline", T, "Expected Duration/Deadline"),
         FieldSpec("status", E, "Status (Pending/ Ongoing/ Blocked/ Alternative/Out-of-Scope/ Done)",
                   lookup="plan_status"),
+        uid_field(),
     ),
 ))
 
@@ -116,6 +119,7 @@ SPRINT = register_entity(EntitySchema(
         FieldSpec("goal", M, "Goal"),
         FieldSpec("status", E, "Status (Planned/ Active/ Closed)", lookup="sprint_status"),
         FieldSpec("closed_on", D, "Closed on"),
+        uid_field(),
     ),
 ))
 
@@ -142,6 +146,7 @@ SPRINT_ITEM = register_entity(EntitySchema(
         FieldSpec("status", E, "Status (To Do/ In Progress/ Done/ Carried)", lookup="item_status"),
         FieldSpec("carried_from", N, "Carried from sprint"),
         FieldSpec("done_on", D, "Done on"),
+        uid_field(),
     ),
 ))
 
@@ -158,6 +163,7 @@ WEEK = register_entity(EntitySchema(
         FieldSpec("section", E, "Section (Note/ Outcomes/ Issues/ Jira)", lookup="week_section", required=True),
         FieldSpec("order", N, "order"),
         FieldSpec("text", M, "Text"),
+        uid_field(),
     ),
 ))
 

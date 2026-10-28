@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import datetime as dt
 import enum
+import re
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -52,6 +54,41 @@ PY_TYPES: dict[FieldType, type] = {
 }
 
 
+# -- the hidden identity (0.9.0; section 3.1 of docs/hidden-identity-plan.md, shared with the sister tool) ---
+# Every row of every entity carries a ``uid``: a canonical lowercase UUID4 with dashes, assigned once on
+# creation, never shown in a table or a form, never changed, written to every file and honoured by every
+# import. The integer ``id`` stays the handle people and agents type; the ``uid`` is the trace.
+UID = "uid"
+UID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+
+
+def new_uid() -> str:
+    """A fresh uid: ``str(uuid.uuid4())``, 36 characters."""
+    return str(uuid.uuid4())
+
+
+def normalise_uid(value: Any) -> str | None:
+    """The canonical form of a uid, or ``None`` when ``value`` is not one.
+
+    Another case or surrounding braces (``{...}``, as Windows and Excel print a GUID) are normalised;
+    anything else is not a uid.
+    """
+    text = normalize_text(str(value))
+    if text.startswith("{") and text.endswith("}"):
+        text = text[1:-1].strip()
+    text = text.lower()
+    return text if UID_PATTERN.fullmatch(text) else None
+
+
+def is_uid(value: Any) -> bool:
+    return isinstance(value, str) and normalise_uid(value) is not None
+
+
+def uid_field() -> FieldSpec:
+    """The ``uid`` field every entity ends with: TEXT, header ``uid``, hidden."""
+    return FieldSpec(UID, FieldType.TEXT, UID, hidden=True, help="Hidden identity: assigned once, never changed.")
+
+
 @dataclass(frozen=True)
 class FieldSpec:
     """One column of an entity."""
@@ -64,6 +101,7 @@ class FieldSpec:
     group: str | None = None
     width: int | None = None
     help: str = ""
+    hidden: bool = False  # no widget, no column, no place in a document unless asked for by name; in every file
 
     def __post_init__(self) -> None:
         if not self.name.isidentifier() or self.name.startswith("_"):
@@ -101,6 +139,7 @@ class FieldSpec:
             "lookup": self.lookup,
             "group": self.group,
             "help": self.help,
+            "hidden": self.hidden,
         }
 
 
@@ -134,6 +173,12 @@ def coerce(
         return None, None
 
     kind = spec.type
+    if spec.name == UID:
+        clean = normalise_uid(value)
+        if clean is None:
+            raise ValueError(f"{spec.name}: {value!r} is not a uid (a lowercase UUID4 with dashes)")
+        return clean, None
+
     if kind is FieldType.INT:
         if isinstance(value, bool):
             return int(value), None

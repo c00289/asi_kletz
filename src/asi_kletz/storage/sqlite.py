@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from ..errors import StorageError
-from ..schema import FieldType, SchemaRegistry
+from ..schema import UID, FieldType, SchemaRegistry, new_uid
 from ..version import __version__
 from .base import Storage
 
@@ -118,6 +118,12 @@ class SQLiteStorage(Storage):
                             + self._column_ddl(spec.name, spec.type)
                         )
                         altered.setdefault(schema.table, []).append(spec.name)
+            for schema in registry:  # the uid is unique per table; the index comes once the column exists
+                if schema.has(UID):
+                    self.execute(
+                        f"CREATE UNIQUE INDEX IF NOT EXISTS {quote(f'ix_{schema.table}_uid')}"
+                        f" ON {quote(schema.table)} ({quote(UID)})"
+                    )
             fingerprint = registry.fingerprint()
             last = self.fetchone("SELECT fingerprint FROM schema_migrations ORDER BY version DESC")
             if last is None or last["fingerprint"] != fingerprint:
@@ -127,6 +133,28 @@ class SQLiteStorage(Storage):
                     (fingerprint, now_iso(), __version__),
                 )
         return {"created": created, "altered": altered, "fingerprint": fingerprint}
+
+    def stamp_uids(self, registry: SchemaRegistry) -> dict[str, int]:
+        """Every row without a ``uid`` gets a fresh one: one ``UPDATE ... WHERE id = ?`` per row, all in one
+        transaction, audited once per table that had rows to stamp (``stamp_uids``, with the count).
+
+        A 0.8.x database therefore opens as 0.9.0 with every row identified and nothing else changed:
+        ``updated_at`` is left alone, the row was not edited. A stamped database stamps nothing and
+        leaves no audit entry behind.
+        """
+        counts: dict[str, int] = {}
+        with self.transaction():
+            for schema in registry:
+                if not schema.has(UID):
+                    continue
+                table, column = quote(schema.table), quote(UID)
+                rows = self.fetchall(f"SELECT id FROM {table} WHERE {column} IS NULL OR {column} = '' ORDER BY id")
+                for row in rows:
+                    self.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", (new_uid(), row["id"]))
+                counts[schema.name] = len(rows)
+                if rows:
+                    self.audit("system", "stamp_uids", schema.name, None, {"count": len(rows)})
+        return counts
 
     @staticmethod
     def _column_ddl(name: str, kind: FieldType) -> str:

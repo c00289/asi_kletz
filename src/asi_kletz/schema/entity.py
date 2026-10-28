@@ -48,6 +48,11 @@ class EntitySchema:
         return tuple(spec.name for spec in self.fields)
 
     @property
+    def visible_fields(self) -> tuple[FieldSpec, ...]:
+        """The fields the window shows; ``fields`` stays the full tuple the storage and the transfers use."""
+        return tuple(spec for spec in self.fields if not spec.hidden)
+
+    @property
     def all_columns(self) -> tuple[str, ...]:
         return ("id", *self.field_names, "created_at", "updated_at")
 

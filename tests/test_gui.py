@@ -169,7 +169,7 @@ def test_safety_plan_table_shows_every_column(window, seeded):
 
     screen = window.show("safety_plan")
     schema = seeded.registry.get(PLAN)
-    assert screen.columns == ["id"] + [f.name for f in schema.fields] and len(screen.columns) == 64
+    assert screen.columns == ["id"] + [f.name for f in schema.visible_fields] and len(screen.columns) == 64
     assert list(screen.tree["columns"]) == [*screen.columns, "plan"]  # the stacked column rides along
     assert screen.columns[1:5] == ["order", "pdp_phase", "lifecycle_phase", "deliverable"]
     assert screen.tree.heading("loc_dms", "text") == "DMS"

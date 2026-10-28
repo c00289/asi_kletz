@@ -12,6 +12,10 @@ from asi_kletz.locks import ENV_LOCK_DIR
 from asi_kletz.prefs import ENV_PREFS
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+FIXTURES = REPO_ROOT / "tests" / "fixtures"
+# a small 0.8.4 database (three plan rows, one sprint; no ``uid`` column): what 0.9.0 opens and stamps.
+# Never opened in place: a test copies it, because opening it would stamp the committed file.
+DB_0_8_4 = FIXTURES / "kletz-0.8.4.db"
 # the real workbook, if kletz.toml in the repo names one; the seeding test skips otherwise
 WORKBOOK = Path(load_config(REPO_ROOT / "kletz.toml").get("workbook") or REPO_ROOT / "kletz.xlsx")
 

@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import shutil
+import sqlite3
+
+import pytest
+
 from asi_kletz import Brain, __version__
-from tests.conftest import ENTITIES, PLAN, TABLES
+from asi_kletz.errors import CommandError, NotFound, ValidationError
+from asi_kletz.schema import UID, UID_PATTERN
+from tests.conftest import DB_0_8_4, ENTITIES, PLAN, TABLES
 
 
 def test_crud_round_trip(brain):
@@ -10,9 +17,10 @@ def test_crud_round_trip(brain):
     assert created.ok, created.errors
     row = created.data
     assert row["id"] == 1 and row["order"] == 7 and row["created_at"]
+    assert UID_PATTERN.fullmatch(row[UID])  # the hidden identity, assigned on create
 
     got = brain.execute("get", entity="Safety Plan", id=1)
-    assert got.ok and got.data["deliverable"] == "Safety Plan"
+    assert got.ok and got.data["deliverable"] == "Safety Plan" and got.data[UID] == row[UID]
 
     updated = brain.execute("update", entity=PLAN, id=1, set=["status=Done"])
     assert updated.ok and updated.data["status"] == "Done"
@@ -97,7 +105,8 @@ def test_reopen_keeps_data_and_migrates(tmp_path):
         b.execute("create", entity=PLAN, data={"deliverable": "keep"})
     with Brain(db) as b:
         assert b.execute("count", entity=PLAN).data["count"] == 1
-        assert b.migration["created"] == []
+        assert b.migration["created"] == [] and b.migration["altered"] == {}
+        assert b.migration["uids_stamped"] == dict.fromkeys(ENTITIES, 0)  # 0.9.0 wrote them on create
 
 
 def test_registered_entities_in_order(brain):
@@ -106,6 +115,9 @@ def test_registered_entities_in_order(brain):
     assert {r["name"] for r in brain.storage.fetchall("SELECT name FROM sqlite_master WHERE type='table'")} == (
         TABLES | {"schema_migrations", "audit_log", "sqlite_sequence"}
     )
+    assert {r["name"] for r in brain.storage.fetchall("SELECT name FROM sqlite_master WHERE type='index'")} >= {
+        f"ix_{table}_uid" for table in TABLES
+    }
 
 
 def test_load_config_reads_the_jira_live_keys(tmp_path):
@@ -125,3 +137,108 @@ def test_load_config_reads_the_jira_live_keys(tmp_path):
     assert "jira_live_autofetch" not in loaded and "jira_live_jql" not in loaded
     config.write_text("jira_live_autofetch = true\n", encoding="utf-8")
     assert load_config(config)["jira_live_autofetch"] is True
+
+
+# -- the hidden identity (0.9.0): assigned once, immutable, unique, readable -------------------------
+
+
+def test_service_assigns_keeps_and_protects_the_uid(brain):
+    service = brain.service(PLAN)
+    row, _ = service.create({"deliverable": "one"})
+    assert UID_PATTERN.fullmatch(row[UID]) and service.get_by_uid(row[UID]) == row
+    given = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+    kept, _ = service.create({"deliverable": "two", UID: "{3F2504E0-4F89-41D3-9A0C-0305E82C3301}"})
+    assert kept[UID] == given and service.get_by_uid(given)["id"] == 2  # a uid handed in is kept, normalised
+    # resolve: digits are an id, a uid is looked up, anything else is a bad argument
+    assert service.resolve(2) == 2 and service.resolve("12") == 12 and service.resolve(given) == 2
+    assert service.resolve(given.upper()) == 2 and service.get(given)["deliverable"] == "two"
+    with pytest.raises(NotFound):
+        service.resolve("00000000-0000-4000-8000-000000000000")
+    with pytest.raises(NotFound):
+        service.get_by_uid("not-a-uid")
+    with pytest.raises(CommandError):
+        service.resolve("seven")
+    # update: the same uid is a no-op, another one is refused, an empty one leaves the stored value alone
+    same, _ = service.update(2, {"deadline": "x", UID: given.upper()})
+    assert same[UID] == given and same["deadline"] == "x"
+    assert brain.storage.audit_tail(1)[0]["payload"] == {"deadline": "x"}  # the no-op uid is not audited
+    with pytest.raises(ValidationError, match="uid is immutable"):
+        service.update(2, {UID: row[UID]})
+    with pytest.raises(ValidationError, match="uid is immutable"):
+        service.update(given, {UID: "00000000-0000-4000-8000-000000000000"})
+    blank, _ = service.update(given, {UID: None, "deadline": "y"})
+    assert blank[UID] == given and blank["deadline"] == "y"
+    assert service.get(2)[UID] == given
+    # through the command path: a refused change is a failed Result, not a crash
+    refused = brain.execute("update", entity=PLAN, id=2, set=[f"{UID}={row[UID]}"])
+    assert not refused.ok and refused.errors == ["uid is immutable"]
+    # two rows cannot share a uid: the unique index refuses, the service reports an error
+    clash = brain.execute("create", entity=PLAN, data={"deliverable": "three", UID: given})
+    assert not clash.ok and "UNIQUE" in clash.errors[0] and brain.execute("count", entity=PLAN).data["count"] == 2
+    # delete by uid returns the id, and a uid of a deleted row is gone
+    assert service.delete(given) == 2
+    with pytest.raises(NotFound):
+        service.get(given)
+    assert brain.execute("list", entity=PLAN, filter=[f"{UID}={row[UID]}"]).data[0]["id"] == 1
+
+
+def _raw_rows(path) -> dict[str, list[dict]]:
+    """Every table's rows straight from SQLite, without the package, so a stamp cannot hide a change."""
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {
+            table: [dict(r) for r in conn.execute(f'SELECT * FROM "{table}" ORDER BY rowid')]
+            for table in sorted(TABLES | {"audit_log", "schema_migrations"})
+        }
+    finally:
+        conn.close()
+
+
+def _indexes(path) -> set[str]:
+    conn = sqlite3.connect(path)
+    try:
+        return {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    finally:
+        conn.close()
+
+
+def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
+    """The fixture has three plan rows and one sprint and no ``uid`` column; 0.9.0 adds the column and the
+    unique index to every table, stamps every row, audits the counts, and changes nothing else."""
+    db = tmp_path / "kletz.db"
+    shutil.copyfile(DB_0_8_4, db)
+    before = _raw_rows(db)
+    assert len(before["safety_plan"]) == 3 and len(before["sprint"]) == 1 and UID not in before["safety_plan"][0]
+    assert len(before["schema_migrations"]) == 1 and not any(n.startswith("ix_") for n in _indexes(db))
+
+    with Brain(db) as brain:
+        assert brain.migration["created"] == []
+        assert brain.migration["altered"] == {table: [UID] for table in TABLES}
+        assert brain.migration["uids_stamped"] == {PLAN: 3, "sprint": 1, "sprint_item": 0, "week": 0}
+        assert brain.execute("count", entity=PLAN).data["count"] == 3
+        stamped = brain.storage.audit_tail(10)
+        assert [(t["action"], t["actor"], t["entity"], t["payload"]) for t in stamped[:2]] == [
+            ("stamp_uids", "system", "sprint", {"count": 1}),
+            ("stamp_uids", "system", PLAN, {"count": 3}),
+        ]
+        assert stamped[2]["action"] == "create"  # the fixture's own history, untouched below it
+    after = _raw_rows(db)
+    assert _indexes(db) >= {f"ix_{table}_uid" for table in TABLES}
+    uids = []
+    for table in TABLES:
+        for old, stamped_row in zip(before[table], after[table], strict=True):
+            new = dict(stamped_row)
+            uid = new.pop(UID)
+            assert UID_PATTERN.fullmatch(uid) and new == old  # stamped, and nothing else changed (updated_at too)
+            uids.append(uid)
+    assert len(uids) == len(set(uids)) == 4
+    assert after["audit_log"][: len(before["audit_log"])] == before["audit_log"]
+    assert len(after["audit_log"]) == len(before["audit_log"]) + 2
+    assert len(after["schema_migrations"]) == 2 and after["schema_migrations"][1]["app_version"] == __version__
+
+    with Brain(db) as brain:  # the second open stamps nothing and audits nothing
+        assert brain.migration["altered"] == {} and brain.migration["uids_stamped"] == dict.fromkeys(ENTITIES, 0)
+        assert {r[UID] for r in brain.execute("list", entity=PLAN).data} < set(uids)
+    again = _raw_rows(db)
+    assert again == after

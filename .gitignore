@@ -16,6 +16,8 @@ kletz.toml
 # runtime data: the database is the source of truth and the workbook is a generated view
 *.db
 *.db-journal
+# the small 0.8.4 database the open-and-stamp test copies is a fixture, not runtime data: it stays tracked
+!tests/fixtures/kletz-*.db
 *.xlsx
 ~$*
 *.tmp

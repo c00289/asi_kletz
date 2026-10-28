@@ -6,6 +6,8 @@ import pytest
 
 from asi_kletz.errors import NotFound, ValidationError
 from asi_kletz.schema import (
+    UID,
+    UID_PATTERN,
     EntitySchema,
     FieldSpec,
     FieldType,
@@ -13,10 +15,16 @@ from asi_kletz.schema import (
     coerce,
     default_lookups,
     default_registry,
-    definitions,  # noqa: F401
+    definitions,
     flag_fields,
+    is_uid,
+    new_uid,
+    normalise_uid,
+    uid_field,
 )
-from tests.conftest import PLAN
+from tests.conftest import ENTITIES, PLAN
+
+FINGERPRINT_0_8_4 = "d3365e8a31d20795"  # what tests/fixtures/kletz-0.8.4.db recorded in schema_migrations
 
 
 def spec(kind, **kw):
@@ -72,7 +80,8 @@ def test_registry_aliases_and_fingerprint():
 def test_safety_plan_matrix_fields_are_unique_and_grouped():
     schema = default_registry.get(PLAN)
     names = schema.field_names
-    assert len(names) == len(set(names)) == 63
+    assert len(names) == len(set(names)) == 64 and names[-1] == UID  # 63 of the sheet, then the hidden uid
+    assert len(schema.visible_fields) == 63
     groups = schema.groups()
     assert len(groups["reference"]) == 23 and len(groups["author"]) == 18 and len(groups["reviewer"]) == 8
     assert "author_tech_lead_functional_safety" in names and "reviewer_tech_lead_functional_safety" in names
@@ -94,3 +103,54 @@ def test_custom_registry_is_independent():
     reg.register(EntitySchema("widget", "widgets", "Widget", "widgets", fields))
     assert reg.get("widgets").field("g_a_b").type is FieldType.BOOL
     assert PLAN not in reg
+
+
+# -- the hidden identity (0.9.0) ---------------------------------------------------------------------
+
+
+def test_every_entity_ends_with_the_hidden_uid():
+    """Section 3.1 of docs/hidden-identity-plan.md: ``uid``, TEXT, header ``uid``, hidden, last on every entity."""
+    assert default_registry.names() == ENTITIES
+    for schema in default_registry:
+        last = schema.fields[-1]
+        assert last.name == UID and last.type is FieldType.TEXT and last.header == UID and last.hidden
+        assert last == uid_field() and not last.required and last.group is None
+        assert [f.name for f in schema.visible_fields] == [f.name for f in schema.fields][:-1]
+        assert not any(f.hidden for f in schema.visible_fields)
+        assert schema.to_dict()["fields"][-1] == {
+            "name": UID, "type": "text", "header": UID, "required": False, "lookup": None, "group": None,
+            "help": "Hidden identity: assigned once, never changed.", "hidden": True,
+        }
+    assert definitions.ALL_ENTITIES[0].fields[-1].name == UID
+    assert FieldSpec("x").hidden is False and "hidden" in FieldSpec("x").to_dict()
+    # the fingerprint moved, so a 0.8.4 database gains a schema_migrations row when 0.9.0 opens it
+    assert default_registry.fingerprint() != FINGERPRINT_0_8_4
+
+
+def test_uid_values_are_canonical_uuid4s():
+    uid = new_uid()
+    assert len(uid) == 36 and uid == uid.lower() and UID_PATTERN.fullmatch(uid) and is_uid(uid)
+    assert len({new_uid() for _ in range(50)}) == 50
+    canonical = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+    assert normalise_uid(canonical) == canonical
+    assert normalise_uid("3F2504E0-4F89-41D3-9A0C-0305E82C3301") == canonical  # another case
+    assert normalise_uid("{3F2504E0-4F89-41D3-9A0C-0305E82C3301}") == canonical  # braces, as Excel prints a GUID
+    assert normalise_uid(" {" + canonical + "} ") == canonical
+    for bad in ("not-a-uid", "3f2504e04f8941d39a0c0305e82c3301", "3f2504e0-4f89-11d3-9a0c-0305e82c3301", "", 12):
+        assert normalise_uid(bad) is None and not is_uid(bad)
+
+
+def test_uid_coercion_accepts_normalises_and_rejects():
+    spec = uid_field()
+    canonical = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+    assert coerce(spec, canonical) == (canonical, None)
+    assert coerce(spec, "{3F2504E0-4F89-41D3-9A0C-0305E82C3301}") == (canonical, None)
+    assert coerce(spec, None) == (None, None) and coerce(spec, "") == (None, None)  # absent: assigned on create
+    with pytest.raises(ValueError, match="^uid: 'not-a-uid' is not a uid"):
+        coerce(spec, "not-a-uid")
+    schema = default_registry.get(PLAN)
+    with pytest.raises(ValidationError) as info:
+        schema.coerce_row({"deliverable": "d", UID: "not-a-uid"})
+    assert info.value.errors == ["uid: 'not-a-uid' is not a uid (a lowercase UUID4 with dashes)"]
+    clean, _ = schema.coerce_row({"deliverable": "d", UID: canonical.upper()})
+    assert clean[UID] == canonical

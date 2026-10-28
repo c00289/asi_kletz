@@ -145,6 +145,7 @@ class Brain:
             self._slot_held = False
             raise
         self.migration = self.storage.ensure_schema(self.registry)
+        self.migration["uids_stamped"] = self.storage.stamp_uids(self.registry)  # a 0.8.x file opens as 0.9.0
         self.events = EventBus()
         self.models = ModelFactory(self.registry)
         self.repositories = RepositoryFactory(self.storage, self.registry)

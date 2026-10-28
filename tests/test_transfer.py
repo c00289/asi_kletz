@@ -14,17 +14,30 @@ def test_json_dump_and_load_modes(seeded, tmp_path):
     dumped = seeded.execute("dump", out=str(out))
     assert dumped.ok and dumped.data["entities"] == {PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0}
     payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 2 and list(payload["entities"]) == ENTITIES
+    assert payload["schema_version"] == 3 and list(payload["entities"]) == ENTITIES
 
+    uids = {r["id"]: r["uid"] for r in payload["entities"][PLAN]}
+    assert len(uids) == 3 and all(uids.values())  # the dump carries the hidden identity like any field
     with Brain(tmp_path / "other.db") as other:
         loaded = other.execute("load", path=str(out), mode="replace")
         assert loaded.ok, loaded.errors
         assert other.execute("count", entity=PLAN).data["count"] == 3
-        # merge keeps ids, append makes new ones
+        assert {r["id"]: r["uid"] for r in other.execute("list", entity=PLAN).data} == uids  # replace keeps them
+        # merge updates the rows the uids name; so does append: a row that exists is never inserted twice
         assert other.execute("load", path=str(out), mode="merge").data["entities"][PLAN]["updated"] == 3
         assert other.execute("count", entity=PLAN).data["count"] == 3
-        other.execute("load", path=str(out), mode="append")
-        assert other.execute("count", entity=PLAN).data["count"] == 6
+        appended = other.execute("load", path=str(out), mode="append").data["entities"][PLAN]
+        assert appended["updated"] == 3 and appended["inserted"] == 0
+        assert other.execute("count", entity=PLAN).data["count"] == 3
+        # a 0.8.x dump has no uids: append makes new rows with new ids, and stamps them
+        for row in payload["entities"][PLAN]:
+            del row["uid"]
+        old = tmp_path / "dump-0.8.json"
+        old.write_text(json.dumps(payload), encoding="utf-8")
+        assert other.execute("load", path=str(old), mode="append").data["entities"][PLAN]["inserted"] == 3
+        rows = other.execute("list", entity=PLAN, order_by="id").data
+        assert [r["id"] for r in rows] == [1, 2, 3, 4, 5, 6] and len({r["uid"] for r in rows}) == 6
+        assert all(r["uid"] for r in rows)
 
     single = tmp_path / "plan.json"
     assert seeded.execute("dump", entity=PLAN, out=str(single)).ok
@@ -40,7 +53,7 @@ def test_excel_export_and_reimport(seeded, tmp_path):
     ws = wb["Safety Plan"]
     headers = [c.value for c in ws[1]]
     assert headers[:4] == ["order", "PDP Phases", "Safety Lifecycle Phase", "Safety Deliverables"]
-    assert headers.count("Tech Lead - Functional Safety") == 2 and len(headers) == 63
+    assert headers.count("Tech Lead - Functional Safety") == 2 and len(headers) == 64 and headers[-1] == "uid"
     assert ws.freeze_panes == "A2"
     assert ws["D2"].value == "Safety Plan" and ws["F2"].value == 1  # deliverable, DMS flag
     assert ws.data_validations.dataValidation  # dropdowns from the lookups
@@ -110,5 +123,5 @@ def test_source_workbook_columns_match_the_schema():
     headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
     while headers and headers[-1] is None:
         headers.pop()
-    assert headers == [f.header for f in default_registry.get(PLAN).fields]
+    assert headers == [f.header for f in default_registry.get(PLAN).visible_fields]  # the source sheet has no uid
     assert len(headers) == 63

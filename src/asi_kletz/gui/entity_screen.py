@@ -59,8 +59,9 @@ class EntityScreen(Screen):
 
     # -- layout ---------------------------------------------------------
     def build(self) -> None:
-        # every column of the source sheet, in source order, behind the surrogate key
-        self.columns = ["id"] + [f.name for f in self.schema.fields]
+        # every visible column of the source sheet, in source order, behind the surrogate key (a hidden
+        # field, the uid, has no column anywhere)
+        self.columns = ["id"] + [f.name for f in self.schema.visible_fields]
         # the plan is stacked (PDP phase > lifecycle phase > deliverable in one frozen column) when the
         # entity has the three fields; the three data columns stay on the tree, hidden, so ``set`` still answers
         self.stacked = all(self.schema.has(name) for name in STACKED)
@@ -142,7 +143,7 @@ class EntityScreen(Screen):
         factory = WidgetFactory(self.brain.lookups)
         parent.columnconfigure(1, weight=1)
         row = 0
-        for spec in self.schema.fields:
+        for spec in self.schema.visible_fields:  # a hidden field has no widget
             if spec.group:
                 continue
             ttk.Label(parent, text=spec.header + (" *" if spec.required else "")).grid(
@@ -245,7 +246,7 @@ class EntityScreen(Screen):
         lookups = self.brain.lookups
         return {
             spec.name: lookups.get(spec.lookup or "", ())
-            for spec in self.schema.fields
+            for spec in self.schema.visible_fields
             if spec.type is FieldType.ENUM and spec.lookup
         }
 
