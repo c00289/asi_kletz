@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.8.4**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.9.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,25 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.9.0
+
+**Every row has a hidden identity, and no table shows `id` or `order`** (`docs/hidden-identity-plan.md`,
+the owner's ask of 2026-10-28; schema version 3). Each row of the four entities carries a `uid`, a
+lowercase UUID4, assigned once when the row is created and never changed: it has no column on any
+screen and no widget in any form, but every file the tool writes carries it (the JSON dump as a key,
+the workbook as the last column of every sheet, headed `uid` and hidden) and every import honours it:
+a row whose `uid` is already in the table is an update of that row, whatever its `id` in the file, so a
+dump whose ids were renumbered merges as updates, not inserts, and a 0.8.x file without uids still
+imports. A 0.8.x `kletz.db` opens as 0.9.0 with the column and a unique index added to every table and
+every row stamped (`Storage.stamp_uids`, audited per table with the count), nothing else changed. The
+integer `id` stays the handle: every command takes it, and now takes a uid in its place
+(`get safety_plan_row 3f2504e0-...`); `update ... --set uid=...` is refused (`uid is immutable`).
+On the screens the vestigial columns are gone: the Safety Plan table and the Safety Plan Matrix freeze
+the stacked `plan` column alone, the dashboard's open deliverables lose `order` (they stay in plan
+order), `order` stays a field of the form and the default sort, and the details frame names the
+selected row (`Safety Plan Row details · row 2`), so the handle a command needs is on screen without a
+column. The audit table keeps `entity_id`: it is the trace, not a vestige.
 
 ## What is in 0.8.4
 
@@ -169,20 +188,23 @@ Everything of 0.1.0 plus diagrams and documents (see Diagrams and documents).
   - **Dashboard**: deliverable counts by status, deliverables per lifecycle phase, the open
     deliverables, recent changes.
   - **Safety Plan**: sortable, searchable table of every column of the source sheet in source
-    order (`id` first; flags as check-mark columns headed by the source title; a `Columns`
-    box narrows the flags to one group; a clicked heading is named in the status bar) with a
-    form below; flag groups rendered as checkbox grids; New / Save / Delete / Duplicate /
-    Refresh. Since 0.7.2 the identity columns stay put while the rest scrolls sideways (since
-    0.8.4 they are `id`, `order` and the plan stacked as PDP phase > safety lifecycle phase >
-    safety deliverable in one column): a Treeview cannot pin a column, so the table is two of them in
-    lock-step (`gui/screens.py:FrozenPane`: one vertical bar, the selection, the striping and
-    the sort shared; a heading on either side sorts). Since 0.7.3 the split between the two is
-    a sash you can drag: it opens at the pinned columns' fitted width, never past 45% of the
-    window, and dragging it never changes a column width.
+    order (flags as check-mark columns headed by the source title; a `Columns` box narrows the
+    flags to one group; a clicked heading is named in the status bar) with a form below; flag
+    groups rendered as checkbox grids; New / Save / Delete / Duplicate / Refresh. Since 0.9.0 no
+    table shows `id`, `order` or the hidden `uid`: the id is in the details frame's title
+    (`Safety Plan Row details · row 2`) and the status bar, `order` is a field of the form and the
+    default sort. Since 0.7.2 the identity column stays put while the rest scrolls sideways (since
+    0.8.4 it is the plan stacked as PDP phase > safety lifecycle phase > safety deliverable in one
+    column, `plan`): a Treeview cannot pin a column, so the table is two of them in lock-step
+    (`gui/screens.py:FrozenPane`: one vertical bar, the selection, the striping and the sort
+    shared; a heading on either side sorts). Since 0.7.3 the split between the two is a sash you
+    can drag: it opens at the pinned columns' fitted width, never past 45% of the window, and
+    dragging it never changes a column width.
   - **Safety Plan Matrix**: the plan stacked as PDP phase > safety lifecycle phase > safety
-    deliverable (one column, indented, since 0.8.3) with `order` beside it, one flag group as
-    columns, click a flag cell to toggle it (location, reference, author, verification, reviewer);
-    the two frozen columns stay put the same way while the flags scroll.
+    deliverable (one column, indented, since 0.8.3; alone on the left since 0.9.0), one flag group
+    as columns, click a flag cell to toggle it (location, reference, author, verification,
+    reviewer); the frozen column stays put the same way while the flags scroll, and the search box
+    still finds a row by its `order`.
   - Since 0.7.1 every column of every table (these two, the dashboard, JIRA Live Data) is as
     wide as the longest string in its domain: heading, cells and, for an enum field, every
     value of its lookup, measured in pixels with the real fonts after each fill, so nothing is
@@ -675,6 +697,16 @@ to `close()`, and a forgotten one keeps every other primary tool out until the p
 info, or `None`), and never opens the SQLite file. `brain.status()["locks"]` says what this
 process holds.
 
+**Identity.** A row has two names. The integer `id` is the handle: what `get`, `update` and
+`delete` take, the audit log's `entity_id`, the tree iids and the status bar's
+`Safety Plan Row 2 selected`. The `uid` (`schema/fields.py:uid_field`, the last field of every
+entity, hidden) is the trace: a lowercase UUID4 assigned once by `EntityService.create`, never shown
+on a screen, carried by every dump and workbook, matched first by every import (`load_rows`), and
+refused by `update` (`uid is immutable`). Every command that takes an id takes a uid in its place
+(`EntityService.resolve`: digits are an id, a uid is looked up, an unknown uid is `NotFound`), and
+`list --filter uid=...` works as for any field. `Storage.stamp_uids` runs on every open, so a
+database written before 0.9.0 gets its uids the first time 0.9.0 opens it (`brain.migration["uids_stamped"]`).
+
 ## Scripts
 
 A script is one JSON object per line:
@@ -756,7 +788,10 @@ tests/                pytest suite (schema, core, transfer, CLI, generate, theme
 
 Tests never read the developer's `kletz.toml` or environment, so no test can touch a real
 workbook. One test seeds a database from the workbook named in the repo's `kletz.toml` and
-is skipped when there is none. The GUI tests drive real tkinter widgets with the window
+is skipped when there is none. `tests/fixtures/kletz-0.8.4.db` is a small database made with the
+0.8.4 code (three plan rows, one sprint, no `uid` column); the open-and-stamp test copies it to a
+temporary folder, never opens it in place, and checks that 0.9.0 adds the column and the index,
+stamps every row, audits the counts and changes nothing else. The GUI tests drive real tkinter widgets with the window
 withdrawn and are skipped when no display is available. pytest runs with `--capture=sys`
 (see `pyproject.toml` for why). The generate tests run the real asi_escher and asi_gutenberg
 (no mocks), check that importing `asi_kletz` loads neither matplotlib, reportlab nor asi_hopper,
@@ -778,6 +813,8 @@ own file, so a developer's open window never receives test traffic.
 
 The schema machinery is generic: an entity registered with `register_entity` gets a table,
 commands, JSON, and a workbook sheet; `ALL_ENTITIES` in `schema/definitions.py` lists the four of
-0.8.0 in order and the test suite asserts that list, never a count. It does not get a screen by
+0.8.0 in order and the test suite asserts that list, never a count. End the fields with
+`uid_field()` so the entity carries the hidden identity like the others (a test checks that every
+registered entity does). It does not get a screen by
 itself: screens are registered in `gui/screens.py`, asserted the same way. The list is the design,
 not a cap.

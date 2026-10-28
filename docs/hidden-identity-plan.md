@@ -1,6 +1,6 @@
 # ASI Kletz — Plan: hidden identity (`uid`) and the end of the `id` / `order` columns
 
-**Status:** Decided 2026-10-28; to be implemented as asi_kletz 0.9.0 (schema version 2 → 3)
+**Status:** Implemented 2026-10-28 (asi_kletz 0.9.0); deviations in the CHANGELOG entry
 **Written:** 2026-10-28
 **Owner:** FuSa engineer
 **Target version:** asi_kletz 0.9.0
@@ -190,3 +190,5 @@ README.md, CHANGELOG.md, pyproject.toml, docs/hidden-identity-plan.md (Status)
 ## 9. Change log
 
 - 2026-10-28: written, decided; the sister plan written the same day.
+- 2026-10-28: implemented as asi_kletz 0.9.0 in four commits (one per phase); every deviation and
+  what the plan got wrong are in `CHANGELOG.md`, section `[0.9.0]`.

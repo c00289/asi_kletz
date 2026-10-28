@@ -12,6 +12,115 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.9.0] - 2026-10-28
+
+Every row has a hidden identity (`uid`), and no table shows `id` or `order`: `docs/hidden-identity-plan.md`,
+implemented in four commits, one per phase. The owner, 2026-10-28: "it is obviously important that all
+objects have some internal guid that is not visible but serves for traceability; then of course we want to
+preserve the order of elements in a table; but the leftmost columns `order` and `id` are vestigial."
+Schema version 2 → 3. Section 3.1 of the plan (the uid value, where a file carries it, how an import
+matches it) is shared byte for byte with asi_dewey 0.9.0, because a Kletz dump or workbook is imported
+into Dewey.
+
+### Added
+- **`uid` on every entity** (`schema/fields.py`: `UID`, `UID_PATTERN`, `new_uid`, `normalise_uid`,
+  `is_uid`, `uid_field`; `schema/definitions.py`): the last field of `safety_plan_row`, `sprint`,
+  `sprint_item` and `week`, `FieldType.TEXT`, header `uid`, `hidden=True`. The value is
+  `str(uuid.uuid4())`; coercion accepts the canonical form, normalises another case or braces
+  (`{3F25...}`, as Excel prints a GUID) and rejects anything else with the field named
+  (`uid: 'not-a-uid' is not a uid`). `FieldSpec.hidden` (in `to_dict`, so the registry fingerprint
+  moved) and `EntitySchema.visible_fields` (the tuple the window uses; `fields` stays the full one the
+  storage and the transfers use).
+- **Assigned once, immutable, unique, readable** (`services/entity_service.py`,
+  `repositories/sql_repo.py`, `storage/sqlite.py`): `create` sets the uid when the row has none and keeps
+  one handed in; `update` with the stored value is a no-op, with another value a
+  `ValidationError("uid is immutable")`, with an empty one leaves the stored value alone (a form or a
+  file that does not carry it); `CREATE UNIQUE INDEX IF NOT EXISTS ix_<table>_uid` after the column
+  exists, so two rows cannot share a uid (the service reports the refusal as a failed `Result`);
+  `SqlRepository.get_by_uid`, `EntityService.get_by_uid` and `EntityService.resolve(ref)` (an integer or
+  digits is an id, a uid is looked up, an unknown uid is `NotFound`, anything else a `CommandError`).
+- **Stamped on open** (`storage/base.py`, `storage/sqlite.py`, `brain.py`): `Storage.stamp_uids(registry)`
+  gives every row whose uid is NULL or empty a fresh one, one `UPDATE ... WHERE id = ?` per row in one
+  transaction, audited as `stamp_uids` (actor `system`) with the count per table; `Brain.__init__` calls
+  it after `ensure_schema` and reports `migration["uids_stamped"]`. A 0.8.x `kletz.db` opens as 0.9.0
+  with every row identified and nothing else changed, `updated_at` included. `SCHEMA_VERSION = 3`.
+- **In every file** (`io/exporters.py`): the JSON dump carries `uid` as any key; the workbook writes it
+  as the last column of every sheet, headed `uid`, with `column_dimensions[letter].hidden = True`, so the
+  sheet reads as before and still round-trips; the import maps it by header like any field.
+- **A uid where an id is expected** (`commands/crud.py`, `commands/base.py`, `automation/cli.py`): the
+  `id` positional of `get`, `update` and `delete` is of type `ref` (a string on the command line); the
+  service resolves it, `delete` answers with the resolved id, `list --filter uid=...` works as for any
+  field, and the automation server's `/execute` runs the same verbs, so an agent passes a uid there too.
+- `tests/fixtures/kletz-0.8.4.db`: a 0.8.4 database (three plan rows, one sprint, no uid column) made
+  with the 0.8.4 code for the open-and-stamp test; `.gitignore` keeps it tracked under the `*.db` rule.
+
+### Changed
+- **`load_rows` matches by uid first** (`services/entity_service.py`, section 3.1): a row whose uid is in
+  the table is an update of that row, whatever its id in the file, in every mode; otherwise a row whose
+  id exists is an update by id (merge only, as before; the file's uid, when it has one, replaces the
+  stored one, which is how a sibling's cached rows take this tool's uids); otherwise an insert that keeps
+  the file's uid when present and the file's id in merge mode. A row without a uid (a 0.8.x file) keeps
+  the stored uid on an update and is stamped on an insert. `replace` wipes first and keeps the file's
+  uids. So `append` of a dump whose rows are already in the table updates them instead of doubling the
+  plan; `append` of a file without uids inserts, as before.
+- **No table shows `id` or `order`** (`gui/entity_screen.py`, `gui/matrix_screen.py`, `gui/dashboard.py`):
+  the Safety Plan table's columns are the visible fields minus the handles (`HANDLES = ("id", "order")`),
+  frozen `plan` alone (`FROZEN = (PLAN,)`; `IDENTITY = STACKED` for an entity without the stack); the
+  matrix freezes `plan` alone (`FIXED = (PLAN,)`, `FIXED_WIDTHS = (360,)`; `SEARCHED` keeps `order`, so a
+  typed number still finds the row); the dashboard's open deliverables are `deliverable`, `status`,
+  `deadline`, still in plan order; the audit table keeps `entity_id`. The tree iids stay the ids, sorting
+  by `plan` returns to plan order, the status bar still says `Safety Plan Row 2 selected`.
+- **The form** shows every visible non-group field (`order` included, never `uid`;
+  `WidgetFactory.create` refuses a hidden field) and the details frame names the selected row:
+  `Safety Plan Row details · row 2` (`EntityScreen.details_title`), reset by New, Duplicate, Delete and
+  a refresh that loses the selection.
+- The `schema` command lists `hidden` on every field; the workbook's visible columns and their order,
+  the JSON shape apart from the new key, the command vocabulary, the audit log, the events, the tracker
+  text, the sprint rules, the family lock and the automation server's shape are unchanged.
+
+### Deviations from the plan, and what the plan got wrong
+- **Phase boundaries.** `load_rows` by uid (phase 2) and the hidden field's absence from the form and the
+  table (phase 3) shipped in the phase 1 commit: once the field existed, the suite could not stay green
+  without them (a dump appended onto itself hit the unique index; the form would have shown a uid
+  entry). The commits are still one per phase; those two pieces are in the first.
+- **`stamp_uids` audits only tables that had rows to stamp.** The plan says "audited once per table with
+  the count"; with four entities, auditing zero counts would add four entries to the audit log at every
+  launch of an already-stamped database, and the dashboard's "Recent changes" would open on them. On
+  the fixture that is two entries (`safety_plan_row` 3, `sprint` 1), none for the empty tables, none on
+  the second open; `brain.migration["uids_stamped"]` still reports every entity.
+- **59 displayed columns, not 58.** Section 6 expects the Safety Plan's right tree to display 58 columns
+  ("59 minus `order`"), but `order` was a frozen column in 0.8.4, never displayed on the right: the tree's
+  columns go from 64 (`id` + 63) to 62 (63 visible minus `id` and `order`), and the displayed count stays
+  59 (62 minus the three stacked fields). The test pins 62 columns, 59 displayed, `uid` nowhere.
+- **The automation server has no row endpoints.** Section 3.1, phase 2 and the files-touched list name
+  "the server's row endpoints"; the server (`automation/server.py`) has `/status`, `/execute`,
+  `/screens`, `/screen`, `/events` and `/quit`, and rows are read and written through `/execute` with the
+  verbs. The verbs resolve the ref, so the server is unchanged; `test_server.py` drives `get`, `update`
+  and `delete` by uid through `/execute`.
+- **The real workbook has no uid column.** `test_source_workbook_columns_match_the_schema` compared the
+  owner's sheet with every field; it now compares with `visible_fields` (63), which is what the plan says
+  the sheet's visible columns are. The owner's `kletz.xlsx` is not touched; the next `export` writes the
+  hidden column.
+- **`.gitignore`** gained `!tests/fixtures/kletz-*.db`, which the plan's file list does not mention: the
+  `*.db` rule exists for the owner's runtime database and would otherwise refuse the fixture.
+- **Service signatures.** `EntityService.get`, `update` and `delete` take the `ref` themselves (an int or a
+  string) and `delete` returns the id; the plan put the resolution in the commands. Same behaviour, one
+  place; `sprint_service` and the window keep passing integers.
+
+### Tests
+- 254 → 264 (phase 1: +5, phase 2: +3, phase 3: +2, plus the rewritten expectations): every entity ends
+  with the hidden uid and the fingerprint moved; uid values, normalisation and coercion; the service
+  assigns, keeps, protects and resolves; the 0.8.4 fixture opens with the column and the index on every
+  table, every row stamped, two audit counts and nothing else changed, and stamps nothing the second
+  time; the plan sheet has 64 headers, the last `uid`, hidden on every sheet; export → import on a fresh
+  database keeps every uid; a dump with every id shifted by 100 merges as 3 updates and 0 inserts; a
+  sibling's rows take the file's uids; a 0.8.x dump and a 0.8.x workbook still import and the new rows are
+  stamped; `get`, `update`, `delete` by uid on the API, the CLI and through `/execute`, an unknown uid is
+  `NotFound`, `list --filter uid=...`; no tree on any screen has a column named `id`, `order` or `uid`
+  (one test walks every screen), the frozen pane holds `plan` alone, the matrix's `FIXED` is `(plan,)`,
+  the dashboard's open table has three columns, the form has `order` and no `uid`, the details title
+  names the selected row, and selecting, saving, duplicating and deleting work as in 0.8.4.
+
 ## [0.8.4] - 2026-10-28
 
 The owner, 2026-10-28: "do the changes on the safety plan table too." Schema version unchanged (2).
