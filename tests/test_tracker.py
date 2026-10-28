@@ -82,6 +82,7 @@ def _built_tracker() -> Tracker:
     ]
     planned = Sprint("3", "Functional Safety Concept (FSC)", "SPRINT 3", day, dt.date(2026, 11, 24), "Planned",
                      number=3)
+    planned.weeks.append(Week(dt.date(2026, 11, 9), outcomes="- Planned ahead."))  # a planned sprint with content
     return Tracker("TITLE", "Role", "the scope", "project HWL, mine", sprints=[closed, active, planned])
 
 
@@ -106,6 +107,37 @@ def test_render_then_parse_then_render_is_stable():
     assert "- Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 2: 10/27 - 11/10." in text
     assert "- Phase 2 (HARA / Risk Assessment): Sprint 1: 10/12 - 10/27/2026. Closed 10/27." in text
     assert "Outcomes so far\n- Week two." in text and "Outcomes\n- Opened." in text  # the current week, then history
+
+
+def test_timeline_names_the_next_planned_sprint_only_and_an_empty_one_has_no_block():
+    """0.10.0: the planner adds seventy-odd empty Planned sprints without a phase; the text names the next."""
+    from asi_kletz.tracker.format import has_content, timeline_sprints
+
+    tracker = _built_tracker()
+    for number, (start, end) in enumerate([("2026-11-25", "2026-12-08"), ("2026-12-09", "2026-12-22"),
+                                           ("2026-12-23", "2027-01-05")], 4):
+        tracker.sprints.append(Sprint(str(number), "", f"SPRINT {number}", dt.date.fromisoformat(start),
+                                      dt.date.fromisoformat(end), "Planned", number=number))
+    assert [s.number for s in timeline_sprints(tracker.sprints)] == [1, 2, 3, 4]
+    assert has_content(tracker.sprints[2]) and not has_content(tracker.sprints[3])
+    text = render(tracker, dt.date(2026, 11, 3))
+    timeline = text.split("TIMELINE\n")[1].split("\n\n")[0].splitlines()
+    assert timeline == [
+        "- Phase 2 (HARA / Risk Assessment): Sprint 1: 10/12 - 10/27/2026. Closed 10/27.",
+        "- Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 2: 10/27 - 11/10.",
+        "- Phase 3 (Functional Safety Concept): planned. Sprint 3: 11/10 - 11/24.",
+        "- Phase to be assigned: planned. Sprint 4: 11/25 - 12/08.",
+        "- Scope: the scope",
+    ]
+    assert text.count("planned.") == 2 and "Sprint 5" not in text and "Sprint 6" not in text
+    assert text.count(fmt.RULE) == 6 and "PHASE 4" not in text  # three blocks: closed, active, planned with a week
+    assert "PHASE 3 - SPRINT 3 (11/10 - 11/24)   [planned]" in text and "- Planned ahead." in text
+    again = parse(text)  # the empty planned sprints live in the database, never in the text
+    assert [s.label for s in again.sprints] == ["SPRINT 3", "SPRINT 2", "SPRINT 1"]
+    next_bullet = "- Phase to be assigned: planned. Sprint 4: 11/25 - 12/08.\n"
+    assert render(again, dt.date(2026, 11, 3)) == text.replace(next_bullet, "")
+    week = render(tracker, dt.date(2026, 11, 3), current_only=True)
+    assert week.count("planned.") == 2 and week.count(fmt.RULE) == 2  # the week build: the same timeline, one block
 
 
 def test_render_week_only_holds_the_active_sprint_and_its_current_week():
@@ -297,3 +329,16 @@ def test_tracker_tables_are_the_registered_ones_and_the_plan_is_untouched(import
     assert {t["name"] for t in tables} - {"schema_migrations", "audit_log"} == TABLES
     assert imported.execute("count", entity=PLAN).data["count"] == len(PLAN_ROWS)
     assert all(r["status"] is None for r in imported.execute("list", entity=PLAN).data)
+
+
+def test_planned_sprints_add_one_bullet_and_no_block_to_the_history(imported):
+    """The chain planned three years ahead: the history names the next planned sprint and prints no block for it."""
+    planned = imported.execute("sprint", action="plan", until="2027-01-31")
+    assert planned.ok and planned.data["added"] == 6
+    text = _read(imported.execute("tracker", action="build", what="history", as_of=AS_OF))
+    assert text.count("planned.") == 1 and "- Phase to be assigned: planned. Sprint 3: 11/11 - 11/24." in text
+    assert "Sprint 4" not in text and text.count(fmt.RULE) == 4  # two blocks: Sprint 1 closed, Sprint 2 active
+    assert text.index("Sprint 3: 11/11") < text.index("- Scope:")
+    week = _read(imported.execute("tracker", action="build", what="week", as_of=AS_OF))
+    assert week.count("planned.") == 1 and week.count(fmt.RULE) == 2
+    assert imported.execute("list", entity="sprint").data[-1]["number"] == 8  # the database keeps them all

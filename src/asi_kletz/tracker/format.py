@@ -407,7 +407,13 @@ def timeline_title(phase_title: str) -> str:
 
 
 def timeline_bullet(sprint: Sprint) -> str:
-    head = f"- Phase {sprint.phase_number} ({timeline_title(sprint.phase_title)}):"
+    """One TIMELINE bullet. A sprint without a lifecycle phase (the planner's, until the work is known) has no
+    ``Phase n (title)`` head; the parser ignores a bullet it does not recognise, and such a sprint prints no
+    block either, so it lives in the database, never in the text."""
+    if sprint.phase_title:
+        head = f"- Phase {sprint.phase_number} ({timeline_title(sprint.phase_title)}):"
+    else:
+        head = "- Phase to be assigned:"
     if sprint.status == "Closed":
         when = sprint.closed_on or sprint.end
         return f"{head} {sprint.target_label}: {_md(sprint.start)} - {_mdy(sprint.end)}. Closed {_md(when)}."
@@ -468,13 +474,32 @@ def render_week(week: Week, sprint: Sprint, as_of: dt.date, jira_scope: str, *, 
     return out
 
 
+def has_content(sprint: Sprint) -> bool:
+    """A sprint the text tells about: started or closed, or planned with weeks or items. A planned sprint
+    with nothing in it (the planner's) adds no ``=====`` block; the TIMELINE names the next one only."""
+    return sprint.status != "Planned" or bool(sprint.weeks) or bool(sprint.items)
+
+
+def timeline_sprints(sprints: list[Sprint]) -> list[Sprint]:
+    """The sprints the TIMELINE lists, in order: every one with content, plus the next planned sprint (the
+    earliest planned one without content), so seventy planned sprints are one bullet, not seventy."""
+    ordered = sorted(sprints, key=lambda s: (s.start, s.number or 0))
+    listed = [s for s in ordered if has_content(s)]
+    upcoming = [s for s in ordered if not has_content(s)]
+    if upcoming:
+        listed.append(upcoming[0])
+    return sorted(listed, key=lambda s: (s.start, s.number or 0))
+
+
 def render(tracker: Tracker, as_of: dt.date, *, current_only: bool = False) -> str:
     """The whole tracker (newest sprint and week first), or with ``current_only`` the active sprint's current week."""
     out = [tracker.title, f"{tracker.byline}. Newest week at the top. Last updated {_mdy(as_of)}.", "", "TIMELINE"]
-    out.extend(timeline_bullet(s) for s in sorted(tracker.sprints, key=lambda s: (s.start, s.number or 0)))
+    out.extend(timeline_bullet(s) for s in timeline_sprints(tracker.sprints))
     if tracker.scope:
         out.append(f"- Scope: {tracker.scope}")
-    sprints = sorted(tracker.sprints, key=lambda s: (s.start, s.number or 0), reverse=True)
+    sprints = sorted(
+        (s for s in tracker.sprints if has_content(s)), key=lambda s: (s.start, s.number or 0), reverse=True
+    )
     if current_only:
         sprints = [s for s in sprints if s.status == "Active"][:1]
     for sprint in sprints:
