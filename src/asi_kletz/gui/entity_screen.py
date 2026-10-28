@@ -7,7 +7,23 @@ from tkinter import ttk
 from typing import TYPE_CHECKING, Any
 
 from ..schema import EntitySchema, FieldSpec, FieldType
-from .screens import FrozenPane, Screen, ScrollableFrame, bind_horizontal_scroll, fit_columns, heading_under
+from .screens import (
+    INDENT,
+    PDP_TAG,
+    PHASE_TAG,
+    PLAN,
+    PLAN_HEADER,
+    STACKED,
+    FrozenPane,
+    Screen,
+    ScrollableFrame,
+    bind_horizontal_scroll,
+    fit_columns,
+    heading_under,
+    is_group,
+    stack,
+    style_group_rows,
+)
 from .widgets import FieldWidget, WidgetFactory
 
 if TYPE_CHECKING:
@@ -15,8 +31,10 @@ if TYPE_CHECKING:
 
 TRUNCATE = 70  # a cell shows this much of a long text; the column fits the clipped text, not the value
 ALL_COLUMNS = "All"
-# the identity columns of the Safety Plan, `id` to Safety Deliverables: they stay put while the rest scrolls
-FROZEN = ("id", "order", "pdp_phase", "lifecycle_phase", "deliverable")
+# the identity columns of the Safety Plan stay put while the rest scrolls (0.7.2); since 0.8.4 the PDP phase,
+# the lifecycle phase and the deliverable are one stacked column, ``plan``, on an entity that has all three
+FROZEN = ("id", "order", PLAN)
+IDENTITY = ("id", "order", *STACKED)  # the frozen set of an entity that lacks the stack
 
 
 def cell_text(spec: FieldSpec | None, value: Any) -> str:
@@ -43,6 +61,9 @@ class EntityScreen(Screen):
     def build(self) -> None:
         # every column of the source sheet, in source order, behind the surrogate key
         self.columns = ["id"] + [f.name for f in self.schema.fields]
+        # the plan is stacked (PDP phase > lifecycle phase > deliverable in one frozen column) when the
+        # entity has the three fields; the three data columns stay on the tree, hidden, so ``set`` still answers
+        self.stacked = all(self.schema.has(name) for name in STACKED)
         # the `Columns` selector: `All`, then one entry per flag group, titled like the form's group boxes
         self.column_groups: dict[str, str] = {
             group.capitalize(): group
@@ -79,10 +100,15 @@ class EntityScreen(Screen):
 
         # two trees in lock-step: the frozen identity columns on the left, the rest scrolling on the right;
         # ``self.tree`` is the right one and still owns every column, so the whole screen works on it
-        self.pane = FrozenPane(paned, self.columns, [c for c in FROZEN if c in self.columns])
+        tree_columns = [*self.columns, PLAN] if self.stacked else self.columns
+        frozen = FROZEN if self.stacked else [c for c in IDENTITY if c in self.columns]
+        self.pane = FrozenPane(paned, tree_columns, frozen)
         self.pane.on_sort = self.sort_by
         self.tree = self.pane.right
         self.ybar, self.xbar = self.pane.ybar, self.pane.xbar
+        if self.stacked:
+            self.tree.heading(PLAN, text=PLAN_HEADER, command=lambda: self.sort_by(PLAN))
+            self.tree.column(PLAN, width=360, minwidth=40, stretch=False, anchor="w")
         for name in self.columns:
             spec = None if name == "id" else self.schema.field(name)
             header = "id" if spec is None else spec.header
@@ -99,6 +125,7 @@ class EntityScreen(Screen):
             stretch = spec is not None and spec.type is FieldType.MULTILINE
             anchor = "center" if spec is not None and spec.is_flag else "w"
             self.tree.column(name, width=width, minwidth=40, stretch=stretch, anchor=anchor)
+        self.pane.set_display(self._shown(ALL_COLUMNS))  # the stacked fields are hidden from the start
         self.tree.bind("<<TreeviewSelect>>", self._on_select, add="+")  # after the pane's own selection sync
         bind_horizontal_scroll(self.tree)
         self._heading_hint: str | None = None
@@ -180,13 +207,33 @@ class EntityScreen(Screen):
             rows = sorted(rows, key=sort_value, reverse=self.sort_desc)
         return rows
 
+    def _values(self, row: dict[str, Any]) -> list[str]:
+        """One cell per data column, in the tree's column order."""
+        return [cell_text(None if c == "id" else self.schema.field(c), row.get(c)) for c in self.columns]
+
+    def _insert_stacked(self, rows: list[dict[str, Any]]) -> None:
+        """The rows as the stack: a PDP phase row, its lifecycle phase rows, their deliverables; the group
+        rows have blank data cells and their tag, a deliverable row has every data cell plus the stacked text."""
+        blanks = [""] * len(self.columns)
+        spec = self.schema.field("deliverable")
+        for iid, level, text, row in stack(rows):
+            if row is None:
+                tag = PDP_TAG if level == 0 else PHASE_TAG
+                self.tree.insert("", "end", iid=iid, values=[*blanks, text], tags=(tag,))
+            else:
+                plan = INDENT * 2 + cell_text(spec, row.get("deliverable"))
+                self.tree.insert("", "end", iid=iid, values=[*self._values(row), plan])
+
     def _populate(self) -> None:
         self.tree.delete(*self.tree.get_children())
         shown = self._visible_rows()
-        for r in shown:
-            values = [cell_text(None if c == "id" else self.schema.field(c), r.get(c)) for c in self.columns]
-            self.tree.insert("", "end", iid=str(r["id"]), values=values)
-        self.window.theme.stripe(self.tree)
+        if self.stacked:
+            self._insert_stacked(shown)
+            style_group_rows(self.tree, self.window.theme)
+        else:
+            for r in shown:
+                self.tree.insert("", "end", iid=str(r["id"]), values=self._values(r))
+            self.window.theme.stripe(self.tree)
         self.fit()
         self.count_var.set(f"{len(shown)} of {len(self.rows)} rows")
         if self.selected_id is not None and self.tree.exists(str(self.selected_id)):
@@ -209,6 +256,11 @@ class EntityScreen(Screen):
         return fit_columns(self.tree, self._domain())
 
     def sort_by(self, column: str, desc: bool | None = None) -> None:
+        if column == PLAN:  # the stacked column's heading: back to the plan's own order
+            self.sort_key, self.sort_desc = None, False
+            self._populate()
+            self.window.set_status("Plan order")
+            return
         if desc is None:
             desc = not self.sort_desc if self.sort_key == column else False
         self.sort_key, self.sort_desc = column, desc
@@ -232,6 +284,13 @@ class EntityScreen(Screen):
         The tree is never rebuilt: headings, widths, the sort and the selection survive, and a hidden
         column still answers ``tree.set``. The choice lives on this screen instance only.
         """
+        self.pane.set_display(self._shown(choice))  # the frozen columns are on the left whatever the choice
+        self.columns_var.set(choice)
+        self.fit()
+
+    def _shown(self, choice: str) -> list[str]:
+        """The data columns the right tree displays for ``choice``; the stacked fields never, they are the
+        ``plan`` column on the left."""
         if choice == ALL_COLUMNS:
             shown = self.columns
         else:
@@ -240,9 +299,7 @@ class EntityScreen(Screen):
                 c for c in self.columns
                 if c == "id" or not self.schema.field(c).is_flag or self.schema.field(c).group == group
             ]
-        self.pane.set_display(shown)  # the frozen columns are on the left whatever the choice
-        self.columns_var.set(choice)
-        self.fit()
+        return [c for c in shown if c not in STACKED] if self.stacked else list(shown)
 
     def select(self, row_id: int) -> None:
         if self.tree.exists(str(row_id)):
@@ -252,7 +309,7 @@ class EntityScreen(Screen):
 
     def _on_select(self, _event: tk.Event | None = None) -> None:
         selection = self.tree.selection()
-        if selection:
+        if selection and not is_group(selection[0]):  # a PDP or lifecycle phase row is a heading, not a record
             self._load(int(selection[0]))
 
     def _load(self, row_id: int) -> None:

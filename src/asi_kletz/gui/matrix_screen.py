@@ -9,48 +9,29 @@ from typing import Any
 
 from ..commands import Result
 from ..schema import FieldSpec
-from .screens import PLAN_ENTITY, FrozenPane, Screen, bind_horizontal_scroll, fit_columns, heading_under
+from .screens import (  # noqa: F401  (INDENT, PDP_TAG, PHASE_TAG and stack are re-exported for the tests)
+    INDENT,
+    PDP_TAG,
+    PHASE_TAG,
+    PLAN,
+    PLAN_ENTITY,
+    PLAN_HEADER,
+    FrozenPane,
+    Screen,
+    bind_horizontal_scroll,
+    fit_columns,
+    heading_under,
+    is_group,
+    stack,
+    style_group_rows,
+)
 
 ENTITY = PLAN_ENTITY
-PLAN = "plan"  # the one stacked column: PDP phase, its lifecycle phases, their deliverables (0.8.3)
-PLAN_HEADER = "PDP phase  ›  Safety lifecycle phase  ›  Safety deliverable"
 FIXED = ("order", PLAN)  # frozen on the left since 0.7.2; stacked since 0.8.3
 FIXED_WIDTHS = (50, 360)  # starting widths only: ``fit_columns`` has the last word after every fill
-INDENT = "    "  # one level of the stack
 SEARCHED = ("order", "pdp_phase", "lifecycle_phase", "deliverable")  # the search box reads these, as before the stack
-PDP_TAG, PHASE_TAG = "pdp", "phase"  # the group rows; a deliverable row carries the stripe tag alone
 CHECK = "✓"
 ALL_GROUPS = "all"  # every flag at once, in source order: the default since 0.7.0
-
-
-def pdp_title(value: Any) -> str:
-    return f"PDP phase {value}" if value not in (None, "") else "(no PDP phase)"
-
-
-def phase_title(value: Any) -> str:
-    return str(value) if value not in (None, "") else "(no lifecycle phase)"
-
-
-def stack(rows: list[dict[str, Any]]) -> list[tuple[str, int, str, dict[str, Any] | None]]:
-    """The plan as a stack: ``(iid, level, text, row)`` per line, in the rows' own order.
-
-    Level 0 is a PDP phase (iid ``pdp:<value>``), level 1 a lifecycle phase under it
-    (``phase:<pdp>:<value>``), level 2 a deliverable (the row id, ``row`` set). A group line opens
-    whenever the value changes between consecutive rows, so a plan kept in order (as the Safety
-    Plan is, by ``order``) shows every phase once; a plan out of order shows the truth of its order.
-    """
-    lines: list[tuple[str, int, str, dict[str, Any] | None]] = []
-    pdp = phase = object()
-    for row in rows:
-        if row.get("pdp_phase") != pdp:
-            pdp, phase = row.get("pdp_phase"), object()
-            lines.append((f"pdp:{pdp}", 0, pdp_title(pdp), None))
-        if row.get("lifecycle_phase") != phase:
-            phase = row.get("lifecycle_phase")
-            lines.append((f"phase:{pdp}:{phase}", 1, INDENT + phase_title(phase), None))
-        deliverable = "" if row.get("deliverable") is None else str(row["deliverable"]).replace("\n", " ")
-        lines.append((str(row["id"]), 2, INDENT * 2 + deliverable, row))
-    return lines
 
 
 class SafetyPlanMatrixScreen(Screen):
@@ -136,22 +117,11 @@ class SafetyPlanMatrixScreen(Screen):
             values = ["" if row.get("order") is None else str(row["order"]), text]
             values += [CHECK if row.get(f.name) else "" for f in self.flags]
             tree.insert("", "end", iid=iid, values=values)
-        self._style_groups()
+        style_group_rows(tree, self.window.theme)
         fit_columns(tree)
         self.pane.mirror()
         total = sum(1 for r in self.rows for f in self.flags if r.get(f.name))
         self.window.set_status(f"{self.group_var.get()}: {total} flags set across {len(self.rows)} deliverables")
-
-    def _style_groups(self) -> None:
-        """Stripe the rows, then put the group tags back in front: the first tag wins an option, so a
-        group row takes its colour and font from its group tag and its background from the stripe."""
-        tree, theme = self.tree, self.window.theme
-        groups = {iid: tree.item(iid, "tags") for iid in tree.get_children() if not iid.isdigit()}
-        theme.stripe(tree)
-        tree.tag_configure(PDP_TAG, foreground=theme.palette.primary, font=theme.heading)
-        tree.tag_configure(PHASE_TAG, foreground=theme.palette.accent, font=theme.heading)
-        for iid, tags in groups.items():
-            tree.item(iid, tags=(*tags, *tree.item(iid, "tags")))
 
     def _on_heading_motion(self, event: tk.Event) -> None:
         text = heading_under(self.tree, event)
@@ -165,7 +135,7 @@ class SafetyPlanMatrixScreen(Screen):
             return
         iid = self.tree.identify_row(event.y)
         column = self.tree.identify_column(event.x)
-        if not iid or not column or not iid.isdigit():  # a group row has no flags to toggle
+        if not iid or not column or is_group(iid):  # a group row has no flags to toggle
             return
         field = self.tree.column(column, "id")  # ``#n`` counts displayed columns, so resolve it by name
         if field not in FIXED:

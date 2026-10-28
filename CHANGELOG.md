@@ -12,6 +12,30 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.8.4] - 2026-10-28
+
+The owner, 2026-10-28: "do the changes on the safety plan table too." Schema version unchanged (2).
+
+### Changed
+- **Safety Plan table stacked** (`gui/entity_screen.py`): on an entity that has `pdp_phase`,
+  `lifecycle_phase` and `deliverable` the frozen columns are `id`, `order` and `plan`, the stacked
+  column (`FROZEN`); the three fields stay on the right tree as hidden data columns (`tree.set`
+  still answers, the Columns box never shows them), and the tree's columns are the data columns
+  plus `plan`. `_populate` inserts the stack (group rows with blank data cells and the `pdp` /
+  `phase` tags, deliverable rows with every data cell plus the indented, clipped deliverable) and
+  styles it; selecting a group row leaves the form and `selected_id` alone; sorting by a heading
+  reorders the deliverables and the stack follows (`stack` opens a group whenever the value
+  changes); the `plan` heading, on either tree, sorts back to the plan's own order (status
+  `Plan order`). An entity without the three fields keeps the old frozen set (`IDENTITY`).
+- **Shared stacking** (`gui/screens.py`): `PLAN`, `PLAN_HEADER`, `STACKED`, `INDENT`, `PDP_TAG`,
+  `PHASE_TAG`, `pdp_title`, `phase_title`, `stack`, `is_group` and `style_group_rows` moved out
+  of `matrix_screen.py`, which imports them (and re-exports the names the tests use).
+
+### Tests
+- `test_safety_plan_group_rows_are_headings_not_records`; the table tests expect nine rows for
+  three deliverables, the stacked column on the tree, 59 displayed columns as before, the group
+  tags in front of the stripe on both trees, and the sort round trip through `plan`.
+
 ## [0.8.3] - 2026-10-28
 
 The owner, 2026-10-28: "the safety plan matrix screens are a little crowded because we are doing

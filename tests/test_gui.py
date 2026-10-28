@@ -18,7 +18,9 @@ SCREENS = ["dashboard", "jira_live", "safety_plan", "safety_plan_matrix", "sprin
 TITLES = ["Dashboard", "JIRA Live Data", "Safety Plan", "Safety Plan Matrix", "Sprint Board", "Weekly Status",
           "Export / Import"]
 # the identity columns of the Safety Plan table: frozen on the left since 0.7.2
-FROZEN_PLAN = ["id", "order", "pdp_phase", "lifecycle_phase", "deliverable"]
+FROZEN_PLAN = ["id", "order", "plan"]  # since 0.8.4 the three identity fields are one stacked column
+STACKED_PLAN = ["pdp_phase", "lifecycle_phase", "deliverable"]  # on the tree, hidden: the stack shows them
+STACK_ROWS = 9  # the three seeded deliverables under three PDP phases and three lifecycle phases
 
 
 def _tk_available() -> bool:
@@ -110,7 +112,7 @@ def test_navigation_and_dashboard(window):
 
 def test_entity_screen_create_update_delete(window, seeded):
     screen = window.show("safety_plan")
-    assert len(screen.tree.get_children()) == 3
+    assert len(screen.tree.get_children()) == STACK_ROWS
     screen.new()
     screen.widgets["deliverable"].set("line one\nline two")
     screen.widgets["order"].set("9")
@@ -143,10 +145,10 @@ def test_entity_screen_validation_shows_error(window, seeded):
 def test_search_sort_and_select(window):
     screen = window.show("safety_plan")
     screen.search_var.set("hazard")
-    assert len(screen.tree.get_children()) == 1
+    assert [iid for iid, _ in _rows(screen.tree)] == ["pdp:2", "phase:2:2. HARA / Risk Assessment", "2"]
     screen.search_var.set("")
     screen.sort_by("order", desc=True)
-    first = int(screen.tree.get_children()[0])
+    first = int(next(iid for iid in screen.tree.get_children() if iid.isdigit()))
     assert screen.by_id[first]["order"] == 3
     screen.select(first)
     assert screen.widgets["deliverable"].get() == "Functional Safety Concept"
@@ -168,7 +170,7 @@ def test_safety_plan_table_shows_every_column(window, seeded):
     screen = window.show("safety_plan")
     schema = seeded.registry.get(PLAN)
     assert screen.columns == ["id"] + [f.name for f in schema.fields] and len(screen.columns) == 64
-    assert list(screen.tree["columns"]) == screen.columns
+    assert list(screen.tree["columns"]) == [*screen.columns, "plan"]  # the stacked column rides along
     assert screen.columns[1:5] == ["order", "pdp_phase", "lifecycle_phase", "deliverable"]
     assert screen.tree.heading("loc_dms", "text") == "DMS"
     long_author = "author_electronics_engineer_mechanical_and_electrical"
@@ -187,7 +189,7 @@ def test_safety_plan_table_shows_every_column(window, seeded):
     assert screen.tree.set("1", "reviewer_tech_lead_functional_safety") == "✓"
     assert screen.tree.set("1", "author_tech_lead_functional_safety") == ""  # the duplicate header maps to two fields
     screen.sort_by("loc_dms", desc=True)
-    assert screen.tree.get_children()[0] == "1"
+    assert next(i for i in screen.tree.get_children() if i.isdigit()) == "1"  # the first deliverable row
     assert "Sorted by DMS" in window.status_text()
     assert not hasattr(entity_screen, "MAX_FLAG_COLUMNS") and not hasattr(entity_screen, "FLAG_WIDTH")
 
@@ -201,7 +203,7 @@ def test_columns_selector_narrows_the_flags(window, seeded):
     groups = ["Location", "Reference", "Author", "Verification", "Reviewer"]
     assert list(screen.columns_box.cget("values")) == ["All", *groups]
     # since 0.7.2 the frozen identity columns live in the left tree: the right one never displays them
-    unfrozen = tuple(c for c in screen.columns if c not in FROZEN_PLAN)
+    unfrozen = tuple(c for c in screen.columns if c not in FROZEN_PLAN and c not in STACKED_PLAN)
     assert screen.tree["displaycolumns"] == unfrozen and len(unfrozen) == 59
 
     screen.set_columns("Location")
@@ -209,7 +211,7 @@ def test_columns_selector_narrows_the_flags(window, seeded):
         "work_product_location", "loc_dms", "loc_jama", "loc_sharepoint", "work_product_reference",
         "author", "gate_reviewer", "deadline", "status",
     ]
-    assert len(screen.tree["columns"]) == 64  # nothing rebuilt
+    assert len(screen.tree["columns"]) == 65  # nothing rebuilt
     assert screen.tree.set("1", "reviewer_pat") == ""  # still readable while hidden
 
     screen.set_columns("Reviewer")
@@ -223,7 +225,7 @@ def test_columns_selector_narrows_the_flags(window, seeded):
     while screen.tree.set("2", "deadline") != "x" and time.time() < deadline:
         window.update()
         time.sleep(0.02)
-    assert len(screen.tree.get_children()) == 3 and screen.tree.set("2", "deadline") == "x"
+    assert len(screen.tree.get_children()) == STACK_ROWS and screen.tree.set("2", "deadline") == "x"
     assert list(screen.tree["displaycolumns"]) == shown and screen.selected_id == 2
     window.show("dashboard")
     assert window.show("safety_plan") is screen and screen.columns_var.get() == "Reviewer"
@@ -281,10 +283,11 @@ def test_event_bus_refreshes_open_screen(window, seeded):
     screen = window.show("safety_plan")
     seeded.execute("create", entity=PLAN, data={"deliverable": "from the API"}, actor="agent")
     deadline = time.time() + 2
-    while len(screen.tree.get_children()) < 4 and time.time() < deadline:
+    while len(screen.tree.get_children()) < STACK_ROWS + 3 and time.time() < deadline:
         window.update()
         time.sleep(0.02)
-    assert len(screen.tree.get_children()) == 4
+    # the new row sits under its own "(no PDP phase)" and "(no lifecycle phase)" headings
+    assert len(screen.tree.get_children()) == STACK_ROWS + 3
 
 
 def test_transfer_screen_round_trip(window, tmp_path, seeded):
@@ -347,7 +350,7 @@ def test_cyan_neon_is_default_and_paints_ttk(window):
     assert [k for k, _ in window.factory.items()] == SCREENS  # the picker is a control, not a screen
     screen = window.show("safety_plan")
     first = screen.tree.get_children()[0]
-    assert screen.tree.item(first, "tags") == ("even",)
+    assert screen.tree.item(first, "tags") == ("pdp", "even")  # a PDP phase heading, striped
 
 
 def test_plain_theme_and_unknown_theme(seeded):
@@ -1265,7 +1268,7 @@ def test_enum_column_fits_the_longest_lookup_value(window, seeded):
     screen = window.show("safety_plan")
     screen.refresh()
     tree = screen.tree
-    assert [tree.set(i, "lifecycle_phase") for i in tree.get_children()] == ["1. Concept Development"]
+    assert [tree.set(i, "lifecycle_phase") for i in tree.get_children() if i.isdigit()] == ["1. Concept Development"]
     body, head = _fonts(tree)
     phases = seeded.lookups["lifecycle_phase"]
     longest = max(phases, key=body.measure)
@@ -1410,36 +1413,46 @@ def test_frozen_pane_keeps_two_trees_in_step():
 
 def test_safety_plan_freezes_the_identity_columns(window, seeded):
     from asi_kletz.gui.entity_screen import FROZEN
-    from asi_kletz.gui.screens import FrozenPane
+    from asi_kletz.gui.screens import PLAN_HEADER, FrozenPane
 
     screen = window.show("safety_plan")
     pane, left, right = screen.pane, screen.pane.left, screen.tree
     assert isinstance(pane, FrozenPane) and list(FROZEN) == FROZEN_PLAN and pane.frozen == tuple(FROZEN_PLAN)
     assert right is pane.right and screen.ybar is pane.ybar and screen.xbar is pane.xbar
-    assert list(right["columns"]) == screen.columns  # the right tree still owns every column
-    assert not any(c in FROZEN for c in right["displaycolumns"]) and len(right["displaycolumns"]) == 59
+    assert list(right["columns"]) == [*screen.columns, "plan"]  # the right tree still owns every column
+    hidden = (*FROZEN, *STACKED_PLAN)
+    assert not any(c in hidden for c in right["displaycolumns"]) and len(right["displaycolumns"]) == 59
     assert tuple(left["columns"]) == tuple(FROZEN_PLAN)
-    assert _rows(left) == _rows(right) and [t for _, t in _rows(left)] == [("even",), ("odd",), ("even",)]
+    assert _rows(left) == _rows(right) and [t for _, t in _rows(left)] == [
+        ("pdp", "even"), ("phase", "odd"), ("even",), ("pdp", "odd"), ("phase", "even"), ("odd",),
+        ("pdp", "even"), ("phase", "odd"), ("even",),
+    ]
     for column in FROZEN:
         assert _cells(left, column) == _cells(right, column)
         assert left.heading(column, "text") == right.heading(column, "text")
-    assert left.heading("deliverable", "text") == screen.schema.field("deliverable").header
+    assert left.heading("plan", "text") == PLAN_HEADER
+    assert _cells(left, "plan")[:3] == ["PDP phase 1", "    1. Concept Development", "        Safety Plan"]
+    assert _cells(left, "order") == ["", "", "1", "", "", "2", "", "", "3"]
     _assert_fitted(left, _enum_extra(screen))  # the frozen enum columns fit their whole lookup too
-    assert int(left.column("lifecycle_phase", "width")) == int(right.column("lifecycle_phase", "width"))
+    assert int(left.column("plan", "width")) == int(right.column("plan", "width"))
     assert left.tag_configure("odd")["background"] == right.tag_configure("odd")["background"]
 
     screen.set_columns("Location")  # a column choice hides nothing frozen and leaves the left tree alone
-    assert "loc_dms" in right["displaycolumns"] and not any(c in FROZEN for c in right["displaycolumns"])
+    assert "loc_dms" in right["displaycolumns"] and not any(c in hidden for c in right["displaycolumns"])
     assert _rows(left) == _rows(right)
 
-    screen.sort_by("deliverable")  # sorting reorders both identically
-    titles = _cells(right, "deliverable")
-    assert titles == sorted(titles, key=str.casefold) and _cells(left, "deliverable") == titles
+    screen.sort_by("deliverable")  # sorting reorders both identically; the stack follows the sorted order
+    titles = [t for t in _cells(right, "deliverable") if t]
+    assert titles == sorted(titles, key=str.casefold)
+    assert [t.strip() for t in _cells(left, "plan") if t.startswith("        ")] == titles
     assert _rows(left) == _rows(right)
-    _click_heading(left, "deliverable")  # a left heading sorts like a right one: same column, now descending
-    assert _cells(right, "deliverable") == titles[::-1] and _cells(left, "deliverable") == titles[::-1]
+    screen.sort_by("deliverable")  # again: descending
+    assert [t for t in _cells(right, "deliverable") if t] == titles[::-1]
     assert window.status_text() == "Sorted by Safety Deliverables, descending"
     assert _rows(left) == _rows(right)
+    _click_heading(left, "plan")  # the stacked heading, on either side, is the way back to the plan's order
+    assert [t for t in _cells(right, "deliverable") if t] == [r["deliverable"] for r in screen.rows]
+    assert window.status_text() == "Plan order" and screen.sort_key is None and _rows(left) == _rows(right)
 
     left.selection_set("2")  # selecting through the frozen tree fills the form
     window.update()
@@ -1543,6 +1556,30 @@ def test_matrix_stacks_pdp_phase_over_lifecycle_phase_over_deliverable(window, s
     assert _rows(left) == _rows(right)
     screen.search_var.set("")
     assert len(_rows(right)) == 9
+
+
+def test_safety_plan_group_rows_are_headings_not_records(window, seeded):
+    """Owner, 2026-10-28: the stack on the table too. A PDP or lifecycle phase row selects nothing."""
+    from asi_kletz.gui.screens import PDP_TAG, PHASE_TAG
+
+    screen = window.show("safety_plan")
+    left, right = screen.pane.left, screen.tree
+    screen.select(2)
+    assert screen.selected_id == 2 and screen.widgets["deliverable"].get() == "Hazard Analysis and Risk Assessment"
+    right.selection_set("pdp:3")
+    screen._on_select()
+    assert screen.selected_id == 2 and screen.widgets["deliverable"].get() == "Hazard Analysis and Risk Assessment"
+    assert right.item("pdp:3", "tags")[0] == PDP_TAG
+    assert right.item("phase:3:3. Functional Safety Concept (FSC)", "tags")[0] == PHASE_TAG
+    assert all(right.set("pdp:3", c) == "" for c in screen.columns)  # a group row has no data cells
+    palette = window.theme.palette
+    for tree in (left, right):
+        assert str(tree.tag_configure(PDP_TAG, "foreground")) == palette.primary
+        assert str(tree.tag_configure(PHASE_TAG, "foreground")) == palette.accent
+    window.update()
+    left.selection_set("3")  # a deliverable through the frozen tree still fills the form
+    window.update()
+    assert screen.selected_id == 3 and screen.widgets["deliverable"].get() == "Functional Safety Concept"
 
 
 def test_frozen_pane_split_is_draggable(window, monkeypatch):

@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.8.3**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.8.4**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,16 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.8.4
+
+The **Safety Plan table is stacked too**, the same way as the matrix in 0.8.3: its frozen columns
+are `id`, `order` and the one stacked column (PDP phase, lifecycle phase indented under it, the
+deliverable under that), while the three data columns stay on the table hidden, so a hidden cell
+still answers and the form, the sort and the Columns box work as before. A phase row is a heading,
+not a record: selecting it leaves the form alone. Sorting by any heading reorders the deliverables
+and the stack follows that order; the stacked heading, on either side, is the way back to the
+plan's own order. The stacking code is shared by the two screens (`gui/screens.py`). No schema change.
 
 ## What is in 0.8.3
 
@@ -162,8 +172,9 @@ Everything of 0.1.0 plus diagrams and documents (see Diagrams and documents).
     order (`id` first; flags as check-mark columns headed by the source title; a `Columns`
     box narrows the flags to one group; a clicked heading is named in the status bar) with a
     form below; flag groups rendered as checkbox grids; New / Save / Delete / Duplicate /
-    Refresh. Since 0.7.2 the first five columns, `id` to Safety Deliverables, stay put while
-    the rest scrolls sideways: a Treeview cannot pin a column, so the table is two of them in
+    Refresh. Since 0.7.2 the identity columns stay put while the rest scrolls sideways (since
+    0.8.4 they are `id`, `order` and the plan stacked as PDP phase > safety lifecycle phase >
+    safety deliverable in one column): a Treeview cannot pin a column, so the table is two of them in
     lock-step (`gui/screens.py:FrozenPane`: one vertical bar, the selection, the striping and
     the sort shared; a heading on either side sorts). Since 0.7.3 the split between the two is
     a sash you can drag: it opens at the pinned columns' fitted width, never past 45% of the

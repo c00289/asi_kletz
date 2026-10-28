@@ -6,15 +6,72 @@ import tkinter as tk
 import tkinter.font as tkfont
 from collections.abc import Callable, Iterable, Mapping
 from tkinter import ttk
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..errors import NotFound
 
 if TYPE_CHECKING:
     from ..brain import Brain
     from .main_window import MainWindow
+    from .theme import Theme
 
 PLAN_ENTITY = "safety_plan_row"
+
+# -- the plan as a stack (0.8.3 on the matrix, 0.8.4 on the table) ------------------------------------
+# Owner, 2026-10-28: the PDP phase, the lifecycle phase and the deliverable side by side crowded the
+# screens; stack them. One column, read top down: a PDP phase row, its lifecycle phase rows indented
+# under it, their deliverables indented under those, in the rows' own order.
+PLAN = "plan"  # the stacked column's name on a tree; not a field of the schema
+PLAN_HEADER = "PDP phase  ›  Safety lifecycle phase  ›  Safety deliverable"
+STACKED = ("pdp_phase", "lifecycle_phase", "deliverable")  # the fields the stack replaces on a table
+INDENT = "    "  # one level of the stack
+PDP_TAG, PHASE_TAG = "pdp", "phase"  # the group rows' tags; a deliverable row carries the stripe tag alone
+
+
+def pdp_title(value: Any) -> str:
+    return f"PDP phase {value}" if value not in (None, "") else "(no PDP phase)"
+
+
+def phase_title(value: Any) -> str:
+    return str(value) if value not in (None, "") else "(no lifecycle phase)"
+
+
+def stack(rows: list[dict[str, Any]]) -> list[tuple[str, int, str, dict[str, Any] | None]]:
+    """The plan as a stack: ``(iid, level, text, row)`` per line, in the rows' own order.
+
+    Level 0 is a PDP phase (iid ``pdp:<value>``), level 1 a lifecycle phase under it
+    (``phase:<pdp>:<value>``), level 2 a deliverable (the row id, ``row`` set). A group line opens
+    whenever the value changes between consecutive rows, so a plan kept in order (as the Safety
+    Plan is, by ``order``) shows every phase once; a plan out of order shows the truth of its order.
+    """
+    lines: list[tuple[str, int, str, dict[str, Any] | None]] = []
+    pdp = phase = object()
+    for row in rows:
+        if row.get("pdp_phase") != pdp:
+            pdp, phase = row.get("pdp_phase"), object()
+            lines.append((f"pdp:{pdp}", 0, pdp_title(pdp), None))
+        if row.get("lifecycle_phase") != phase:
+            phase = row.get("lifecycle_phase")
+            lines.append((f"phase:{pdp}:{phase}", 1, INDENT + phase_title(phase), None))
+        deliverable = "" if row.get("deliverable") is None else str(row["deliverable"]).replace("\n", " ")
+        lines.append((str(row["id"]), 2, INDENT * 2 + deliverable, row))
+    return lines
+
+
+def is_group(iid: str) -> bool:
+    """A group row of the stack (a PDP or lifecycle phase), as opposed to a deliverable row keyed by its id."""
+    return not iid.isdigit()
+
+
+def style_group_rows(tree: ttk.Treeview, theme: Theme) -> None:
+    """Stripe the rows, then put the group tags back in front: the first tag wins an option, so a
+    group row takes its colour and font from its group tag and its background from the stripe."""
+    groups = {iid: tree.item(iid, "tags") for iid in tree.get_children() if is_group(iid)}
+    theme.stripe(tree)
+    tree.tag_configure(PDP_TAG, foreground=theme.palette.primary, font=theme.heading)
+    tree.tag_configure(PHASE_TAG, foreground=theme.palette.accent, font=theme.heading)
+    for iid, tags in groups.items():
+        tree.item(iid, tags=(*tags, *tree.item(iid, "tags")))
 
 
 class Screen(ttk.Frame):
