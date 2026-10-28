@@ -173,6 +173,8 @@ implementation produced by a factory.
 | 0.7.1 to 0.7.3 | Window polish: every column fitted to its text (`fit_columns`, 0.7.1); the identity columns of both Safety Plan screens frozen on the left (`FrozenPane`, 0.7.2) behind a draggable sash that opens at their fitted width but never past 45% of the window (0.7.3); the JIRA Live Data filter grid; the broken-windows sweep of the documents (0.7.3) | done 2026-10-28 |
 | 0.8.0 | The Weekly Activity Tracker and sprints, phases 1 to 3 of `docs/weekly-tracker-plan.md`: entities `sprint`, `sprint_item`, `week` (schema version 2), `tracker/format.py` (the file grammar, parse and render), `TrackerService` and the `tracker` verb (import, build history / week, add), `SprintService`, `generate/sprint_queries.py` and the `sprint` verb (board, start, close, point, carry), the tracker and sprint keys in `kletz.toml`; the one-table rule retired. Screens, diagrams and the family tables are phases 4 and 5. | done 2026-10-28 (CLI and automation server; no screen yet) |
 | 0.8.1 | The tracker in the window: the Dashboard's sprint strip, the Sprint Board and Weekly Status screens (`gui/sprint_board_screen.py`, `gui/tracker_screen.py`, registered after Safety Plan Matrix), the two File menu entries; phase 4 of `docs/weekly-tracker-plan.md` without the diagrams and the report. | done 2026-10-28 |
+| 0.9.0 | The hidden identity: every row of every entity carries a `uid` (schema version 3), stamped on open, carried by every file, matched first by every import, accepted wherever an id is; no table shows `id` or `order`; see [hidden-identity-plan.md](hidden-identity-plan.md) | done 2026-10-28 |
+| 0.10.0 | The sprint planner: the `holiday` entity and `holiday load` (schema version 4, `data/us-holidays-2026-2029.json`), `tracker/business_days.py`, `sprint plan` / `--replan`, the owner's rule (10 business days, 8 points fixed and enforced, consecutive sprints), the TIMELINE naming the next planned sprint only, the Holidays screen; see [sprint-planner-plan.md](sprint-planner-plan.md) | done 2026-10-28 |
 | later | The burndown and velocity diagrams and the sprint report; approval mode, form puppeting, import diff preview, date picker | planned |
 
 ---
@@ -180,6 +182,7 @@ implementation produced by a factory.
 ## 9. Change log
 
 - 2026-10-28 0.8.1: the section 8 row for the tracker screens and the dashboard strip.
+- 2026-10-28 0.10.0: the section 8 rows for the hidden identity (0.9.0) and the sprint planner (0.10.0).
 - 2026-10-28 0.8.0: the section 8 row for the Weekly Activity Tracker and sprints (phases 1 to 3); section 4's "one table" is history as of this version, the registered list is the design.
 - 2026-10-28 0.7.3: status line and the section 8 row for the three patch releases (fitted columns, frozen identity columns, the draggable split, the sweep).
 - 2026-10-27 0.7: section 3 (the automation server lives in the GUI front end), section 7 (the server, the session file, forwarding, the `session` verb delivered) and section 8 row for the automation server (0.7.0); approval mode and form puppeting are the next row.

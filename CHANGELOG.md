@@ -12,6 +12,112 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.10.0] - 2026-10-28
+
+The sprint planner, holidays and the capacity rule: `docs/sprint-planner-plan.md`, implemented in four
+commits, one per phase. The owner's rule, 2026-10-28: "A sprint spans 10 business days. Monday to Friday
+count; weekends and holidays do not, so a sprint that contains a holiday ends one calendar day later per
+holiday. Dates move as holidays become real; the cadence does not. Capacity is 8 points per sprint, company
+policy (8 productive days of the 10). Holidays never reduce points. Sprints are consecutive with no gaps,
+numbered across the programme (SPRINT n); the chain continues from Sprint 2 (2026-10-27 to 2026-11-10). We
+do not know the work yet: future sprints are empty, Planned, with no lifecycle phase, and will be adjusted
+as dates become real." And, the same day: "every single sprint except the one in the past is 8 points; set
+this as a global value that is fixed." Schema version 3 → 4.
+
+### Added
+- **The `holiday` entity** (`schema/definitions.py`): `date` (required), `name` (required), `status`
+  (`holiday_status`: `assumed` / `confirmed`), `note`, the hidden `uid`; sheet `Holidays`; `order_by` date;
+  fifth and last in `ALL_ENTITIES`, so it has the CRUD verbs, a place in the dump and the workbook and, through
+  the generic `EntityScreen`, a **Holidays** screen registered after Weekly Status (`gui/screens.py`; no stack,
+  so no frozen column). **`holiday load <file>`** (`commands/holiday.py`, `services/holiday_service.py`) upserts
+  a JSON list of `{date, name, status[, note]}` by date and name, the whole file validated before anything is
+  written. **`data/us-holidays-2026-2029.json`**: 52 weekday holidays (US federal 2026 to 2029, observed dates,
+  plus the day after Thanksgiving and Christmas Eve marked `(company, assumed)`), every row `assumed`, copied as
+  given.
+- **Business days** (`tracker/business_days.py`): `is_business_day`, `next_business_day`, `add_business_days`,
+  `business_days_between`, `holidays_within`; pure functions over dates and a collection of holidays.
+  `sprint_queries.holiday_dates` reads the table as `{date: name}`, any status; two holidays on one date are
+  one day off with both names.
+- **The planner** (`services/sprint_service.py:plan`, `sprint plan [--until | --years 3] [--days 10]
+  [--replan]`): the next sprint starts on the first business day after the highest-numbered sprint's end and
+  ends on its `days`th business day, `SPRINT n`, no lifecycle phase, capacity 8, Planned, the goal
+  `Holidays: <name> (<m/d>), ...` when it contains holidays; sprints are added while they start on or before
+  the horizon; an existing sprint is never touched; `--replan` recomputes the dates of the Planned sprints
+  after the active one (after the last Closed one when none is active) from the holiday table, never a
+  started or closed sprint, and rewrites a goal only when it is empty or a `Holidays:` line the planner
+  wrote. The report: `added`, `replanned`, `first`, `last`, `until`, `days`, `capacity`, `holidays` (every
+  holiday in the planned span). The event `sprint.planned`.
+- **The capacity rule, enforced** (`schema/definitions.py:SPRINT_CAPACITY`, `CAPACITY_RULE`;
+  `services/sprint_service.py:guard`, `enforce_capacity`; `services/entity_service.py:guard`;
+  `generate/sprint_queries.py:capacity_of`; `brain.py`): 8 is a fixed global; a create of a sprint that is
+  not Closed without a capacity gets it, a create or an update with another value is refused with the rule's
+  text (`EntityService.guard`, a per-entity check `Brain.service` attaches to the `sprint` service); on open,
+  after `ensure_schema` and `stamp_uids`, every sprint that is not Closed and differs is set to 8 in one
+  transaction, audited once as `enforce_capacity` (actor `system`, the count and the ids) and reported in
+  `brain.migration["capacity_enforced"]`; the board, the dashboard strip, `point` and the tracker's sprint
+  line read `capacity_of`: 8 for any sprint that is not Closed, the stored value for a Closed one. The
+  `capacity` field stays for that history (Sprint 1 keeps 10).
+- `status` reports `config_warnings`; `load_config` records one for a `sprint_capacity` key.
+
+### Changed
+- **`sprint_capacity` is no setting and `--capacity` is gone** (`brain.py`, `commands/sprint.py`,
+  `kletz.example.toml`): the key is ignored with a warning naming the rule, logged and in `status`; `sprint
+  start` and `sprint plan` have no `--capacity`; a sprint is created with 8. Why: an option that is always 8
+  is a trap, and the owner asked for a global value that is fixed.
+- **`sprint_days` means business days, 10** (`schema/definitions.py:SPRINT_DAYS`, `brain.py`): `sprint
+  start` ends a sprint on its `sprint_days`th business day over the holiday table (a `--start` or `--as-of`
+  given is kept as the first day); `sprint close` opens the next sprint on the first business day after the
+  closed one's end, `sprint_days` business days long, capacity 8, instead of on the closed one's end day
+  with its calendar length and capacity (0.8.0); a Planned next sprint that already has dates (the planner's)
+  keeps them. The `sprint` verb's help carries the rule verbatim.
+- **The tracker text** (`tracker/format.py:render`, `timeline_sprints`, `has_content`, `timeline_bullet`):
+  the `TIMELINE` prints the Closed and Active sprints as before and, of the Planned ones, those with weeks
+  or items plus the next one, one bullet; a Planned sprint with no weeks and no items prints no `=====`
+  block. This is a deviation from 0.8.0's "every sprint" rule: with seventy-odd planned sprints the text
+  would have been mostly rules. A sprint without a lifecycle phase prints its bullet as
+  `- Phase to be assigned: planned. Sprint 3: 11/12 - 11/25.`; the parser ignores a bullet it does not
+  recognise, and such a sprint, having no block, lives in the database and is never re-created by an
+  import. The `week` build, the Sprint Board picker (every sprint, the active one first) and the dashboard
+  strip are unchanged.
+- The real tracker file, imported, gives Sprint 2 capacity 8 (the rule, whatever the file said); the test
+  fixtures of the board and the window carry 8 and 3 + 3 + 2 points.
+
+### Deviations from the plan, and what the design got wrong once it met the code
+- **The capacity addition** reached the implementing agent before phase 1 was committed, so it is in the plan
+  (section 3.4) and in phase 2, not a phase of its own.
+- **The horizon counts from the last started sprint.** "Three years from the last sprint's end" read
+  literally made every run extend the chain by three more years (the last sprint was the one just planned);
+  `years` counts from the end of the last Active or Closed sprint, so a second run with the same horizon
+  adds nothing, which is what "idempotent" asked for.
+- **The history did not skip empty sprints before.** The design said the history "still prints only
+  sprints that have weeks or items"; `format.render` printed a block for every sprint. Both the TIMELINE
+  rule and the block rule are new in this release.
+- **The sample first start is a holiday.** The design expected the first planned sprint to start 2026-11-11;
+  that is Veterans Day in the seed, so with the holidays loaded it starts 2026-11-12 (and 2026-11-11 without
+  them). The tests pin both. Three years add 79 sprints without holidays and 75 with the seed.
+- **The holidays honoured are the span's**, gaps included: a holiday between two sprints (Veterans Day moves
+  a start without being inside any sprint) is honoured too, so the report lists it.
+- **Two holidays on one date** (an observed Christmas on the company's Christmas Eve, twice in the seed) are
+  one day off in the calendar with both names in the goal; the seed's 52 rows are 50 dates.
+- **A planned sprint whose holidays fall in the gap before it** (Sprint 6 after Christmas Eve and Christmas
+  Day are confirmed) has no `Holidays:` goal: the goal names the holidays a sprint contains, and the gap is
+  what moved it.
+- **The Holidays screen's frozen pane is empty** (no stack, no identity column); the sash sits at zero.
+- `holiday_dates`, `capacity_of` and the `ref` of the `holiday` verb's file argument are names the plan left
+  open; `EntityService.guard` is the hook the capacity rule needed and the plan did not foresee.
+
+### Tests
+- 264 → 285: the calendar (a plain week, a weekend, one holiday, a holiday on a Monday, the Christmas
+  and New Year span); the seed loads 52 rows and loads again unchanged, the upsert by date and name, a bad
+  file or row is an error; the five-entity lists and the 0.8.4 fixture gaining the `holiday` table; the
+  planner (79 / 75 sprints, the first and last dates, the Christmas sprint's goal and span, `--until`,
+  `--days 5`, a second run adds 0, `--replan` after a holiday becomes real with the active, the closed and a
+  human goal untouched, the errors); the rule (`sprint start` ends 2026-11-09 from 2026-10-27 with capacity 8
+  and no `--capacity`, `sprint_days = 7`, the config warning, the open-time step on a database written before
+  the rule, the refused update and create, the board reading 8 whatever the row says); the TIMELINE naming
+  the next planned sprint only and no block for an empty one, in the grammar and from a database; the
+  Holidays screen in the navigation list after Weekly Status.
+
 ## [0.9.1] - 2026-10-28
 
 The owner, 2026-10-28: "make it so that the left pane in Safety Plan and the left pane in Safety Plan

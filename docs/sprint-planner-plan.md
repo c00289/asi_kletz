@@ -1,6 +1,6 @@
 # ASI Kletz — Plan: the sprint planner, holidays and business days
 
-**Status:** Decided 2026-10-28; to be implemented as asi_kletz 0.10.0 (schema version 3 → 4)
+**Status:** Implemented 2026-10-28 (asi_kletz 0.10.0); deviations in the CHANGELOG entry
 **Written:** 2026-10-28
 **Owner:** FuSa engineer
 **Target version:** asi_kletz 0.10.0 (after 0.9.1; one new entity, `holiday`; Kletz only, nothing shared with
@@ -248,4 +248,6 @@ README.md, CHANGELOG.md, docs/plan.md, pyproject.toml, docs/sprint-planner-plan.
 
 ## 9. Change log
 
-- 2026-10-28: written, decided.
+- 2026-10-28: written, decided; the owner's capacity addition folded in the same day (section 3.4).
+- 2026-10-28: implemented as asi_kletz 0.10.0 in four commits (one per phase); every deviation and what the
+  design got wrong once it met the code are in `CHANGELOG.md`, section `[0.10.0]`.
