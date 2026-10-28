@@ -1655,14 +1655,14 @@ TRACKER_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "tracker_2026-10-28.txt"
 
 
 def _sprint(brain):
-    """Sprint 1, active, with three items: 3 points to do, 5 in progress, 2 done."""
+    """Sprint 1, active, with three items: 3 points to do, 3 in progress, 2 done (capacity is the rule, 8)."""
     assert brain.execute("create", entity="sprint", data={
         "number": 1, "label": "SPRINT 1", "lifecycle_phase": "3. Functional Safety Concept (FSC)",
-        "start": "2026-10-27", "end": "2026-11-10", "capacity": 10, "status": "Active", "goal": "Clear the backlog",
+        "start": "2026-10-27", "end": "2026-11-10", "status": "Active", "goal": "Clear the backlog",
     }).ok
     for order, (title, points, status, extra) in enumerate([
         ("Safety Plan dated", 3, "To Do", {"kind": "Deliverable", "plan_row": 1}),
-        ("Perform Platform Activity Flow", 5, "In Progress", {"kind": "Jira", "jira_key": "HWL-2553"}),
+        ("Perform Platform Activity Flow", 3, "In Progress", {"kind": "Jira", "jira_key": "HWL-2553"}),
         ("Intro meeting", 2, "Done", {"kind": "Meeting"}),
     ], 1):
         assert brain.execute("create", entity=ITEM, data={
@@ -1680,15 +1680,15 @@ def test_dashboard_shows_where_the_active_sprint_stands(window, seeded):
     assert dash._sprint_vars["sprint"].get() == "–" and "No active sprint" in dash.sprint_tiles.cget("text")
     _sprint(seeded)
     dash.refresh()
-    assert dash._sprint_vars["sprint"].get() == "1" and dash._sprint_vars["committed"].get() == "10 / 10"
-    assert dash._sprint_vars["done"].get() == "2" and dash._sprint_vars["to_go"].get() == "8"
+    assert dash._sprint_vars["sprint"].get() == "1" and dash._sprint_vars["committed"].get() == "8 / 8"
+    assert dash._sprint_vars["done"].get() == "2" and dash._sprint_vars["to_go"].get() == "6"
     assert dash._sprint_vars["unpointed"].get() == "0" and dash._sprint_vars["velocity"].get() == "–"
     assert dash.sprint_tiles.cget("text").startswith("Sprint 1 · SPRINT 1 · 3. Functional Safety Concept (FSC)")
     seeded.execute("sprint", action="close", as_of="2026-11-10")
     time.sleep(0.1)
     window.update()  # the event bus refreshes the open screen after 50 ms
     assert dash._sprint_vars["sprint"].get() == "2" and dash._sprint_vars["velocity"].get() == "2"
-    assert dash._sprint_vars["committed"].get() == "8 / 10"
+    assert dash._sprint_vars["committed"].get() == "6 / 8"
 
 
 def test_sprint_board_lanes_form_and_save(window, seeded):
@@ -1698,10 +1698,10 @@ def test_sprint_board_lanes_form_and_save(window, seeded):
     screen.refresh()
     assert screen.sprint_var.get() == "1 · SPRINT 1 · Active" and window.sprint_number == 1
     assert _lane(screen, "To Do") == ["Safety Plan dated"] and _lane(screen, "Done") == ["Intro meeting"]
-    assert screen.points_var.get() == "10 / 10 points committed · 2 done · 8 to go · 0 unpointed"
+    assert screen.points_var.get() == "8 / 8 points committed · 2 done · 6 to go · 0 unpointed"
     pace = screen.pace_var.get()
     assert pace.startswith("2026-10-27 to 2026-11-10 · ") and "velocity no closed sprint" in pace
-    assert int(screen.bar.cget("value")) == 10 and int(screen.bar.cget("maximum")) == 10
+    assert int(screen.bar.cget("value")) == 8 and int(screen.bar.cget("maximum")) == 8
     assert "Clear the backlog" in screen.goal_var.get()
     # select the In Progress item: the form fills, the other lanes drop their selection
     tree = screen.lanes["In Progress"]
@@ -1709,14 +1709,14 @@ def test_sprint_board_lanes_form_and_save(window, seeded):
     tree.selection_set(iid)
     tree.event_generate("<<TreeviewSelect>>")
     assert screen.selected == int(iid) and screen.widgets["title"].get() == "Perform Platform Activity Flow"
-    assert screen.widgets["jira_key"].get() == "HWL-2553" and screen.widgets["points"].get() == "5"
-    # 8 points: over capacity is a warning on the summary, never a refusal
+    assert screen.widgets["jira_key"].get() == "HWL-2553" and screen.widgets["points"].get() == "3"
+    # 8 points on one item: over capacity is a warning on the summary, never a refusal
     screen.widgets["points"].set("8")
     screen.widgets["status"].set("Done")
     assert screen.save().ok
     assert _lane(screen, "Done") == ["Perform Platform Activity Flow", "Intro meeting"]
-    assert screen.warn_var.get() == "sprint 1 committed 13 of 10 points"
-    assert screen.points_var.get().startswith("13 / 10 points committed · 10 done")
+    assert screen.warn_var.get() == "sprint 1 committed 13 of 8 points"
+    assert screen.points_var.get().startswith("13 / 8 points committed · 10 done")
     # a new item from the form
     screen.new()
     screen.widgets["title"].set("Ask the systems team")
@@ -1732,7 +1732,7 @@ def test_sprint_board_lanes_form_and_save(window, seeded):
     assert [s[0] for s in [v.split(" · ") for v in screen.sprint_box["values"]]] == ["1", "2"]
     assert window.status_text() == "Sprint 1 closed: 10 points done, 1 item(s) carried into sprint 2"
     screen.refresh()
-    assert window.status_text().startswith("Sprint 2: 3 / 10 points committed")
+    assert window.status_text().startswith("Sprint 2: 3 / 8 points committed")
 
 
 def test_sprint_board_survives_a_theme_pick_and_start_refuses_twice(window, seeded):

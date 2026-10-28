@@ -7,6 +7,7 @@ import datetime as dt
 from typing import TYPE_CHECKING, Any
 
 from ..errors import CommandError
+from ..schema.definitions import SPRINT_CAPACITY
 
 if TYPE_CHECKING:
     from ..brain import Brain
@@ -90,6 +91,13 @@ def holiday_dates(brain: Brain) -> dict[dt.date, str]:
     return out
 
 
+def capacity_of(sprint: dict[str, Any]) -> int:
+    """The rule: 8 for any sprint that is not Closed, whatever the row says; a Closed sprint's stored value."""
+    if sprint.get("status") == "Closed":
+        return int(sprint.get("capacity") or SPRINT_CAPACITY)
+    return SPRINT_CAPACITY
+
+
 # -- points ----------------------------------------------------------------------------------
 def committed(rows: list[dict[str, Any]]) -> int:
     return sum(int(r["points"]) for r in rows if r.get("points") and r.get("status") != "Carried")
@@ -125,7 +133,7 @@ def board(brain: Brain, sprint: dict[str, Any], as_of: dt.date | None = None) ->
     """Everything the Sprint Board, the sprint line and the dashboard tile show, with the capacity warnings."""
     as_of = as_of or dt.date.today()
     rows = items(brain, sprint["number"])
-    capacity = int(sprint.get("capacity") or brain.sprint_capacity)
+    capacity = capacity_of(sprint)
     committed_points, done_points = committed(rows), done(rows)
     missing = unpointed(rows)
     left = days_left(sprint, as_of)

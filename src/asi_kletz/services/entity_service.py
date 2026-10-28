@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from ..automation.events import EventBus
@@ -29,6 +29,9 @@ class EntityService:
         self.storage = storage
         self.lookups = lookups
         self.events = events
+        # an entity's own rule, run after coercion and before the write: ``guard(current_row_or_None, clean)``
+        # may fill ``clean`` or raise ``ValidationError`` (the sprint's capacity rule; ``Brain.service`` sets it)
+        self.guard: Callable[[dict[str, Any] | None, dict[str, Any]], None] | None = None
 
     # -- reads ----------------------------------------------------------
     def list(
@@ -75,6 +78,8 @@ class EntityService:
     # -- writes ---------------------------------------------------------
     def create(self, data: Mapping[str, Any], actor: str = "python") -> tuple[dict[str, Any], list[str]]:
         clean, warnings = self.schema.coerce_row(data, self.lookups)
+        if self.guard is not None:
+            self.guard(None, clean)
         if self.schema.has(UID) and not clean.get(UID):  # assigned once, here; a uid handed in is kept
             clean[UID] = new_uid()
         with self.storage.transaction():
@@ -88,6 +93,11 @@ class EntityService:
     ) -> tuple[dict[str, Any], list[str]]:
         row_id = self.resolve(ref)
         clean, warnings = self.schema.coerce_row(data, self.lookups, partial=True)
+        if self.guard is not None:
+            current = self.repo.get(row_id)
+            if current is None:
+                raise NotFound(f"{self.schema.name} {row_id} not found")
+            self.guard(current, clean)
         with self.storage.transaction():
             if UID in clean:
                 clean = self._check_uid(row_id, clean)

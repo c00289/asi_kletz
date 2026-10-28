@@ -153,7 +153,8 @@ def test_import_the_real_file(imported):
         (1, "SPRINT 1", "Closed", "2026-10-12", "2026-10-27", "2026-10-27"),
         (2, "SPRINT 2", "Active", "2026-10-27", "2026-11-10", None),
     ]
-    assert sprints[1]["lifecycle_phase"] == "3. Functional Safety Concept (FSC)" and sprints[1]["capacity"] == 10
+    assert sprints[1]["lifecycle_phase"] == "3. Functional Safety Concept (FSC)"
+    assert sprints[1]["capacity"] == 8  # the rule, whatever the file said
     items = brain.execute("list", entity="sprint_item").data
     assert all(i["sprint"] == 2 and i["status"] == "To Do" and i["points"] is None for i in items)
     assert [i["jira_key"] for i in items if i["kind"] == "Jira"] == JIRA_KEYS
@@ -234,7 +235,7 @@ def test_points_show_on_the_sprint_line_and_under_the_item(imported):
     lines = text.splitlines()
     # the imported Phase 2 sprint is closed with nothing done, so the velocity is 0, honestly
     assert lines[11] == (
-        "Sprint: 3 of 10 points committed, 0 done, 3 to go, 14 unpointed, 13 days left; velocity 0 points per sprint."
+        "Sprint: 3 of 8 points committed, 0 done, 3 to go, 14 unpointed, 13 days left; velocity 0 points per sprint."
     )
     detail = "            Sprint 2 target: dates added to every deliverable; plan baselined.\n            Points: 3\n"
     assert detail in text

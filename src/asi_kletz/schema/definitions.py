@@ -94,8 +94,19 @@ SPRINT_STATUSES = ("Planned", "Active", "Closed")
 ITEM_STATUSES = ("To Do", "In Progress", "Done", "Carried")
 ITEM_KINDS = ("Deliverable", "Jira", "Meeting", "Question", "Other")
 WEEK_SECTIONS = ("Note", "Outcomes", "Issues", "Jira")
-SPRINT_CAPACITY = 10  # points per sprint when neither kletz.toml nor the sprint says otherwise
-SPRINT_DAYS = 14
+# The owner's rule, 2026-10-28 (docs/sprint-planner-plan.md): "Capacity is 8 points per sprint, company policy
+# (8 productive days of the 10). Holidays never reduce points." And: "every single sprint except the one in the
+# past is 8 points; set this as a global value that is fixed." So this is not a default: every sprint that is
+# not Closed has it (enforced on open and on every create and update); a Closed sprint keeps its stored capacity
+# as history. No kletz.toml key and no command option sets it.
+SPRINT_CAPACITY = 8
+CAPACITY_RULE = (
+    f"every sprint that is not Closed has a capacity of {SPRINT_CAPACITY} points (company policy, fixed: "
+    "\"every single sprint except the one in the past is 8 points\"); a Closed sprint keeps its own as history"
+)
+# "A sprint spans 10 business days. Monday to Friday count; weekends and holidays do not." Business days, not
+# calendar days, since 0.10.0; the holidays are the `holiday` table. `sprint_days` in kletz.toml overrides it.
+SPRINT_DAYS = 10
 
 default_lookups.register("sprint_status", SPRINT_STATUSES)
 default_lookups.register("item_status", ITEM_STATUSES)

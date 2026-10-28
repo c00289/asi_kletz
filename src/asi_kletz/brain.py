@@ -7,6 +7,7 @@ directly through ``service(entity)``.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -17,10 +18,12 @@ from .locks import guard
 from .models import ModelFactory
 from .repositories import RepositoryFactory
 from .schema import LookupRegistry, SchemaRegistry, default_lookups, default_registry
-from .schema.definitions import SPRINT_CAPACITY, SPRINT_DAYS
+from .schema.definitions import CAPACITY_RULE, SPRINT_CAPACITY, SPRINT_DAYS
 from .services import EntityService, HolidayService, JiraService, SprintService, TrackerService, TransferService
 from .storage import StorageFactory
 from .version import SCHEMA_VERSION, __version__
+
+log = logging.getLogger(__name__)
 
 DEFAULT_DB_NAME = "kletz.db"
 DEFAULT_WORKBOOK_NAME = "kletz.xlsx"
@@ -35,7 +38,8 @@ CONFIG_TEXT_KEYS = (  # document metadata, the live JQL and the tracker's header
     "doc_id", "project", "jira_live_jql", "tracker_title", "tracker_byline", "tracker_scope", "tracker_jira_scope",
 )
 CONFIG_BOOL_KEYS = ("jira_live_autofetch",)  # copied only when the TOML value is a real boolean; absent = false
-CONFIG_INT_KEYS = ("sprint_capacity", "sprint_days")  # copied only when the TOML value is an integer
+CONFIG_INT_KEYS = ("sprint_days",)  # copied only when the TOML value is an integer
+IGNORED_KEYS = ("sprint_capacity",)  # 0.10.0: capacity is the rule, fixed; the key is ignored with a warning
 REVISION_FIELDS = ("rev", "date", "author", "description")
 
 
@@ -51,8 +55,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     default is ``False`` (``services.jira_service.AUTOFETCH_DEFAULT``): the window never connects
     to Jira unless the file says ``true`` or the engineer presses Refresh. ``tracker_title``,
     ``tracker_byline``, ``tracker_scope`` and ``tracker_jira_scope`` are the header lines of the Weekly
-    Activity Tracker text; ``sprint_capacity`` (default 10) and ``sprint_days`` (default 14) are the
-    defaults of a new sprint (TOML integers; anything else is ignored so the default applies).
+    Activity Tracker text; ``sprint_days`` (default 10, business days) is the length of a new sprint (a
+    TOML integer; anything else is ignored so the default applies). ``sprint_capacity`` is ignored since
+    0.10.0 (capacity is the rule, 8, fixed): when present, ``warnings`` carries one line naming the rule.
     Missing file: ``{}``.
     """
     import tomllib
@@ -80,6 +85,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         value = data.get(key)
         if isinstance(value, int) and not isinstance(value, bool) and value > 0:
             config[key] = value
+    for key in IGNORED_KEYS:
+        if key in data:
+            config.setdefault("warnings", []).append(f"{key} = {data[key]!r} in kletz.toml is ignored: {CAPACITY_RULE}")
     revisions = data.get("revision")
     if isinstance(revisions, list):
         config["revisions"] = [
@@ -150,12 +158,18 @@ class Brain:
         self.models = ModelFactory(self.registry)
         self.repositories = RepositoryFactory(self.storage, self.registry)
         self._services: dict[str, EntityService] = {}
+        self.sprints = SprintService(self)  # the agile rules: eight points a sprint, close and carry, the planner
         self.transfer = TransferService(self)
         self.jira = JiraService(self)  # read only; asi_hopper is imported when a jira verb runs, never here
         self.tracker = TrackerService(self)  # the Weekly Activity Tracker text, in and out
-        self.sprints = SprintService(self)  # the agile rules: eight points a sprint, close and carry, the planner
         self.holidays = HolidayService(self)  # the holidays the planner skips, loaded from a JSON list
         self.dispatcher = Dispatcher(self)
+        self.config_warnings: list[str] = list(self.config.get("warnings", []))
+        for warning in self.config_warnings:
+            log.warning("%s", warning)
+        # the capacity rule: every sprint that is not Closed is 8 points, set here the first time a database
+        # written before the rule is opened (audited once with the count), nothing on a database that follows it
+        self.migration["capacity_enforced"] = self.sprints.enforce_capacity()
         if workbook_path is not None:
             self.workbook_path = str(workbook_path)
         elif os.environ.get(ENV_WORKBOOK):
@@ -171,17 +185,20 @@ class Brain:
         self.doc_id: str = self.config.get("doc_id", "")
         self.project: str = self.config.get("project", "")
         self.revisions: list[dict[str, str]] = [dict(r) for r in self.config.get("revisions", [])]
-        # sprint defaults: a sprint stores its own capacity and dates; these fill `sprint start` and the forms
-        self.sprint_capacity: int = int(self.config.get("sprint_capacity") or SPRINT_CAPACITY)
+        # the capacity is the rule (fixed, never from the config); the length in business days fills `sprint start`
+        self.sprint_capacity: int = SPRINT_CAPACITY
         self.sprint_days: int = int(self.config.get("sprint_days") or SPRINT_DAYS)
 
     # -- access ---------------------------------------------------------
     def service(self, entity: str) -> EntityService:
         schema = self.registry.get(entity)
         if schema.name not in self._services:
-            self._services[schema.name] = EntityService(
+            service = EntityService(
                 schema, self.repositories.for_entity(schema), self.storage, self.lookups, self.events
             )
+            if schema.name == "sprint":
+                service.guard = self.sprints.guard  # the capacity rule on every create and update of a sprint
+            self._services[schema.name] = service
         return self._services[schema.name]
 
     def execute(
@@ -212,6 +229,7 @@ class Brain:
             "revisions": [dict(r) for r in self.revisions],
             "sprint_capacity": self.sprint_capacity,
             "sprint_days": self.sprint_days,
+            "config_warnings": list(self.config_warnings),
             "tracker": {"title": self.tracker.title, "byline": self.tracker.byline, "scope": self.tracker.scope},
             "config_path": self.config.get("path"),
             "lock_dir": locks["lock_dir"],
