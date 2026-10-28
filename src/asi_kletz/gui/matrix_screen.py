@@ -27,9 +27,9 @@ from .screens import (  # noqa: F401  (INDENT, PDP_TAG, PHASE_TAG and stack are 
 )
 
 ENTITY = PLAN_ENTITY
-FIXED = ("order", PLAN)  # frozen on the left since 0.7.2; stacked since 0.8.3
-FIXED_WIDTHS = (50, 360)  # starting widths only: ``fit_columns`` has the last word after every fill
-SEARCHED = ("order", "pdp_phase", "lifecycle_phase", "deliverable")  # the search box reads these, as before the stack
+FIXED = (PLAN,)  # frozen on the left since 0.7.2; stacked since 0.8.3; ``order`` dropped in 0.9.0 (no table shows it)
+FIXED_WIDTHS = (360,)  # starting widths only: ``fit_columns`` has the last word after every fill
+SEARCHED = ("order", "pdp_phase", "lifecycle_phase", "deliverable")  # the search reads these: a number finds the row
 CHECK = "✓"
 ALL_GROUPS = "all"  # every flag at once, in source order: the default since 0.7.0
 
@@ -111,11 +111,10 @@ class SafetyPlanMatrixScreen(Screen):
             if needle and not self._matches(row, needle):
                 continue
             for group_iid, group_level, group_text in pending:
-                tree.insert("", "end", iid=group_iid, values=["", group_text, *blanks],
+                tree.insert("", "end", iid=group_iid, values=[group_text, *blanks],
                             tags=(PDP_TAG if group_level == 0 else PHASE_TAG,))
             pending.clear()
-            values = ["" if row.get("order") is None else str(row["order"]), text]
-            values += [CHECK if row.get(f.name) else "" for f in self.flags]
+            values = [text, *(CHECK if row.get(f.name) else "" for f in self.flags)]
             tree.insert("", "end", iid=iid, values=values)
         style_group_rows(tree, self.window.theme)
         fit_columns(tree)

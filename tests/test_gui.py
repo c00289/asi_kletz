@@ -17,9 +17,11 @@ from tests.conftest import PLAN, REPO_ROOT
 SCREENS = ["dashboard", "jira_live", "safety_plan", "safety_plan_matrix", "sprint_board", "tracker", "transfer"]
 TITLES = ["Dashboard", "JIRA Live Data", "Safety Plan", "Safety Plan Matrix", "Sprint Board", "Weekly Status",
           "Export / Import"]
-# the identity columns of the Safety Plan table: frozen on the left since 0.7.2
-FROZEN_PLAN = ["id", "order", "plan"]  # since 0.8.4 the three identity fields are one stacked column
+# the identity column of the Safety Plan table: frozen on the left since 0.7.2; since 0.8.4 the three identity
+# fields are one stacked column; since 0.9.0 ``id`` and ``order`` are no columns at all (docs/hidden-identity-plan.md)
+FROZEN_PLAN = ["plan"]
 STACKED_PLAN = ["pdp_phase", "lifecycle_phase", "deliverable"]  # on the tree, hidden: the stack shows them
+NEVER_COLUMNS = ("id", "order", "uid")  # no table on any screen has a column so named
 STACK_ROWS = 9  # the three seeded deliverables under three PDP phases and three lifecycle phases
 
 
@@ -104,7 +106,9 @@ def test_navigation_and_dashboard(window):
     phases = {table.set(i, "lifecycle_phase"): table.set(i, "deliverables") for i in table.get_children()}
     assert phases["1. Concept Development"] == "1" and phases["10. Decommissioning"] == "0"
     opened = [dash.open_table.set(i, "deliverable") for i in dash.open_table.get_children()]
-    assert opened == ["Hazard Analysis and Risk Assessment", "Functional Safety Concept"]
+    assert opened == ["Hazard Analysis and Risk Assessment", "Functional Safety Concept"]  # plan order, no column
+    assert tuple(dash.open_table["columns"]) == ("deliverable", "status", "deadline")
+    assert tuple(dash.audit["columns"]) == ("ts", "actor", "action", "entity", "entity_id")  # the trace stays
     assert len(dash.audit.get_children()) == 3
     window.show("safety_plan")
     assert window.current_key == "safety_plan" and window.title().endswith("Safety Plan")
@@ -169,9 +173,9 @@ def test_safety_plan_table_shows_every_column(window, seeded):
 
     screen = window.show("safety_plan")
     schema = seeded.registry.get(PLAN)
-    assert screen.columns == ["id"] + [f.name for f in schema.visible_fields] and len(screen.columns) == 64
+    assert screen.columns == [f.name for f in schema.visible_fields if f.name != "order"] and len(screen.columns) == 62
     assert list(screen.tree["columns"]) == [*screen.columns, "plan"]  # the stacked column rides along
-    assert screen.columns[1:5] == ["order", "pdp_phase", "lifecycle_phase", "deliverable"]
+    assert screen.columns[:3] == ["pdp_phase", "lifecycle_phase", "deliverable"] and "uid" not in screen.columns
     assert screen.tree.heading("loc_dms", "text") == "DMS"
     long_author = "author_electronics_engineer_mechanical_and_electrical"
     assert screen.tree.heading(long_author, "text") == "Electronics Engineer (Mechanical and Electrical)"
@@ -183,7 +187,6 @@ def test_safety_plan_table_shows_every_column(window, seeded):
     widest_deliverable = body.measure("Hazard Analysis and Risk Assessment") + 24
     assert int(screen.tree.column("deliverable", "width")) == widest_deliverable
     assert screen.tree.column("deliverable", "stretch") == 0  # fitted columns never stretch: Tk would shrink them
-    assert int(screen.tree.column("order", "width")) == head.measure("order") + 24
     assert screen.tree.set("1", "loc_dms") == "✓" and screen.tree.set("1", "loc_jama") == ""
     assert screen.tree.set("2", "loc_jama") == "✓"
     assert screen.tree.set("1", "reviewer_tech_lead_functional_safety") == "✓"
@@ -204,14 +207,14 @@ def test_columns_selector_narrows_the_flags(window, seeded):
     assert list(screen.columns_box.cget("values")) == ["All", *groups]
     # since 0.7.2 the frozen identity columns live in the left tree: the right one never displays them
     unfrozen = tuple(c for c in screen.columns if c not in FROZEN_PLAN and c not in STACKED_PLAN)
-    assert screen.tree["displaycolumns"] == unfrozen and len(unfrozen) == 59
+    assert screen.tree["displaycolumns"] == unfrozen and len(unfrozen) == 59  # 62 columns minus the three stacked
 
     screen.set_columns("Location")
     assert list(screen.tree["displaycolumns"]) == [
         "work_product_location", "loc_dms", "loc_jama", "loc_sharepoint", "work_product_reference",
         "author", "gate_reviewer", "deadline", "status",
     ]
-    assert len(screen.tree["columns"]) == 65  # nothing rebuilt
+    assert len(screen.tree["columns"]) == 63  # nothing rebuilt
     assert screen.tree.set("1", "reviewer_pat") == ""  # still readable while hidden
 
     screen.set_columns("Reviewer")
@@ -265,7 +268,7 @@ def test_matrix_toggle_and_group_switch(window, seeded):
     screen = window.show("safety_plan_matrix")
     assert screen.group_var.get() == "all"  # every flag at once, each column as wide as its heading
     flags = [f.name for f in screen.schema.fields if f.is_flag]
-    assert list(screen.tree["columns"]) == ["order", "plan", *flags]
+    assert list(screen.tree["columns"]) == ["plan", *flags]
     _, head = _fonts(screen.tree)
     assert int(screen.tree.column("loc_jama", "width")) == head.measure("JAMA") + 24
     assert int(screen.tree.column("reviewer_pat", "width")) == head.measure("PAT") + 24
@@ -1432,7 +1435,6 @@ def test_safety_plan_freezes_the_identity_columns(window, seeded):
         assert left.heading(column, "text") == right.heading(column, "text")
     assert left.heading("plan", "text") == PLAN_HEADER
     assert _cells(left, "plan")[:3] == ["PDP phase 1", "    1. Concept Development", "        Safety Plan"]
-    assert _cells(left, "order") == ["", "", "1", "", "", "2", "", "", "3"]
     _assert_fitted(left, _enum_extra(screen))  # the frozen enum columns fit their whole lookup too
     assert int(left.column("plan", "width")) == int(right.column("plan", "width"))
     assert left.tag_configure("odd")["background"] == right.tag_configure("odd")["background"]
@@ -1530,7 +1532,6 @@ def test_matrix_stacks_pdp_phase_over_lifecycle_phase_over_deliverable(window, s
     left, right = screen.pane.left, screen.tree
     assert [iid for iid, _ in _rows(right)] == [iid for iid, _, _, _ in lines]
     assert _cells(right, "plan") == [text for _, _, text, _ in lines]
-    assert _cells(right, "order") == ["", "", "1", "", "", "2", "", "", "3"]
     assert all(right.set("pdp:1", f.name) == "" for f in screen.flags)  # a group row has no flags
     # group rows wear their tag first (colour and font), then the stripe (background); deliverables the stripe alone
     assert right.item("pdp:1", "tags")[0] == PDP_TAG
@@ -1789,3 +1790,81 @@ def test_tracker_screen_new_week_joins_the_active_sprint(window, seeded):
     again = screen.new_week()
     assert again.ok and again.warnings == ["that week already exists"]
     assert seeded.execute("count", entity="week").data["count"] == 1
+
+
+# -- the hidden identity (0.9.0): no id, no order, no uid on any table; the details title names the row ----
+
+
+def _trees(widget) -> list:
+    from tkinter import ttk
+
+    found = [widget] if isinstance(widget, ttk.Treeview) else []
+    for child in widget.winfo_children():
+        found.extend(_trees(child))
+    return found
+
+
+def test_no_table_on_any_screen_has_an_id_order_or_uid_column(window, seeded):
+    """Owner, 2026-10-28: the leftmost ``order`` and ``id`` columns are vestigial; the uid is never shown."""
+    from asi_kletz.gui.entity_screen import FROZEN, HANDLES, IDENTITY
+    from asi_kletz.gui.matrix_screen import FIXED, FIXED_WIDTHS, SEARCHED
+
+    assert FROZEN == ("plan",) and HANDLES == ("id", "order")
+    assert IDENTITY == ("pdp_phase", "lifecycle_phase", "deliverable")
+    assert FIXED == ("plan",) and FIXED_WIDTHS == (360,) and "order" in SEARCHED
+    seen = 0
+    for key in SCREENS:
+        screen = window.show(key)
+        for tree in _trees(screen):
+            seen += 1
+            columns = tuple(tree["columns"])
+            assert not any(c in NEVER_COLUMNS for c in columns), (key, columns)
+            assert not any(c in NEVER_COLUMNS for c in tree["displaycolumns"]), (key, tree["displaycolumns"])
+            assert "entity_id" in columns or not any("id" in c.split("_") for c in columns), (key, columns)
+    assert seen >= 9  # the dashboard's three, the two frozen pairs of the plan screens, the board's lanes, and more
+    plan = window.show("safety_plan")
+    assert plan.pane.frozen == ("plan",) and tuple(plan.pane.left["columns"]) == ("plan",)
+    assert len(plan.tree["displaycolumns"]) == 59 and "uid" not in plan.tree["columns"]
+    matrix = window.show("safety_plan_matrix")
+    assert tuple(matrix.pane.left["columns"]) == ("plan",) and matrix.tree.set("1", "plan").strip() == "Safety Plan"
+    matrix.search_var.set("2")  # a typed number still finds the row by its order
+    assert [iid for iid, _ in _rows(matrix.tree)] == ["pdp:2", "phase:2:2. HARA / Risk Assessment", "2"]
+
+
+def test_form_has_order_but_no_uid_and_the_details_title_names_the_row(window, seeded):
+    from asi_kletz.gui.widgets import WidgetFactory
+    from asi_kletz.schema import uid_field
+
+    screen = window.show("safety_plan")
+    assert "order" in screen.widgets and "uid" not in screen.widgets and "id" not in screen.widgets
+    assert set(screen.widgets) == {f.name for f in screen.schema.visible_fields}
+    with pytest.raises(ValueError, match="hidden"):
+        WidgetFactory(seeded.lookups).create(screen.form.inner, uid_field())
+    assert screen.form_box.cget("text") == "Safety Plan Row details"
+    screen.select(2)
+    assert screen.form_box.cget("text") == "Safety Plan Row details · row 2"
+    assert window.status_text() == "Safety Plan Row 2 selected" and screen.widgets["order"].get() == "2"
+    window.update()  # drain the selection events, as the loop does before a user can click the left tree
+    screen.pane.left.selection_set("3")
+    window.update()
+    assert screen.form_box.cget("text") == "Safety Plan Row details · row 3" and screen.selected_id == 3
+    # saving keeps the title on the saved row; the uid is untouched (the form never sends it)
+    uid = screen.by_id[3]["uid"]
+    screen.widgets["deadline"].set("soon")
+    screen.save()
+    assert screen.form_box.cget("text") == "Safety Plan Row details · row 3" and screen.by_id[3]["uid"] == uid
+    assert seeded.execute("get", entity=PLAN, id=3).data["deadline"] == "soon"
+    # duplicating makes a new row with a new uid and no order; the title names it once saved
+    screen.duplicate()
+    assert screen.form_box.cget("text") == "Safety Plan Row details" and screen.selected_id is None
+    screen.widgets["order"].set("4")
+    screen.save()
+    assert screen.selected_id == 4 and screen.form_box.cget("text") == "Safety Plan Row details · row 4"
+    copy = seeded.execute("get", entity=PLAN, id=4).data
+    assert copy["deliverable"] == "Functional Safety Concept" and copy["uid"] != uid and copy["order"] == 4
+    # deleting empties the form and the title
+    screen.delete()
+    assert screen.form_box.cget("text") == "Safety Plan Row details" and screen.selected_id is None
+    assert seeded.execute("count", entity=PLAN).data["count"] == 3
+    screen.new()
+    assert screen.form_box.cget("text") == "Safety Plan Row details"

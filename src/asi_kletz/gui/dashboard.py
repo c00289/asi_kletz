@@ -18,8 +18,8 @@ from .theme import GridBanner
 
 TOTAL = "total"
 PHASE_COLUMNS = ("lifecycle_phase", "deliverables", "done")
-OPEN_COLUMNS = ("order", "deliverable", "status", "deadline")
-AUDIT_COLUMNS = ("ts", "actor", "action", "entity", "entity_id")
+OPEN_COLUMNS = ("deliverable", "status", "deadline")  # in plan order; ``order`` is no column since 0.9.0
+AUDIT_COLUMNS = ("ts", "actor", "action", "entity", "entity_id")  # entity_id stays: it is the trace, not a vestige
 SPRINT_TILES = (
     ("sprint", "SPRINT"), ("committed", "COMMITTED"), ("done", "DONE"), ("to_go", "TO GO"),
     ("unpointed", "UNPOINTED"), ("days_left", "DAYS LEFT"), ("velocity", "VELOCITY"),
@@ -53,7 +53,7 @@ class DashboardScreen(Screen):
         lower = ttk.PanedWindow(self, orient="horizontal")
         lower.pack(fill="both", expand=True)
         self.phase_table = self._table(lower, "Deliverables by lifecycle phase", PHASE_COLUMNS, (260, 90, 60))
-        self.open_table = self._table(lower, "Open deliverables", OPEN_COLUMNS, (50, 300, 90, 120))
+        self.open_table = self._table(lower, "Open deliverables", OPEN_COLUMNS, (300, 90, 120))
         self.audit = self._table(lower, "Recent changes", AUDIT_COLUMNS, (140, 70, 90, 110, 60))
 
     def _build_sprint_tiles(self) -> None:

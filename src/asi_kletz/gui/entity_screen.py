@@ -31,10 +31,14 @@ if TYPE_CHECKING:
 
 TRUNCATE = 70  # a cell shows this much of a long text; the column fits the clipped text, not the value
 ALL_COLUMNS = "All"
-# the identity columns of the Safety Plan stay put while the rest scrolls (0.7.2); since 0.8.4 the PDP phase,
-# the lifecycle phase and the deliverable are one stacked column, ``plan``, on an entity that has all three
-FROZEN = ("id", "order", PLAN)
-IDENTITY = ("id", "order", *STACKED)  # the frozen set of an entity that lacks the stack
+# Owner, 2026-10-28 (docs/hidden-identity-plan.md): no table shows ``id`` or ``order``. The id stays the handle
+# of every command, the tree iids, the status bar and the details title; ``order`` stays a field of the form
+# and the default sort. Neither is a column since 0.9.0; the hidden ``uid`` never was.
+HANDLES = ("id", "order")
+# the stacked column of the Safety Plan stays put while the rest scrolls (0.7.2, 0.8.4): the PDP phase, the
+# lifecycle phase and the deliverable as one column, ``plan``, on an entity that has all three
+FROZEN = (PLAN,)
+IDENTITY = STACKED  # the frozen set of an entity that lacks the stack: whichever of the three it has
 
 
 def cell_text(spec: FieldSpec | None, value: Any) -> str:
@@ -59,9 +63,9 @@ class EntityScreen(Screen):
 
     # -- layout ---------------------------------------------------------
     def build(self) -> None:
-        # every visible column of the source sheet, in source order, behind the surrogate key (a hidden
-        # field, the uid, has no column anywhere)
-        self.columns = ["id"] + [f.name for f in self.schema.visible_fields]
+        # every visible column of the source sheet, in source order; the handles (id, order) and a hidden
+        # field (the uid) have no column anywhere
+        self.columns = [f.name for f in self.schema.visible_fields if f.name not in HANDLES]
         # the plan is stacked (PDP phase > lifecycle phase > deliverable in one frozen column) when the
         # entity has the three fields; the three data columns stay on the tree, hidden, so ``set`` still answers
         self.stacked = all(self.schema.has(name) for name in STACKED)
@@ -111,11 +115,10 @@ class EntityScreen(Screen):
             self.tree.heading(PLAN, text=PLAN_HEADER, command=lambda: self.sort_by(PLAN))
             self.tree.column(PLAN, width=360, minwidth=40, stretch=False, anchor="w")
         for name in self.columns:
-            spec = None if name == "id" else self.schema.field(name)
-            header = "id" if spec is None else spec.header
-            self.tree.heading(name, text=header, command=lambda n=name: self.sort_by(n))
+            spec = self.schema.field(name)
+            self.tree.heading(name, text=spec.header, command=lambda n=name: self.sort_by(n))
             # starting widths only: ``fit_columns`` has the last word after every fill
-            if spec is None or spec.type in (FieldType.INT, FieldType.BOOL):
+            if spec.type in (FieldType.INT, FieldType.BOOL):
                 width = 60
             elif spec.type in (FieldType.MULTILINE, FieldType.URL):
                 width = 320
@@ -123,8 +126,8 @@ class EntityScreen(Screen):
                 width = 100
             else:
                 width = 180
-            stretch = spec is not None and spec.type is FieldType.MULTILINE
-            anchor = "center" if spec is not None and spec.is_flag else "w"
+            stretch = spec.type is FieldType.MULTILINE
+            anchor = "center" if spec.is_flag else "w"
             self.tree.column(name, width=width, minwidth=40, stretch=stretch, anchor=anchor)
         self.pane.set_display(self._shown(ALL_COLUMNS))  # the stacked fields are hidden from the start
         self.tree.bind("<<TreeviewSelect>>", self._on_select, add="+")  # after the pane's own selection sync
@@ -133,11 +136,17 @@ class EntityScreen(Screen):
         self.tree.bind("<Motion>", self._on_heading_motion)
         paned.add(self.pane, weight=3)
 
-        form_box = ttk.LabelFrame(paned, text=f"{self.schema.label} details")
-        self.form = ScrollableFrame(form_box)
+        # the details frame names the selected row (``Safety Plan Row details · row 2``): the handle a command
+        # needs is on screen without a column
+        self.form_box = ttk.LabelFrame(paned, text=self.details_title(None))
+        self.form = ScrollableFrame(self.form_box)
         self.form.pack(fill="both", expand=True)
         self._build_form(self.form.inner)
-        paned.add(form_box, weight=2)
+        paned.add(self.form_box, weight=2)
+
+    def details_title(self, row_id: int | None) -> str:
+        title = f"{self.schema.label} details"
+        return title if row_id is None else f"{title} · row {row_id}"
 
     def _build_form(self, parent: ttk.Frame) -> None:
         factory = WidgetFactory(self.brain.lookups)
@@ -189,6 +198,7 @@ class EntityScreen(Screen):
         self.by_id = {r["id"]: r for r in self.rows}
         if self.selected_id not in self.by_id:
             self.selected_id = None
+            self.form_box.configure(text=self.details_title(None))
         self._populate()
 
     def _visible_rows(self) -> list[dict[str, Any]]:
@@ -210,7 +220,7 @@ class EntityScreen(Screen):
 
     def _values(self, row: dict[str, Any]) -> list[str]:
         """One cell per data column, in the tree's column order."""
-        return [cell_text(None if c == "id" else self.schema.field(c), row.get(c)) for c in self.columns]
+        return [cell_text(self.schema.field(c), row.get(c)) for c in self.columns]
 
     def _insert_stacked(self, rows: list[dict[str, Any]]) -> None:
         """The rows as the stack: a PDP phase row, its lifecycle phase rows, their deliverables; the group
@@ -266,7 +276,7 @@ class EntityScreen(Screen):
             desc = not self.sort_desc if self.sort_key == column else False
         self.sort_key, self.sort_desc = column, desc
         self._populate()
-        header = "id" if column == "id" else self.schema.field(column).header
+        header = self.schema.field(column).header
         self.window.set_status(f"Sorted by {header}" + (", descending" if desc else ""))
 
     def _on_heading_motion(self, event: tk.Event) -> None:
@@ -298,7 +308,7 @@ class EntityScreen(Screen):
             group = self.column_groups[choice]
             shown = [
                 c for c in self.columns
-                if c == "id" or not self.schema.field(c).is_flag or self.schema.field(c).group == group
+                if not self.schema.field(c).is_flag or self.schema.field(c).group == group
             ]
         return [c for c in shown if c not in STACKED] if self.stacked else list(shown)
 
@@ -318,6 +328,7 @@ class EntityScreen(Screen):
         if row is None:
             return
         self.selected_id = row_id
+        self.form_box.configure(text=self.details_title(row_id))
         for name, widget in self.widgets.items():
             widget.set(row.get(name))
         self.window.set_status(f"{self.schema.label} {row_id} selected")
@@ -328,6 +339,7 @@ class EntityScreen(Screen):
     # -- actions --------------------------------------------------------
     def new(self) -> None:
         self.selected_id = None
+        self.form_box.configure(text=self.details_title(None))
         self.tree.selection_remove(*self.tree.selection())
         for widget in self.widgets.values():
             widget.clear()
@@ -369,6 +381,7 @@ class EntityScreen(Screen):
             self.window.set_status("Select a row to duplicate")
             return
         self.selected_id = None
+        self.form_box.configure(text=self.details_title(None))
         self.tree.selection_remove(*self.tree.selection())
         if "order" in self.widgets:
             self.widgets["order"].clear()
