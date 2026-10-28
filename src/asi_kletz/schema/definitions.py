@@ -58,6 +58,14 @@ REVIEWER_FLAGS = (
     "Tech Lead - Safety and Compliance", "Tech Lead - Systems", "PAT", "Technical Training Team",
 )
 
+# The owner, 2026-10-28: "the expected duration and deadline field is now a calculated field; another calculated
+# field would be sprint, which tells you which sprint this deadline belongs to; when displaying the number of
+# points switch to some default value enforced globally". The floor below is what a row with neither points nor
+# a default weighs; `default_points` in kletz.toml overrides it.
+DEFAULT_POINTS = 2
+CALCULATED_RULE = "deadline and sprint are calculated from points and the sprint chain"
+DEFAULTS_RULE = "default_points is set by `plan weights load` (the estimation panel's record)"
+
 SAFETY_PLAN_ROW = register_entity(EntitySchema(
     name="safety_plan_row", table="safety_plan", label="Safety Plan Row", sheet="Safety Plan",
     description=(
@@ -70,6 +78,14 @@ SAFETY_PLAN_ROW = register_entity(EntitySchema(
         FieldSpec("pdp_phase", E, "PDP Phases", lookup="pdp_phase"),
         FieldSpec("lifecycle_phase", E, "Safety Lifecycle Phase", lookup="lifecycle_phase"),
         FieldSpec("deliverable", M, "Safety Deliverables", required=True),
+        # 0.11.0: the weight in sprint points (editable; empty means the default), the estimation panel's
+        # default (set by `plan weights load`), the sprint the last point lands in and that sprint's end
+        FieldSpec("points", N, "Points", source=False, default_from="default_points",
+                  help="The weight of the deliverable in sprint points; a deliverable may span sprints."),
+        FieldSpec("default_points", N, "Default points", source=False, readonly=True,
+                  help="The estimation panel's consensus (docs/deliverable-points.md); set by `plan weights load`."),
+        FieldSpec("sprint", N, "Sprint", source=False, calculated=True,
+                  help="Calculated: the sprint in which the deliverable's last point lands."),
         FieldSpec("work_product_location", T, "Work Product Location"),
         *flag_fields("location", "loc", LOCATION_FLAGS),
         FieldSpec("work_product_reference", T, "Work Product Reference"),
@@ -79,7 +95,8 @@ SAFETY_PLAN_ROW = register_entity(EntitySchema(
         *flag_fields("verification", "verify", VERIFICATION_FLAGS),
         FieldSpec("gate_reviewer", T, "Gate Reviewer", group="reviewer"),
         *flag_fields("reviewer", "reviewer", REVIEWER_FLAGS),
-        FieldSpec("deadline", T, "Expected Duration/Deadline"),
+        FieldSpec("deadline", T, "Expected Duration/Deadline", calculated=True,
+                  help="Calculated: the end date of the sprint in which the deliverable's last point lands."),
         FieldSpec("status", E, "Status (Pending/ Ongoing/ Blocked/ Alternative/Out-of-Scope/ Done)",
                   lookup="plan_status"),
         uid_field(),

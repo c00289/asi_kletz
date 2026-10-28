@@ -61,3 +61,7 @@ tracker_jira_scope = "project HWL, open items I am assigned, reported or watchin
 # 8 points, company policy, fixed ("every single sprint except the one in the past is 8 points"); a
 # `sprint_capacity` key here is ignored with a warning.
 sprint_days = 10
+
+# The floor in sprint points for a Safety Plan row that has neither its own points nor the estimation
+# panel's default (`plan weights load data/deliverable-points.json`). A TOML integer; default 2.
+default_points = 2

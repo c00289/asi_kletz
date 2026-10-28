@@ -18,8 +18,16 @@ from .locks import guard
 from .models import ModelFactory
 from .repositories import RepositoryFactory
 from .schema import LookupRegistry, SchemaRegistry, default_lookups, default_registry
-from .schema.definitions import CAPACITY_RULE, SPRINT_CAPACITY, SPRINT_DAYS
-from .services import EntityService, HolidayService, JiraService, SprintService, TrackerService, TransferService
+from .schema.definitions import CAPACITY_RULE, DEFAULT_POINTS, SPRINT_CAPACITY, SPRINT_DAYS
+from .services import (
+    EntityService,
+    HolidayService,
+    JiraService,
+    PlanScheduleService,
+    SprintService,
+    TrackerService,
+    TransferService,
+)
 from .storage import StorageFactory
 from .version import SCHEMA_VERSION, __version__
 
@@ -38,7 +46,7 @@ CONFIG_TEXT_KEYS = (  # document metadata, the live JQL and the tracker's header
     "doc_id", "project", "jira_live_jql", "tracker_title", "tracker_byline", "tracker_scope", "tracker_jira_scope",
 )
 CONFIG_BOOL_KEYS = ("jira_live_autofetch",)  # copied only when the TOML value is a real boolean; absent = false
-CONFIG_INT_KEYS = ("sprint_days",)  # copied only when the TOML value is an integer
+CONFIG_INT_KEYS = ("sprint_days", "default_points")  # copied only when the TOML value is an integer
 IGNORED_KEYS = ("sprint_capacity",)  # 0.10.0: capacity is the rule, fixed; the key is ignored with a warning
 REVISION_FIELDS = ("rev", "date", "author", "description")
 
@@ -58,7 +66,8 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     Activity Tracker text; ``sprint_days`` (default 10, business days) is the length of a new sprint (a
     TOML integer; anything else is ignored so the default applies). ``sprint_capacity`` is ignored since
     0.10.0 (capacity is the rule, 8, fixed): when present, ``warnings`` carries one line naming the rule.
-    Missing file: ``{}``.
+    ``default_points`` (default 2) is the floor a Safety Plan row weighs when it has neither points nor the
+    panel's default. Missing file: ``{}``.
     """
     import tomllib
 
@@ -159,6 +168,7 @@ class Brain:
         self.repositories = RepositoryFactory(self.storage, self.registry)
         self._services: dict[str, EntityService] = {}
         self.sprints = SprintService(self)  # the agile rules: eight points a sprint, close and carry, the planner
+        self.schedule = PlanScheduleService(self)  # the plan's calculated sprint and deadline, kept current
         self.transfer = TransferService(self)
         self.jira = JiraService(self)  # read only; asi_hopper is imported when a jira verb runs, never here
         self.tracker = TrackerService(self)  # the Weekly Activity Tracker text, in and out
@@ -170,6 +180,11 @@ class Brain:
         # the capacity rule: every sprint that is not Closed is 8 points, set here the first time a database
         # written before the rule is opened (audited once with the count), nothing on a database that follows it
         self.migration["capacity_enforced"] = self.sprints.enforce_capacity()
+        # the plan's floor (kletz.toml) must be known before the first recompute below
+        self.default_points: int = int(self.config.get("default_points") or DEFAULT_POINTS)
+        # the calculated sprint and deadline of every plan row, written where they moved (a database written
+        # before 0.11.0 gets them here for the first time)
+        self.migration["scheduled"] = self.schedule.recompute()["changed"]
         if workbook_path is not None:
             self.workbook_path = str(workbook_path)
         elif os.environ.get(ENV_WORKBOOK):
@@ -198,6 +213,10 @@ class Brain:
             )
             if schema.name == "sprint":
                 service.guard = self.sprints.guard  # the capacity rule on every create and update of a sprint
+            if schema.name == "safety_plan_row":
+                service.guard = self.schedule.guard  # the calculated fields and the panel's default stay out
+            if schema.name in ("safety_plan_row", "sprint", "sprint_item"):
+                service.after = self.schedule.on_change  # a change here can move a deadline
             self._services[schema.name] = service
         return self._services[schema.name]
 
@@ -229,6 +248,7 @@ class Brain:
             "revisions": [dict(r) for r in self.revisions],
             "sprint_capacity": self.sprint_capacity,
             "sprint_days": self.sprint_days,
+            "default_points": self.default_points,
             "config_warnings": list(self.config_warnings),
             "tracker": {"title": self.tracker.title, "byline": self.tracker.byline, "scope": self.tracker.scope},
             "config_path": self.config.get("path"),

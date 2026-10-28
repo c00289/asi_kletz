@@ -128,9 +128,9 @@ def test_entity_screen_create_update_delete(window, seeded):
     row = seeded.execute("get", entity=PLAN, id=screen.selected_id).data
     assert row["order"] == 9 and row["deliverable"] == "line one\nline two" and row["status"] == "Blocked"
 
-    screen.widgets["deadline"].set("edited")
+    screen.widgets["work_product_location"].set("edited")
     screen.save()
-    assert seeded.execute("get", entity=PLAN, id=screen.selected_id).data["deadline"] == "edited"
+    assert seeded.execute("get", entity=PLAN, id=screen.selected_id).data["work_product_location"] == "edited"
     assert seeded.storage.audit_tail(1)[0]["actor"] == "gui"
 
     screen.delete()
@@ -174,7 +174,7 @@ def test_safety_plan_table_shows_every_column(window, seeded):
 
     screen = window.show("safety_plan")
     schema = seeded.registry.get(PLAN)
-    assert screen.columns == [f.name for f in schema.visible_fields if f.name != "order"] and len(screen.columns) == 62
+    assert screen.columns == [f.name for f in schema.visible_fields if f.name != "order"] and len(screen.columns) == 65
     assert list(screen.tree["columns"]) == [*screen.columns, "plan"]  # the stacked column rides along
     assert screen.columns[:3] == ["pdp_phase", "lifecycle_phase", "deliverable"] and "uid" not in screen.columns
     assert screen.tree.heading("loc_dms", "text") == "DMS"
@@ -208,28 +208,28 @@ def test_columns_selector_narrows_the_flags(window, seeded):
     assert list(screen.columns_box.cget("values")) == ["All", *groups]
     # since 0.7.2 the frozen identity columns live in the left tree: the right one never displays them
     unfrozen = tuple(c for c in screen.columns if c not in FROZEN_PLAN and c not in STACKED_PLAN)
-    assert screen.tree["displaycolumns"] == unfrozen and len(unfrozen) == 59  # 62 columns minus the three stacked
+    assert screen.tree["displaycolumns"] == unfrozen and len(unfrozen) == 62  # 65 columns minus the three stacked
 
     screen.set_columns("Location")
     assert list(screen.tree["displaycolumns"]) == [
-        "work_product_location", "loc_dms", "loc_jama", "loc_sharepoint", "work_product_reference",
-        "author", "gate_reviewer", "deadline", "status",
+        "points", "default_points", "sprint", "work_product_location", "loc_dms", "loc_jama", "loc_sharepoint",
+        "work_product_reference", "author", "gate_reviewer", "deadline", "status",
     ]
-    assert len(screen.tree["columns"]) == 63  # nothing rebuilt
+    assert len(screen.tree["columns"]) == 66  # nothing rebuilt
     assert screen.tree.set("1", "reviewer_pat") == ""  # still readable while hidden
 
     screen.set_columns("Reviewer")
     shown = list(screen.tree["displaycolumns"])
-    assert len(shown) == 13 and shown[-3:] == ["reviewer_technical_training_team", "deadline", "status"]
+    assert len(shown) == 16 and shown[-3:] == ["reviewer_technical_training_team", "deadline", "status"]
     assert not any(c.startswith("loc_") for c in shown)
 
     screen.select(2)
-    seeded.execute("update", entity=PLAN, id=2, data={"deadline": "x"}, actor="agent")
+    seeded.execute("update", entity=PLAN, id=2, data={"gate_reviewer": "x"}, actor="agent")
     deadline = time.time() + 2
-    while screen.tree.set("2", "deadline") != "x" and time.time() < deadline:
+    while screen.tree.set("2", "gate_reviewer") != "x" and time.time() < deadline:
         window.update()
         time.sleep(0.02)
-    assert len(screen.tree.get_children()) == STACK_ROWS and screen.tree.set("2", "deadline") == "x"
+    assert len(screen.tree.get_children()) == STACK_ROWS and screen.tree.set("2", "gate_reviewer") == "x"
     assert list(screen.tree["displaycolumns"]) == shown and screen.selected_id == 2
     window.show("dashboard")
     assert window.show("safety_plan") is screen and screen.columns_var.get() == "Reviewer"
@@ -1425,7 +1425,7 @@ def test_safety_plan_freezes_the_identity_columns(window, seeded):
     assert right is pane.right and screen.ybar is pane.ybar and screen.xbar is pane.xbar
     assert list(right["columns"]) == [*screen.columns, "plan"]  # the right tree still owns every column
     hidden = (*FROZEN, *STACKED_PLAN)
-    assert not any(c in hidden for c in right["displaycolumns"]) and len(right["displaycolumns"]) == 59
+    assert not any(c in hidden for c in right["displaycolumns"]) and len(right["displaycolumns"]) == 62
     assert tuple(left["columns"]) == tuple(FROZEN_PLAN)
     assert _rows(left) == _rows(right) and [t for _, t in _rows(left)] == [
         ("pdp", "even"), ("phase", "odd"), ("even",), ("pdp", "odd"), ("phase", "even"), ("odd",),
@@ -1830,7 +1830,7 @@ def test_no_table_on_any_screen_has_an_id_order_or_uid_column(window, seeded):
     assert seen >= 9  # the dashboard's three, the two frozen pairs of the plan screens, the board's lanes, and more
     plan = window.show("safety_plan")
     assert plan.pane.frozen == ("plan",) and tuple(plan.pane.left["columns"]) == ("plan",)
-    assert len(plan.tree["displaycolumns"]) == 59 and "uid" not in plan.tree["columns"]
+    assert len(plan.tree["displaycolumns"]) == 62 and "uid" not in plan.tree["columns"]
     matrix = window.show("safety_plan_matrix")
     assert tuple(matrix.pane.left["columns"]) == ("plan",) and matrix.tree.set("1", "plan").strip() == "Safety Plan"
     matrix.search_var.set("2")  # a typed number still finds the row by its order
@@ -1856,10 +1856,10 @@ def test_form_has_order_but_no_uid_and_the_details_title_names_the_row(window, s
     assert screen.form_box.cget("text") == "Safety Plan Row details · row 3" and screen.selected_id == 3
     # saving keeps the title on the saved row; the uid is untouched (the form never sends it)
     uid = screen.by_id[3]["uid"]
-    screen.widgets["deadline"].set("soon")
+    screen.widgets["gate_reviewer"].set("soon")
     screen.save()
     assert screen.form_box.cget("text") == "Safety Plan Row details · row 3" and screen.by_id[3]["uid"] == uid
-    assert seeded.execute("get", entity=PLAN, id=3).data["deadline"] == "soon"
+    assert seeded.execute("get", entity=PLAN, id=3).data["gate_reviewer"] == "soon"
     # duplicating makes a new row with a new uid and no order; the title names it once saved
     screen.duplicate()
     assert screen.form_box.cget("text") == "Safety Plan Row details" and screen.selected_id is None

@@ -61,7 +61,7 @@ def test_audit_log_and_events(brain):
     seen = []
     brain.events.subscribe("*", lambda topic, event: seen.append(topic))
     brain.execute("create", entity=PLAN, data={"deliverable": "a"}, actor="ai")
-    brain.execute("update", entity=PLAN, id=1, data={"deadline": "b"}, actor="human")
+    brain.execute("update", entity=PLAN, id=1, data={"work_product_location": "b"}, actor="human")
     brain.execute("delete", entity=PLAN, id=1)
     tail = brain.storage.audit_tail(10)
     assert [t["action"] for t in tail] == ["delete", "update", "create"]
@@ -161,15 +161,15 @@ def test_service_assigns_keeps_and_protects_the_uid(brain):
     with pytest.raises(CommandError):
         service.resolve("seven")
     # update: the same uid is a no-op, another one is refused, an empty one leaves the stored value alone
-    same, _ = service.update(2, {"deadline": "x", UID: given.upper()})
-    assert same[UID] == given and same["deadline"] == "x"
-    assert brain.storage.audit_tail(1)[0]["payload"] == {"deadline": "x"}  # the no-op uid is not audited
+    same, _ = service.update(2, {"gate_reviewer": "x", UID: given.upper()})
+    assert same[UID] == given and same["gate_reviewer"] == "x"
+    assert brain.storage.audit_tail(1)[0]["payload"] == {"gate_reviewer": "x"}  # the no-op uid is not audited
     with pytest.raises(ValidationError, match="uid is immutable"):
         service.update(2, {UID: row[UID]})
     with pytest.raises(ValidationError, match="uid is immutable"):
         service.update(given, {UID: "00000000-0000-4000-8000-000000000000"})
-    blank, _ = service.update(given, {UID: None, "deadline": "y"})
-    assert blank[UID] == given and blank["deadline"] == "y"
+    blank, _ = service.update(given, {UID: None, "gate_reviewer": "y"})
+    assert blank[UID] == given and blank["gate_reviewer"] == "y"
     assert service.get(2)[UID] == given
     # through the command path: a refused change is a failed Result, not a crash
     refused = brain.execute("update", entity=PLAN, id=2, set=[f"{UID}={row[UID]}"])
@@ -216,7 +216,10 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
 
     with Brain(db) as brain:
         assert brain.migration["created"] == ["holiday"]  # the 0.10.0 table; the four of 0.8.4 are altered
-        assert brain.migration["altered"] == {table: [UID] for table in TABLES_0_8_4}
+        altered = {table: [UID] for table in TABLES_0_8_4}
+        altered["safety_plan"] = ["points", "default_points", "sprint", UID]  # 0.11.0's three, then the uid
+        assert brain.migration["altered"] == altered
+        assert brain.migration["scheduled"] == 0  # Sprint 1 is Closed: no chain, nothing to write
         assert brain.migration["uids_stamped"] == {PLAN: 3, "sprint": 1, "sprint_item": 0, "week": 0, "holiday": 0}
         assert brain.execute("count", entity=PLAN).data["count"] == 3
         stamped = brain.storage.audit_tail(10)
@@ -232,6 +235,9 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
         for old, stamped_row in zip(before[table], after[table], strict=True):
             new = dict(stamped_row)
             uid = new.pop(UID)
+            for column in ("points", "default_points", "sprint"):  # 0.11.0's columns: added, still empty
+                if table == "safety_plan":
+                    assert new.pop(column) is None
             assert UID_PATTERN.fullmatch(uid) and new == old  # stamped, and nothing else changed (updated_at too)
             uids.append(uid)
     assert len(uids) == len(set(uids)) == 4

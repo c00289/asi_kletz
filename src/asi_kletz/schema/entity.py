@@ -53,6 +53,20 @@ class EntitySchema:
         return tuple(spec for spec in self.fields if not spec.hidden)
 
     @property
+    def editable_fields(self) -> tuple[FieldSpec, ...]:
+        """The fields the form sends: visible, not calculated, not set by a loader."""
+        return tuple(spec for spec in self.fields if spec.editable)
+
+    @property
+    def calculated_fields(self) -> tuple[FieldSpec, ...]:
+        return tuple(spec for spec in self.fields if spec.calculated)
+
+    @property
+    def source_fields(self) -> tuple[FieldSpec, ...]:
+        """The visible fields that are columns of the owner's source sheet."""
+        return tuple(spec for spec in self.fields if not spec.hidden and spec.source)
+
+    @property
     def all_columns(self) -> tuple[str, ...]:
         return ("id", *self.field_names, "created_at", "updated_at")
 

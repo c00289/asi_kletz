@@ -32,6 +32,9 @@ class EntityService:
         # an entity's own rule, run after coercion and before the write: ``guard(current_row_or_None, clean)``
         # may fill ``clean`` or raise ``ValidationError`` (the sprint's capacity rule; ``Brain.service`` sets it)
         self.guard: Callable[[dict[str, Any] | None, dict[str, Any]], None] | None = None
+        # a hook run once after a committed create, update, delete or load: ``after(action, row_id)`` (the
+        # plan's recompute; ``Brain.service`` sets it on the plan, sprint and sprint-item services)
+        self.after: Callable[[str, int | None], None] | None = None
 
     # -- reads ----------------------------------------------------------
     def list(
@@ -86,6 +89,8 @@ class EntityService:
             row = self.repo.create(clean)
             self.storage.audit(actor, "create", self.schema.name, row["id"], clean)
         self.events.publish("entity.created", entity=self.schema.name, id=row["id"], actor=actor, row=row)
+        if self.after is not None:
+            self.after("create", row["id"])
         return row, warnings
 
     def update(
@@ -106,6 +111,8 @@ class EntityService:
                 raise NotFound(f"{self.schema.name} {row_id} not found")
             self.storage.audit(actor, "update", self.schema.name, row_id, clean)
         self.events.publish("entity.updated", entity=self.schema.name, id=row_id, actor=actor, row=row)
+        if self.after is not None:
+            self.after("update", row_id)
         return row, warnings
 
     def _check_uid(self, row_id: int, clean: dict[str, Any]) -> dict[str, Any]:
@@ -129,6 +136,8 @@ class EntityService:
                 raise NotFound(f"{self.schema.name} {row_id} not found")
             self.storage.audit(actor, "delete", self.schema.name, row_id)
         self.events.publish("entity.deleted", entity=self.schema.name, id=row_id, actor=actor)
+        if self.after is not None:
+            self.after("delete", row_id)
         return row_id
 
     def load_rows(
@@ -155,6 +164,8 @@ class EntityService:
             "warnings": [], "errors": [],
         }
         has_uid = self.schema.has(UID)
+        calculated = self.schema.calculated_fields  # the file's values are ignored: the tool computes them
+        carried: list[tuple[int, dict[str, Any]]] = []  # (row id, the file's calculated values) to warn about
         with self.storage.transaction():
             if mode == "replace":
                 summary["deleted"] = self.repo.delete_all()
@@ -168,23 +179,44 @@ class EntityService:
                     summary["skipped"] += 1
                     continue
                 summary["warnings"].extend(f"row {index}: {w}" for w in warnings)
+                ignored = {s.name: clean.pop(s.name) for s in calculated if clean.get(s.name) not in (None, "")}
+                for spec in calculated:
+                    clean.pop(spec.name, None)
                 row_id = raw.get("id")
                 uid = clean.get(UID) if has_uid else None
                 by_uid = self.repo.get_by_uid(uid) if uid else None
                 if by_uid is not None:
                     self.repo.update(int(by_uid["id"]), clean)
                     summary["updated"] += 1
+                    written = int(by_uid["id"])
                 elif mode == "merge" and row_id is not None and self.repo.exists(int(row_id)):
                     if has_uid and not uid:
                         del clean[UID]  # the file does not carry it: the stored uid stays
                     self.repo.update(int(row_id), clean)
                     summary["updated"] += 1
+                    written = int(row_id)
                 else:
                     keep = int(row_id) if (mode == "merge" and row_id is not None) else None
                     if has_uid and not uid:
                         clean[UID] = new_uid()
-                    self.repo.create(clean, keep)
+                    written = int(self.repo.create(clean, keep)["id"])
                     summary["inserted"] += 1
+                if ignored:
+                    carried.append((written, ignored))
+            if self.after is not None:
+                self.after("load", None)  # the recompute, so the file's calculated values can be compared
+            if carried:
+                differing = 0
+                for written, ignored in carried:
+                    row = self.repo.get(written) or {}
+                    if any(str(row.get(k) or "") != str(v) for k, v in ignored.items()):
+                        differing += 1
+                if differing:
+                    names = " or ".join(s.name for s in calculated)
+                    summary["warnings"].append(
+                        f"{differing} row(s) carried a {names} that differs from the calculated value; "
+                        "the file's values were ignored"
+                    )
             self.storage.audit(
                 actor, f"load:{mode}", self.schema.name, None,
                 {k: summary[k] for k in ("inserted", "updated", "deleted", "skipped")},

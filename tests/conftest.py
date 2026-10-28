@@ -20,6 +20,7 @@ DB_0_8_4 = FIXTURES / "kletz-0.8.4.db"
 WORKBOOK = Path(load_config(REPO_ROOT / "kletz.toml").get("workbook") or REPO_ROOT / "kletz.xlsx")
 
 SEED_HOLIDAYS = REPO_ROOT / "data" / "us-holidays-2026-2029.json"  # 52 weekday holidays, the planner's calendar
+SEED_WEIGHTS = REPO_ROOT / "data" / "deliverable-points.json"  # the estimation panel's consensus, 48 rows, 174 points
 
 PLAN = "safety_plan_row"
 # every registered entity, in registration order (the list is the design, not a cap), and its table
@@ -61,9 +62,11 @@ def seeded(brain):
     brain.execute("create", entity=PLAN, data={
         "order": 1, "pdp_phase": "1", "lifecycle_phase": "1. Concept Development",
         "deliverable": "Safety Plan", "loc_dms": 1, "ref_qf_17": "1", "author_fusa_engineer": True,
-        "verify_level_u3_refer_section_3_2": 1, "reviewer_tech_lead_functional_safety": 1,
-        "deadline": "Phase 1 exit", "status": "Done",
+        "verify_level_u3_refer_section_3_2": 1, "reviewer_tech_lead_functional_safety": 1, "status": "Done",
     })
+    # the owner's sheet carried free text in the deadline column; a Done row keeps it as history (0.11.0), so
+    # it is written the way an import writes it, through the repository
+    brain.service(PLAN).repo.update(1, {"deadline": "Phase 1 exit"})
     brain.execute("create", entity=PLAN, data={
         "order": 2, "pdp_phase": "2", "lifecycle_phase": "2. HARA / Risk Assessment",
         "deliverable": "Hazard Analysis and Risk Assessment", "loc_jama": True, "ref_qp_11": True,

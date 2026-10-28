@@ -261,8 +261,10 @@ def test_phase_checklist_ticks_done_rows(seeded):
 
 
 def test_status_report_sections(seeded):
-    seeded.execute("update", entity=PLAN, id=2, data={"status": "Blocked", "deadline": "2026-11-05"})
-    seeded.execute("update", entity=PLAN, id=3, data={"deadline": "31/12/2099"})
+    # the deadline is calculated since 0.11.0: these dates are written the way the tool writes them
+    seeded.execute("update", entity=PLAN, id=2, data={"status": "Blocked"})
+    seeded.service(PLAN).repo.update(2, {"deadline": "2026-11-05"})
+    seeded.service(PLAN).repo.update(3, {"deadline": "31/12/2099"})
     result = seeded.execute("document", name="status_report")
     assert result.ok, result.errors
     md = Path(result.data["paths"]["md"]).read_text(encoding="utf-8")

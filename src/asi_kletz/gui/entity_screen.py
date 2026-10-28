@@ -334,7 +334,9 @@ class EntityScreen(Screen):
         self.window.set_status(f"{self.schema.label} {row_id} selected")
 
     def form_data(self) -> dict[str, Any]:
-        return {name: widget.get() for name, widget in self.widgets.items()}
+        """What Save sends: the editable fields only (a calculated field or a loader's is shown, never sent)."""
+        editable = {spec.name for spec in self.schema.editable_fields}
+        return {name: widget.get() for name, widget in self.widgets.items() if name in editable}
 
     # -- actions --------------------------------------------------------
     def new(self) -> None:

@@ -131,6 +131,10 @@ class SprintService:
 
     def close(self, number: int | None = None, as_of: Any = None, actor: str = "python") -> dict[str, Any]:
         """Close the active sprint: Done stays, the rest is carried into the next sprint (opened now), Jira freezes."""
+        with self.brain.schedule.deferred():  # the plan's deadlines move once, after the close
+            return self._close(number, as_of, actor)
+
+    def _close(self, number: int | None, as_of: Any, actor: str) -> dict[str, Any]:
         sprint = q.sprint_by_number(self.brain, number)
         if sprint.get("status") != "Active":
             raise CommandError(f"sprint {sprint['number']} is {sprint.get('status') or 'unset'}, not Active")
@@ -212,6 +216,12 @@ class SprintService:
         holiday table as it is now; Active and Closed sprints are never touched, and a goal is rewritten only
         when it is empty or a ``Holidays:`` line the planner wrote.
         """
+        with self.brain.schedule.deferred():  # the plan's deadlines move once, after the chain is planned
+            return self._plan(until=until, years=years, days=days, replan=replan, actor=actor)
+
+    def _plan(
+        self, *, until: Any, years: int | None, days: int | None, replan: bool, actor: str
+    ) -> dict[str, Any]:
         length = int(self.brain.sprint_days if days is None else days)
         if length < 1:
             raise CommandError(f"days must be 1 or more, not {length}")

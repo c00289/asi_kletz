@@ -81,8 +81,13 @@ def test_registry_aliases_and_fingerprint():
 def test_safety_plan_matrix_fields_are_unique_and_grouped():
     schema = default_registry.get(PLAN)
     names = schema.field_names
-    assert len(names) == len(set(names)) == 64 and names[-1] == UID  # 63 of the sheet, then the hidden uid
-    assert len(schema.visible_fields) == 63
+    assert len(names) == len(set(names)) == 67 and names[-1] == UID  # 63 of the sheet, three of 0.11.0, the uid
+    assert len(schema.visible_fields) == 66 and len(schema.source_fields) == 63
+    assert names[3:7] == ("deliverable", "points", "default_points", "sprint")
+    assert [f.name for f in schema.calculated_fields] == ["sprint", "deadline"]
+    assert not schema.field("default_points").editable and schema.field("points").default_from == "default_points"
+    assert [f.name for f in schema.visible_fields if not f.editable] == ["default_points", "sprint", "deadline"]
+    assert len(schema.editable_fields) == 63 and schema.field("deadline").header == "Expected Duration/Deadline"
     groups = schema.groups()
     assert len(groups["reference"]) == 23 and len(groups["author"]) == 18 and len(groups["reviewer"]) == 8
     assert "author_tech_lead_functional_safety" in names and "reviewer_tech_lead_functional_safety" in names
@@ -120,7 +125,8 @@ def test_every_entity_ends_with_the_hidden_uid():
         assert not any(f.hidden for f in schema.visible_fields)
         assert schema.to_dict()["fields"][-1] == {
             "name": UID, "type": "text", "header": UID, "required": False, "lookup": None, "group": None,
-            "help": "Hidden identity: assigned once, never changed.", "hidden": True,
+            "help": "Hidden identity: assigned once, never changed.", "hidden": True, "calculated": False,
+            "readonly": False, "source": True,
         }
     assert definitions.ALL_ENTITIES[0].fields[-1].name == UID
     assert FieldSpec("x").hidden is False and "hidden" in FieldSpec("x").to_dict()

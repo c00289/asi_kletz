@@ -52,7 +52,7 @@ class HolidayService:
             rows.append(clean)
         existing = {(r["date"], r["name"]): r for r in service.list()}
         counts = {"inserted": 0, "updated": 0, "unchanged": 0}
-        with self.brain.storage.transaction():
+        with self.brain.storage.transaction(), self.brain.schedule.deferred():
             for clean in rows:
                 current = existing.get((clean["date"], clean["name"]))
                 if current is None:
@@ -66,4 +66,5 @@ class HolidayService:
                     counts["updated"] += 1
                 else:
                     counts["unchanged"] += 1
+        self.brain.schedule.recompute(actor)  # the chain's dates may have moved
         return {"path": str(file), "rows": len(rows), **counts, "holidays": service.count()}

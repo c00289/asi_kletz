@@ -221,7 +221,7 @@ def status_report(brain: Brain, params: dict[str, str], ctx: BuildContext) -> An
         doc.p(f"No open deliverable has a dated deadline within {DUE_DAYS} days.")
     if undated:
         doc.h2("Open deliverables without a date")
-        doc.p("The deadline column is free text; these open deliverables carry no date the tool can parse.")
+        doc.p("These open deliverables have no deadline: the sprint chain does not reach them (run `sprint plan`).")
         doc.table(
             ["Deliverable", "Phase", "Deadline", "Status"],
             [[_cell(r.get("deliverable")), _cell(r.get("lifecycle_phase")), _cell(r.get("deadline")),

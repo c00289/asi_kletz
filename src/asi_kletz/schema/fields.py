@@ -102,6 +102,15 @@ class FieldSpec:
     width: int | None = None
     help: str = ""
     hidden: bool = False  # no widget, no column, no place in a document unless asked for by name; in every file
+    # 0.11.0 (docs/plan-points-plan.md): a calculated field is computed by the tool (read-only in the form and the
+    # table, refused on create and update, stripped by the import with a warning); a readonly field is set by a
+    # loader (read-only in the form, refused on create and update, accepted by the import); a field with
+    # ``source=False`` is not a column of the owner's source sheet; ``default_from`` names the field whose value
+    # the form shows as this one's placeholder.
+    calculated: bool = False
+    readonly: bool = False
+    source: bool = True
+    default_from: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name.isidentifier() or self.name.startswith("_"):
@@ -130,6 +139,11 @@ class FieldSpec:
     def default(self) -> Any:
         return False if self.is_flag else None
 
+    @property
+    def editable(self) -> bool:
+        """A field a person or an agent may write: not hidden, not calculated, not set by a loader."""
+        return not (self.hidden or self.calculated or self.readonly)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
@@ -140,6 +154,9 @@ class FieldSpec:
             "group": self.group,
             "help": self.help,
             "hidden": self.hidden,
+            "calculated": self.calculated,
+            "readonly": self.readonly,
+            "source": self.source,
         }
 
 
