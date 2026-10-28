@@ -263,7 +263,7 @@ def test_matrix_toggle_and_group_switch(window, seeded):
     screen = window.show("safety_plan_matrix")
     assert screen.group_var.get() == "all"  # every flag at once, each column as wide as its heading
     flags = [f.name for f in screen.schema.fields if f.is_flag]
-    assert list(screen.tree["columns"]) == ["order", "pdp_phase", "lifecycle_phase", "deliverable", *flags]
+    assert list(screen.tree["columns"]) == ["order", "plan", *flags]
     _, head = _fonts(screen.tree)
     assert int(screen.tree.column("loc_jama", "width")) == head.measure("JAMA") + 24
     assert int(screen.tree.column("reviewer_pat", "width")) == head.measure("PAT") + 24
@@ -1454,18 +1454,18 @@ def test_safety_plan_freezes_the_identity_columns(window, seeded):
 
 
 def test_matrix_freezes_the_fixed_columns(window, seeded, monkeypatch):
-    from asi_kletz.gui.matrix_screen import FIXED
+    from asi_kletz.gui.matrix_screen import FIXED, PLAN_HEADER
 
     screen = window.show("safety_plan_matrix")
     pane, left, right = screen.pane, screen.pane.left, screen.tree
     assert pane.frozen == FIXED and right is pane.right and tuple(left["columns"]) == FIXED
     flags = [f.name for f in screen.schema.fields if f.is_flag]
     assert list(right["displaycolumns"]) == flags  # the right tree shows the flags alone
-    assert _rows(left) == _rows(right) and len(_rows(left)) == 3
+    assert _rows(left) == _rows(right) and len(_rows(left)) == 9  # 3 PDP phases, 3 lifecycle phases, 3 deliverables
     for column in FIXED:
         assert _cells(left, column) == _cells(right, column)
-    assert left.set("1", "deliverable") == next(r["deliverable"] for r in screen.rows if r["id"] == 1)
-    assert left.heading("deliverable", "text") == screen.schema.field("deliverable").header
+    assert left.set("1", "plan").strip() == next(r["deliverable"] for r in screen.rows if r["id"] == 1)
+    assert left.heading("plan", "text") == PLAN_HEADER
 
     screen.set_group("reviewer")
     reviewers = [f.name for f in screen.groups["reviewer"]]
@@ -1487,6 +1487,62 @@ def test_matrix_freezes_the_fixed_columns(window, seeded, monkeypatch):
     left.selection_set("3")
     window.update()
     assert right.selection() == ("3",)
+
+
+def test_matrix_stacks_pdp_phase_over_lifecycle_phase_over_deliverable(window, seeded, monkeypatch):
+    """Owner, 2026-10-28: the three identity columns were crowded; stack them instead."""
+    from types import SimpleNamespace
+
+    from asi_kletz.gui.matrix_screen import INDENT, PDP_TAG, PHASE_TAG, stack
+
+    rows = seeded.execute("list", entity=PLAN).data
+    lines = stack(rows)
+    assert [(iid, level) for iid, level, _, _ in lines] == [
+        ("pdp:1", 0), ("phase:1:1. Concept Development", 1), ("1", 2),
+        ("pdp:2", 0), ("phase:2:2. HARA / Risk Assessment", 1), ("2", 2),
+        ("pdp:3", 0), ("phase:3:3. Functional Safety Concept (FSC)", 1), ("3", 2),
+    ]
+    assert lines[0][2] == "PDP phase 1" and lines[1][2] == INDENT + "1. Concept Development"
+    assert lines[2][2] == INDENT * 2 + "Safety Plan" and lines[2][3] is rows[0]
+    # a plan out of order shows the truth of its order: the same phase opens again
+    twice = stack([rows[0], rows[1], rows[0]])
+    assert [iid for iid, _, _, _ in twice] == ["pdp:1", "phase:1:1. Concept Development", "1",
+                                              "pdp:2", "phase:2:2. HARA / Risk Assessment", "2",
+                                              "pdp:1", "phase:1:1. Concept Development", "1"]
+    # a row without phases still has a place
+    assert [t for _, _, t, _ in stack([{"id": 9, "deliverable": "Loose"}])] == [
+        "(no PDP phase)", INDENT + "(no lifecycle phase)", INDENT * 2 + "Loose"]
+
+    screen = window.show("safety_plan_matrix")
+    left, right = screen.pane.left, screen.tree
+    assert [iid for iid, _ in _rows(right)] == [iid for iid, _, _, _ in lines]
+    assert _cells(right, "plan") == [text for _, _, text, _ in lines]
+    assert _cells(right, "order") == ["", "", "1", "", "", "2", "", "", "3"]
+    assert all(right.set("pdp:1", f.name) == "" for f in screen.flags)  # a group row has no flags
+    # group rows wear their tag first (colour and font), then the stripe (background); deliverables the stripe alone
+    assert right.item("pdp:1", "tags")[0] == PDP_TAG
+    assert right.item("phase:1:1. Concept Development", "tags")[0] == PHASE_TAG
+    assert tuple(right.item("1", "tags")) in (("odd",), ("even",))
+    assert _rows(left) == _rows(right)
+    palette = window.theme.palette
+    for tree in (left, right):
+        assert str(tree.tag_configure(PDP_TAG, "foreground")) == palette.primary
+        assert str(tree.tag_configure(PHASE_TAG, "foreground")) == palette.accent
+
+    # a click on a group row toggles nothing
+    monkeypatch.setattr(right, "identify", lambda region, x, y: "cell")
+    monkeypatch.setattr(right, "identify_row", lambda y: "pdp:1")
+    monkeypatch.setattr(right, "identify_column", lambda x: "#1")
+    before = seeded.execute("get", entity=PLAN, id=1).data
+    screen._on_click(SimpleNamespace(x=5, y=5))
+    assert seeded.execute("get", entity=PLAN, id=1).data == before
+
+    # the search keeps a deliverable and the two group rows above it, nothing else
+    screen.search_var.set("hazard")
+    assert [iid for iid, _ in _rows(right)] == ["pdp:2", "phase:2:2. HARA / Risk Assessment", "2"]
+    assert _rows(left) == _rows(right)
+    screen.search_var.set("")
+    assert len(_rows(right)) == 9
 
 
 def test_frozen_pane_split_is_draggable(window, monkeypatch):

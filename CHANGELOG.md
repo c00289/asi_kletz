@@ -12,6 +12,32 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.8.3] - 2026-10-28
+
+The owner, 2026-10-28: "the safety plan matrix screens are a little crowded because we are doing
+pdp phase, safety lifecycle phase and then the safety deliverables each as one column; instead
+stack them." Schema version unchanged (2).
+
+### Changed
+- **Safety Plan Matrix stacked** (`gui/matrix_screen.py`): the frozen columns are `order` and one
+  `plan` column (heading `PDP phase  ›  Safety lifecycle phase  ›  Safety deliverable`) instead of
+  `order`, `pdp_phase`, `lifecycle_phase`, `deliverable`. `stack(rows)` turns the plan into lines
+  `(iid, level, text, row)`: a PDP phase row (`pdp:<value>`, `PDP phase n`) whenever the value
+  changes, a lifecycle phase row under it (`phase:<pdp>:<value>`, indented four spaces), the
+  deliverable rows under that (indented eight, iid the row id). Missing phases print as
+  `(no PDP phase)` / `(no lifecycle phase)` so every row has a place. Group rows have blank flag
+  cells and the tags `pdp` (primary colour) and `phase` (accent colour) in the heading font, put
+  in front of the stripe tag so colour and font come from the group and the background from the
+  stripe; `FrozenPane.mirror` copies tags and their colours to the left tree as before. A click on
+  a group row toggles nothing. The search filters deliverables and shows the group rows above
+  every match. Column fitting, the frozen split, the sort and the scrolling are unchanged.
+
+### Tests
+- `test_matrix_stacks_pdp_phase_over_lifecycle_phase_over_deliverable`: the pure `stack` (order,
+  a repeated phase, a row without phases) and the screen (iids, texts, blank flags, tags and
+  colours on both trees, a click on a group row, the search). The two older matrix tests expect
+  the new columns and nine rows for three deliverables.
+
 ## [0.8.2] - 2026-10-28
 
 The owner's rule of 2026-10-28 on sprints: "the time from Oct 12 to 27 is a single sprint, part of

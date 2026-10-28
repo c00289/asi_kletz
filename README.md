@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.8.2**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.8.3**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,16 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.8.3
+
+The **Safety Plan Matrix is stacked**: the PDP phase, the safety lifecycle phase and the safety
+deliverable were three frozen columns side by side and the screen was crowded; they are now one
+column read top down, a PDP phase row, its lifecycle phase rows indented under it, their
+deliverables indented under those, in the plan's own order. Group rows carry the theme's primary
+and accent colours in the heading font and no flags; a click on one toggles nothing. The search
+keeps every matching deliverable with the two group rows above it. `order` stays as the first
+frozen column. No schema change.
 
 ## What is in 0.8.2
 
@@ -158,9 +168,10 @@ Everything of 0.1.0 plus diagrams and documents (see Diagrams and documents).
     the sort shared; a heading on either side sorts). Since 0.7.3 the split between the two is
     a sash you can drag: it opens at the pinned columns' fitted width, never past 45% of the
     window, and dragging it never changes a column width.
-  - **Safety Plan Matrix**: deliverables as rows, one flag group as columns, click a cell to
-    toggle it (location, reference, author, verification, reviewer); its four identity
-    columns stay put the same way while the flags scroll.
+  - **Safety Plan Matrix**: the plan stacked as PDP phase > safety lifecycle phase > safety
+    deliverable (one column, indented, since 0.8.3) with `order` beside it, one flag group as
+    columns, click a flag cell to toggle it (location, reference, author, verification, reviewer);
+    the two frozen columns stay put the same way while the flags scroll.
   - Since 0.7.1 every column of every table (these two, the dashboard, JIRA Live Data) is as
     wide as the longest string in its domain: heading, cells and, for an enum field, every
     value of its lookup, measured in pixels with the real fonts after each fill, so nothing is
