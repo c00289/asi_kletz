@@ -131,6 +131,22 @@ def test_execute_read_verb_is_byte_equal_to_the_api(window, seeded):
     assert json.dumps(body, separators=(", ", ": ")) == seeded.execute("count", entity=PLAN).to_json(indent=None)
 
 
+def test_execute_takes_a_uid_where_an_id_is_expected(window, seeded):
+    """The server has no row endpoints of its own: ``/execute`` runs the verbs, and they resolve a uid."""
+    uid = seeded.execute("get", entity=PLAN, id=2).data["uid"]
+    status, body = _call(window, "POST", "/execute", {"verb": "get", "args": {"entity": PLAN, "id": uid}})
+    assert status == 200 and body["ok"] and body["data"]["id"] == 2 and body["data"]["uid"] == uid
+    status, body = _call(
+        window, "POST", "/execute",
+        {"verb": "update", "args": {"entity": PLAN, "id": uid, "data": {"status": "Blocked"}}, "actor": "agent"},
+    )
+    assert status == 200 and body["ok"] and body["data"]["id"] == 2 and body["data"]["status"] == "Blocked"
+    _, body = _call(window, "POST", "/execute", {"verb": "delete", "args": {"entity": PLAN, "id": uid}})
+    assert body["ok"] and body["data"]["deleted"] == 2
+    _, body = _call(window, "POST", "/execute", {"verb": "get", "args": {"entity": PLAN, "id": uid}})
+    assert not body["ok"] and "not found" in body["errors"][0]
+
+
 def test_execute_write_verb_refreshes_the_open_screen(window, seeded):
     screen = window.show("safety_plan")
     assert screen.tree.set("3", "status") == "Pending"

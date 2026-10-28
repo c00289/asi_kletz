@@ -46,7 +46,7 @@ class Argument:
     help: str = ""
     required: bool = False
     flag: bool = False  # True: --option, False: positional
-    type: str = "str"  # str | int | json | kv | path | bool
+    type: str = "str"  # str | int | json | kv | path | bool | ref (an id, or a uid; resolved by the service)
     choices: tuple[str, ...] = ()
     default: Any = None
     multiple: bool = False

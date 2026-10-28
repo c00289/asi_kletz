@@ -8,7 +8,8 @@ from .base import Argument, Command, Context, Result, merge_data, parse_kv
 from .factory import register_command
 
 ENTITY = Argument("entity", "Entity name (see `schema`)", required=True)
-ROW_ID = Argument("id", "Row id", required=True, type="int")
+# since 0.9.0 a row is named by its id (digits) or its uid (the hidden identity); ``EntityService.resolve``
+ROW_ID = Argument("id", "Row id, or its uid", required=True, type="ref")
 DATA = Argument("data", "Row as a JSON object", flag=True, type="json")
 SET = Argument("set", "Field value as key=value (repeatable)", flag=True, type="kv", multiple=True)
 FILTER = Argument("filter", "Only rows where key=value (repeatable)", flag=True, type="kv", multiple=True)
@@ -48,11 +49,11 @@ class CountCommand(Command):
 @register_command
 class GetCommand(Command):
     verb = "get"
-    help = "Fetch one row by id."
+    help = "Fetch one row by id or uid."
     arguments = (ENTITY, ROW_ID)
 
     def run(self, ctx: Context, args: dict[str, Any]) -> Result:
-        return Result.success(ctx.brain.service(args["entity"]).get(int(args["id"])))
+        return Result.success(ctx.brain.service(args["entity"]).get(args["id"]))
 
 
 @register_command
@@ -76,20 +77,20 @@ class UpdateCommand(Command):
         data = merge_data(args)
         if not data:
             return Result.failure("nothing to update: pass --data or --set")
-        row, warnings = ctx.brain.service(args["entity"]).update(int(args["id"]), data, ctx.actor)
+        row, warnings = ctx.brain.service(args["entity"]).update(args["id"], data, ctx.actor)
         return Result.success(row, warnings)
 
 
 @register_command
 class DeleteCommand(Command):
     verb = "delete"
-    help = "Delete a row by id."
+    help = "Delete a row by id or uid."
     arguments = (ENTITY, ROW_ID)
 
     def run(self, ctx: Context, args: dict[str, Any]) -> Result:
         service = ctx.brain.service(args["entity"])
-        service.delete(int(args["id"]), ctx.actor)
-        return Result.success({"entity": service.schema.name, "deleted": int(args["id"])})
+        row_id = service.delete(args["id"], ctx.actor)
+        return Result.success({"entity": service.schema.name, "deleted": row_id})
 
 
 @register_command

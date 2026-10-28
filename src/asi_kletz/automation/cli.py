@@ -35,7 +35,7 @@ def _json(text: str) -> Any:
         raise argparse.ArgumentTypeError(f"invalid JSON: {exc.msg}") from None
 
 
-_TYPES = {"str": str, "path": str, "int": int, "json": _json, "kv": str, "bool": _bool}
+_TYPES = {"str": str, "path": str, "int": int, "json": _json, "kv": str, "bool": _bool, "ref": str}
 
 
 def build_parser(factory: CommandFactory | None = None) -> argparse.ArgumentParser:

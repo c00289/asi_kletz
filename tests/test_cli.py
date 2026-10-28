@@ -28,6 +28,18 @@ def test_cli_end_to_end(tmp_path, capsys):
     code, res = run(capsys, "--db", db, "get", "safety_plan_row", "42")
     assert code == 1 and not res["ok"]
 
+    code, res = run(capsys, "--db", db, "get", "safety_plan_row", "1")
+    uid = res["data"]["uid"]
+    code, res = run(capsys, "--db", db, "get", "safety_plan_row", uid)  # the id positional takes a uid
+    assert code == 0 and res["data"]["id"] == 1 and res["data"]["order"] == 3
+    code, res = run(capsys, "--db", db, "update", "safety_plan_row", uid, "--set", "status=Done")
+    assert code == 0 and res["data"]["id"] == 1 and res["data"]["status"] == "Done"
+    other = "00000000-0000-4000-8000-000000000000"
+    code, res = run(capsys, "--db", db, "update", "safety_plan_row", uid, "--set", f"uid={other}")
+    assert code == 1 and res["errors"] == ["uid is immutable"]
+    code, res = run(capsys, "--db", db, "--actor", "me", "delete", "safety_plan_row", uid)
+    assert code == 0 and res["data"]["deleted"] == 1
+
     code, res = run(capsys, "--db", db, "status")
     assert res["data"]["recent_audit"][0]["actor"] == "me"
 

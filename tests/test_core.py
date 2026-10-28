@@ -242,3 +242,28 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
         assert {r[UID] for r in brain.execute("list", entity=PLAN).data} < set(uids)
     again = _raw_rows(db)
     assert again == after
+
+
+def test_commands_take_a_uid_where_an_id_is_expected(seeded):
+    rows = seeded.execute("list", entity=PLAN).data
+    uid = rows[1]["uid"]
+    got = seeded.execute("get", entity=PLAN, id=uid)
+    assert got.ok and got.data["id"] == 2 and got.data["deliverable"] == "Hazard Analysis and Risk Assessment"
+    assert seeded.execute("get", entity=PLAN, id="{" + uid.upper() + "}").data["id"] == 2
+    assert seeded.execute("get", entity=PLAN, id="2").data == got.data
+    updated = seeded.execute("update", entity=PLAN, id=uid, set=["status=Blocked"])
+    assert updated.ok and updated.data["id"] == 2 and updated.data["status"] == "Blocked"
+    assert seeded.storage.audit_tail(1)[0]["entity_id"] == 2  # the audit log keeps the id, the trace of the handle
+    refused = seeded.execute("update", entity=PLAN, id=uid, set=["uid=00000000-0000-4000-8000-000000000000"])
+    assert not refused.ok and refused.errors == ["uid is immutable"]
+    assert seeded.execute("list", entity=PLAN, filter=[f"uid={uid}"]).data[0]["id"] == 2
+    assert seeded.execute("list", entity=PLAN, filter=["uid=00000000-0000-4000-8000-000000000000"]).data == []
+    missing = seeded.execute("get", entity=PLAN, id="00000000-0000-4000-8000-000000000000")
+    assert not missing.ok and "not found" in missing.errors[0]
+    neither = seeded.execute("delete", entity=PLAN, id="row-two")
+    assert not neither.ok and "neither an id nor a uid" in neither.errors[0]
+    deleted = seeded.execute("delete", entity=PLAN, id=uid)
+    assert deleted.ok and deleted.data == {"entity": PLAN, "deleted": 2}
+    assert seeded.execute("count", entity=PLAN).data["count"] == 2
+    signature = next(c for c in seeded.dispatcher.factory.signatures() if c["verb"] == "get")
+    assert [a["type"] for a in signature["arguments"]] == ["str", "ref"]

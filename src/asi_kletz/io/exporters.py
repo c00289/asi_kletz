@@ -1,4 +1,8 @@
-"""Exporters: the workbook and the JSON dump are *views* regenerated from the database."""
+"""Exporters: the workbook and the JSON dump are *views* regenerated from the database.
+
+Since 0.9.0 both carry the hidden ``uid`` of every row: the JSON dump as any key, the workbook as the
+last column of every sheet, headed ``uid`` and hidden, so the sheet reads as before and still round-trips.
+"""
 
 from __future__ import annotations
 
@@ -145,6 +149,8 @@ class ExcelExporter(Exporter):
                 if spec.type is FieldType.BOOL:
                     base = min(base, 14)
                 ws.column_dimensions[get_column_letter(col)].width = max(6, min(base + 2, 62))
+                if spec.hidden:  # the uid: present in the data, hidden on the sheet, so it reads as before
+                    ws.column_dimensions[get_column_letter(col)].hidden = True
                 if spec.lookup:
                     values = brain.lookups.get(spec.lookup, ())
                     formula = '"' + ",".join(values) + '"'
