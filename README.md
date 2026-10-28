@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.8.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.8.2**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,16 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.8.2
+
+Two sprints, numbered across the programme, and nothing else: **Sprint 1** is 10/12 to 10/27 (Phase
+2, closed 10/27) and **Sprint 2** is 10/27 to 11/10 (Phase 3, active). The period 10/12 to 10/27
+was imported as `FINAL SPRINTS`, as if the HARA phase had had sprints of its own; the owner's rule
+of 2026-10-28 is that one dated interval is one sprint, so the sprint rows, the week texts that
+name the sprint and the tracker text now say `SPRINT 1` and `SPRINT 2`. The closed bullet of the
+`TIMELINE` prints as `Sprint 1: 10/12 - 10/27/2026. Closed 10/27.`, the same shape as the open
+and planned bullets. No schema change.
 
 ## What is in 0.8.1
 

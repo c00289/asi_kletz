@@ -7,12 +7,12 @@ file back. One module knows the shape, so the importer and the builder cannot dr
     <byline>. Newest week at the top. Last updated m/d/yyyy.
 
     TIMELINE
-    - Phase 2 (HARA / Risk Assessment): final sprints 10/12 - 10/27/2026. Closed 10/27.
-    - Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 1: 10/27 - 11/10.
+    - Phase 2 (HARA / Risk Assessment): Sprint 1: 10/12 - 10/27/2026. Closed 10/27.
+    - Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 2: 10/27 - 11/10.
     - Scope: <scope>
 
     =====================================================================
-    PHASE 3 - SPRINT 1 (10/27 - 11/10)   [in progress]
+    PHASE 3 - SPRINT 2 (10/27 - 11/10)   [in progress]
     =====================================================================
     Sprint: 9 of 10 points committed, ...          (generated, only when an item is pointed)
 
@@ -32,7 +32,7 @@ file back. One module knows the shape, so the importer and the builder cannot dr
       HWL-2554  Story  <title>
                 Jira status: <jira line>
                 Note: <note>
-                Sprint 1 target: <target>
+                Sprint 2 target: <target>
                 Points: 3                           (omitted while unpointed)
 
 Nothing here reads or writes the database: the service turns rows into ``Tracker`` and back.
@@ -128,7 +128,7 @@ class Week:
 class Sprint:
     phase_number: str  # "3"
     phase_title: str  # "Functional Safety Concept (FSC)"; the timeline drops a trailing parenthesis
-    label: str  # "SPRINT 1", "FINAL SPRINTS"
+    label: str  # "SPRINT 1", "SPRINT 2": one dated interval is one sprint, numbered across the programme
     start: dt.date
     end: dt.date
     status: str  # Planned | Active | Closed
@@ -410,7 +410,7 @@ def timeline_bullet(sprint: Sprint) -> str:
     head = f"- Phase {sprint.phase_number} ({timeline_title(sprint.phase_title)}):"
     if sprint.status == "Closed":
         when = sprint.closed_on or sprint.end
-        return f"{head} {sprint.label.lower()} {_md(sprint.start)} - {_mdy(sprint.end)}. Closed {_md(when)}."
+        return f"{head} {sprint.target_label}: {_md(sprint.start)} - {_mdy(sprint.end)}. Closed {_md(when)}."
     if sprint.status == "Active":
         return f"{head} opened {_mdy(sprint.start)}. {sprint.target_label}: {_md(sprint.start)} - {_md(sprint.end)}."
     return f"{head} planned. {sprint.target_label}: {_md(sprint.start)} - {_md(sprint.end)}."

@@ -2,15 +2,15 @@ WHEEL LOADER FUNCTIONAL SAFETY ENGINEERING - WEEKLY ACTIVITY TRACKER
 FuSa Engineer. Newest week at the top. Last updated 10/28/2026.
 
 TIMELINE
-- Phase 2 (HARA / Risk Assessment): final sprints 10/12 - 10/27/2026. Closed 10/27.
-- Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 1: 10/27 - 11/10.
+- Phase 2 (HARA / Risk Assessment): Sprint 1: 10/12 - 10/27/2026. Closed 10/27.
+- Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 2: 10/27 - 11/10.
 - Scope: platform functional safety for the Wheel Loader programme (project HWL).
 
 =====================================================================
-PHASE 3 - SPRINT 1 (10/27 - 11/10)   [in progress]
+PHASE 3 - SPRINT 2 (10/27 - 11/10)   [in progress]
 =====================================================================
 
-WEEK OF 10/26 - 11/01   (Phase 2 closed 10/27; Phase 3 Sprint 1 opened 10/27)
+WEEK OF 10/26 - 11/01   (Phase 2 closed 10/27; Phase 3 Sprint 2 opened 10/27)
 
 Outcomes so far
 - Phase 2 closed on schedule on 10/27 with the HARA report (MPLr/PLr assignments) and STPA Step 2
@@ -34,15 +34,15 @@ Miscellaneous issues
 
   Phase 1 - Concept Development
   - Safety Plan (Word document): in work. Dates still to be added to every deliverable; I need
-    the programme schedule for that. Sprint 1 target: dated and baselined.
+    the programme schedule for that. Sprint 2 target: dated and baselined.
   - SCOPE Definition Report: draft.
   - System Functions, Functional Architecture and its Interfaces: unsure whether I have compiled
     all of these documents. Ask: confirmation from the systems team that the set is complete.
-  - ConOps / Use Case specification: not yet seen. Sprint 1 target: located.
+  - ConOps / Use Case specification: not yet seen. Sprint 2 target: located.
   - TOD/PRD document: unclear what this is. Ask: definition and owner to be confirmed.
-  - Activity Flow: draft. Sprint 1 target: reviewed and baselined.
+  - Activity Flow: draft. Sprint 2 target: reviewed and baselined.
   - Preliminary Hazard List (STPA Step 1 outputs: losses, hazards, constraints): draft, under
-    peer review. Sprint 1 target: peer review closed, approval obtained.
+    peer review. Sprint 2 target: peer review closed, approval obtained.
 
   Phase 2 - HARA / Risk Assessment
   - STPA Step 2: draft, carried into Phase 3 for completion.
@@ -50,7 +50,7 @@ Miscellaneous issues
 
   People and cadence
   - Introduction meeting with Rod DeMay: invitation sent 10/23; awaiting Rod's availability.
-    Sprint 1 target: held.
+    Sprint 2 target: held.
   - Knowledge sharing on FSE best practices: format and cadence still to agree.
 
   Status questions (answered 10/28)
@@ -70,32 +70,32 @@ Jira issues (project HWL, open items I am assigned, reported or watching, as of 
   HWL-2554  Story  Perform Platform Safety Plan
             Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
             Note: In progress, will be ready before November 10.
-            Sprint 1 target: dates added to every deliverable; plan baselined.
+            Sprint 2 target: dates added to every deliverable; plan baselined.
 
   HWL-2553  Story  Perform Platform Activity Flow
             Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
             Note: In progress, will be ready before November 10.
-            Sprint 1 target: draft reviewed and baselined.
+            Sprint 2 target: draft reviewed and baselined.
 
   HWL-2572  Story  STPA Step 1 - Losses, Hazards and System Boundary - Peer Review
             Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
             Note: In progress, will be ready before November 10.
-            Sprint 1 target: peer review closed.
+            Sprint 2 target: peer review closed.
 
   HWL-2573  Story  STPA Step 1 - Losses, Hazards and System Boundary - Approval
             Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
             Note: In progress, will be ready before November 10.
-            Sprint 1 target: approval obtained.
+            Sprint 2 target: approval obtained.
 
   HWL-2574  Story  STPA Step 3 - Unsafe Control Actions - Work
             Jira status: To Do | Priority: Un-Groomed | Assignee: Roy Mendoza
             Note: In progress, will be ready before November 10.
-            Sprint 1 target: work started.
+            Sprint 2 target: work started.
 
   HWL-2575  Story  STPA Step 4 - Loss Scenarios - Work
             Jira status: To Do | Priority: Un-Groomed | Assignee: Roy Mendoza
             Note: In progress, will be ready before November 10.
-            Sprint 1 target: scoped and scheduled.
+            Sprint 2 target: scoped and scheduled.
 
   Watched, assigned to Matt Whale
 
@@ -103,16 +103,16 @@ Jira issues (project HWL, open items I am assigned, reported or watching, as of 
                    test case (01-006 step 3, CONWLD-TSTRN-3788)
             Jira status: To Do | Priority: High | Assignee: Matt Whale
             Note: no FuSa impact
-            Sprint 1 target: followed to closure.
+            Sprint 2 target: followed to closure.
 
   HWL-2652  Task   Review L0 test dependencies: define which test failures block which test
                    cases, and record it in the case preconditions
             Jira status: To Do | Priority: Un-Groomed | Assignee: Matt Whale
             Note: no FuSa impact
-            Sprint 1 target: followed to closure.
+            Sprint 2 target: followed to closure.
 
 =====================================================================
-PHASE 2 - FINAL SPRINTS (10/12 - 10/27)   [closed 10/27]
+PHASE 2 - SPRINT 1 (10/12 - 10/27)   [closed 10/27]
 =====================================================================
 
 WEEK OF 10/19 - 10/25
@@ -122,7 +122,7 @@ Outcomes
 - Mentor meeting with Darsh Patel held (by 10/21).
 - FSE introductions with Adolfo held (by 10/23).
 - Introduction meeting with Rod DeMay requested; invitation sent (10/23).
-- Foundational FSE sprint planning drafted: the Phase 2 close-out and the Phase 3 Sprint 1
+- Foundational FSE sprint planning drafted: the Phase 2 close-out and the Phase 3 Sprint 2
   content laid out against the safety lifecycle.
 - Phase 2 deliverables advanced to draft: STPA Step 2, HARA report with MPLr/PLr assignments,
   Preliminary Hazard List, SCOPE Definition Report.

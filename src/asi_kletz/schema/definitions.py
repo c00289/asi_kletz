@@ -103,7 +103,7 @@ SPRINT = register_entity(EntitySchema(
     name="sprint", table="sprint", label="Sprint", sheet="Sprints",
     description=(
         "One sprint of the Weekly Activity Tracker: its number across the programme, the printed "
-        "label (SPRINT 1, FINAL SPRINTS), lifecycle phase, dates, capacity in points, goal and status."
+        "label (SPRINT 1, SPRINT 2), lifecycle phase, dates, capacity in points, goal and status."
     ),
     order_by=("number", "id"),
     fields=(

@@ -1654,7 +1654,7 @@ def test_tracker_screen_loads_saves_and_builds(window, seeded, tmp_path):
     screen.refresh()
     assert screen.week_var.get() == "WEEK OF 10/26 - 11/01 · sprint 2" and window.week_start == "2026-10-26"
     assert len(screen.week_box["values"]) == 3 and screen.week_box["values"][-1] == "WEEK OF 10/12 - 10/18 · sprint 1"
-    assert screen.note_var.get() == "Phase 2 closed 10/27; Phase 3 Sprint 1 opened 10/27"
+    assert screen.note_var.get() == "Phase 2 closed 10/27; Phase 3 Sprint 2 opened 10/27"
     assert screen.pane_text("Outcomes").startswith("- Phase 2 closed on schedule on 10/27")
     assert screen.pane_text("Issues").startswith("Platform Safety Plan deliverables")
     jira = screen.jira.get("1.0", "end-1c")

@@ -61,14 +61,14 @@ def _read(result) -> str:
 # -- grammar ------------------------------------------------------------------------------------
 def _built_tracker() -> Tracker:
     day = dt.date(2026, 11, 10)
-    closed = Sprint("2", "HARA / Risk Assessment", "FINAL SPRINTS", dt.date(2026, 10, 12), dt.date(2026, 10, 27),
+    closed = Sprint("2", "HARA / Risk Assessment", "SPRINT 1", dt.date(2026, 10, 12), dt.date(2026, 10, 27),
                     "Closed", closed_on=dt.date(2026, 10, 27), number=1)
     closed.weeks.append(Week(dt.date(2026, 10, 19), outcomes="- Done a thing.\n- Done another."))
     frozen = "Jira issues (project HWL, as of 10/18)\n\n  HWL-1  Bug    Old\n            Note: gone"
     closed.weeks.append(Week(dt.date(2026, 10, 12), outcomes="- Started.", jira_frozen=frozen))
-    active = Sprint("3", "Functional Safety Concept (FSC)", "SPRINT 1", dt.date(2026, 10, 27), day, "Active",
+    active = Sprint("3", "Functional Safety Concept (FSC)", "SPRINT 2", dt.date(2026, 10, 27), day, "Active",
                     goal="Clear the Phase 2 backlog", number=2)
-    issues = "Phase 1 - Concept Development\n- Safety Plan: in work. Sprint 1 target: dated.\n  wrapped line"
+    issues = "Phase 1 - Concept Development\n- Safety Plan: in work. Sprint 2 target: dated.\n  wrapped line"
     active.weeks.append(Week(dt.date(2026, 10, 26), note="Phase 3 opened 10/27", outcomes="- Opened.", issues=issues))
     active.weeks.append(Week(dt.date(2026, 11, 2), outcomes="- Week two."))
     active.items = [
@@ -80,7 +80,7 @@ def _built_tracker() -> Tracker:
              target="followed to closure.", heading="Watched"),
         Item("HWL-2652", "Task", "Review L0 test dependencies", None, heading="Watched"),
     ]
-    planned = Sprint("3", "Functional Safety Concept (FSC)", "SPRINT 2", day, dt.date(2026, 11, 24), "Planned",
+    planned = Sprint("3", "Functional Safety Concept (FSC)", "SPRINT 3", day, dt.date(2026, 11, 24), "Planned",
                      number=3)
     return Tracker("TITLE", "Role", "the scope", "project HWL, mine", sprints=[closed, active, planned])
 
@@ -90,7 +90,7 @@ def test_render_then_parse_then_render_is_stable():
     text = render(tracker, dt.date(2026, 11, 3))
     again = parse(text)
     assert render(again, dt.date(2026, 11, 3)) == text
-    assert [s.label for s in again.sprints] == ["SPRINT 2", "SPRINT 1", "FINAL SPRINTS"]  # file order: newest first
+    assert [s.label for s in again.sprints] == ["SPRINT 3", "SPRINT 2", "SPRINT 1"]  # file order: newest first
     active = again.sprints[1]
     assert active.goal == "Clear the Phase 2 backlog" and active.status == "Active"
     assert [i.key for i in active.items] == ["HWL-2554", "HWL-2620", "HWL-2652"]
@@ -102,14 +102,15 @@ def test_render_then_parse_then_render_is_stable():
     assert [(t.title, t.target) for t in week.targets] == [("Safety Plan", "dated. wrapped line")]
     frozen = next(w for w in again.sprints[2].weeks if w.start == dt.date(2026, 10, 12))
     assert frozen.jira_frozen.startswith("Jira issues (project HWL, as of 10/18)")
-    assert "- Phase 3 (Functional Safety Concept): planned. Sprint 2: 11/10 - 11/24." in text
-    assert "- Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 1: 10/27 - 11/10." in text
+    assert "- Phase 3 (Functional Safety Concept): planned. Sprint 3: 11/10 - 11/24." in text
+    assert "- Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 2: 10/27 - 11/10." in text
+    assert "- Phase 2 (HARA / Risk Assessment): Sprint 1: 10/12 - 10/27/2026. Closed 10/27." in text
     assert "Outcomes so far\n- Week two." in text and "Outcomes\n- Opened." in text  # the current week, then history
 
 
 def test_render_week_only_holds_the_active_sprint_and_its_current_week():
     text = render(_built_tracker(), dt.date(2026, 11, 3), current_only=True)
-    assert "PHASE 3 - SPRINT 1" in text and "FINAL SPRINTS" not in text.split("TIMELINE")[1].split("=====")[1]
+    assert "PHASE 3 - SPRINT 2" in text and "PHASE 2 - SPRINT 1" not in text.split("TIMELINE")[1].split("=====")[1]
     assert text.count("WEEK OF") == 1 and "WEEK OF 11/02 - 11/08" in text and "HWL-2554" in text
 
 
@@ -149,8 +150,8 @@ def test_import_the_real_file(imported):
     brain = imported
     sprints = brain.execute("list", entity="sprint").data
     assert [(s["number"], s["label"], s["status"], s["start"], s["end"], s["closed_on"]) for s in sprints] == [
-        (1, "FINAL SPRINTS", "Closed", "2026-10-12", "2026-10-27", "2026-10-27"),
-        (2, "SPRINT 1", "Active", "2026-10-27", "2026-11-10", None),
+        (1, "SPRINT 1", "Closed", "2026-10-12", "2026-10-27", "2026-10-27"),
+        (2, "SPRINT 2", "Active", "2026-10-27", "2026-11-10", None),
     ]
     assert sprints[1]["lifecycle_phase"] == "3. Functional Safety Concept (FSC)" and sprints[1]["capacity"] == 10
     items = brain.execute("list", entity="sprint_item").data
@@ -172,7 +173,7 @@ def test_import_the_real_file(imported):
         ("2026-10-12", 1, "Outcomes"), ("2026-10-19", 1, "Outcomes"),
         ("2026-10-26", 2, "Note"), ("2026-10-26", 2, "Outcomes"), ("2026-10-26", 2, "Issues"),
     ]
-    assert weeks[2]["text"] == "Phase 2 closed 10/27; Phase 3 Sprint 1 opened 10/27"
+    assert weeks[2]["text"] == "Phase 2 closed 10/27; Phase 3 Sprint 2 opened 10/27"
     assert weeks[4]["text"].startswith("Platform Safety Plan deliverables, where each stands (10/28)")
     assert brain.storage.audit_tail(1)[0]["action"] == "load:replace"
 
@@ -215,7 +216,7 @@ def test_week_build_is_the_current_week_of_the_active_sprint(imported):
     assert text == "\n".join(FIXTURE.read_text(encoding="utf-8").splitlines()[:112]) + "\n"
     assert result.data["sprint"] == 2 and result.data["week"] == "2026-10-26"
     assert result.data["path"].endswith("tracker_week.txt")
-    assert text.count("WEEK OF") == 1 and "FINAL SPRINTS" not in text.split("TIMELINE")[1].split(fmt.RULE)[1]
+    assert text.count("WEEK OF") == 1 and "PHASE 2 - SPRINT 1" not in text.split("TIMELINE")[1].split(fmt.RULE)[1]
 
 
 def test_build_without_an_active_sprint_or_week_fails_cleanly(configured):
@@ -235,7 +236,7 @@ def test_points_show_on_the_sprint_line_and_under_the_item(imported):
     assert lines[11] == (
         "Sprint: 3 of 10 points committed, 0 done, 3 to go, 14 unpointed, 13 days left; velocity 0 points per sprint."
     )
-    detail = "            Sprint 1 target: dates added to every deliverable; plan baselined.\n            Points: 3\n"
+    detail = "            Sprint 2 target: dates added to every deliverable; plan baselined.\n            Points: 3\n"
     assert detail in text
 
 

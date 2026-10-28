@@ -12,6 +12,29 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.8.2] - 2026-10-28
+
+The owner's rule of 2026-10-28 on sprints: "the time from Oct 12 to 27 is a single sprint, part of
+Phase 2; there is the sprint from the 12th to the 27th and now one from the 27th to Nov 10; these
+are the only two sprints; there is no HARA sprint." Schema version unchanged (2).
+
+### Changed
+- **Sprint labels follow the programme-wide number.** Sprint 1 is 10/12 to 10/27 (Phase 2, Closed
+  10/27); Sprint 2 is 10/27 to 11/10 (Phase 3, Active). The imported label `FINAL SPRINTS` is gone
+  from the data (`update sprint`), from the week texts that name the sprint (the 10/26 Note,
+  the 10/19 Outcomes, the `Sprint n target:` lines of the 10/26 Issues) and from the fixture; the
+  generated `Sprint n target:` lines of the Jira items follow the label on their own.
+- **The closed `TIMELINE` bullet** prints `Sprint 1: 10/12 - 10/27/2026. Closed 10/27.` (the
+  label through `target_label`, then the dates), the same shape as the open and planned bullets,
+  instead of the label in lower case before the dates.
+- The grammar is unchanged: any label still parses, so an old file imports; the docstring example
+  and the `sprint` entity description name `SPRINT 1` and `SPRINT 2`.
+
+### Tests
+- `test_tracker` builds and asserts the three sprints as `SPRINT 1` (closed), `SPRINT 2` (active),
+  `SPRINT 3` (planned) and the closed bullet; the import test expects the renamed rows; the
+  Weekly Status test expects the renamed Note line.
+
 ## [0.8.1] - 2026-10-28
 
 The tracker in the window: phase 4 of `docs/weekly-tracker-plan.md`, asked by the owner on
