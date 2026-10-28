@@ -1,0 +1,144 @@
+WHEEL LOADER FUNCTIONAL SAFETY ENGINEERING - WEEKLY ACTIVITY TRACKER
+FuSa Engineer. Newest week at the top. Last updated 10/28/2026.
+
+TIMELINE
+- Phase 2 (HARA / Risk Assessment): final sprints 10/12 - 10/27/2026. Closed 10/27.
+- Phase 3 (Functional Safety Concept): opened 10/27/2026. Sprint 1: 10/27 - 11/10.
+- Scope: platform functional safety for the Wheel Loader programme (project HWL).
+
+=====================================================================
+PHASE 3 - SPRINT 1 (10/27 - 11/10)   [in progress]
+=====================================================================
+
+WEEK OF 10/26 - 11/01   (Phase 2 closed 10/27; Phase 3 Sprint 1 opened 10/27)
+
+Outcomes so far
+- Phase 2 closed on schedule on 10/27 with the HARA report (MPLr/PLr assignments) and STPA Step 2
+  in draft and handed into Phase 3 for completion.
+- The Platform Safety Plan is now a controlled, structured plan: 48 deliverables across the ten
+  safety lifecycle phases, each with its work-product location, QMS references, author, verifier,
+  reviewers, deadline and status, and a Safety Plan document generated from it on demand.
+- The platform Activity Flow and the STPA Step 1 outputs (losses, hazards, constraints) are in
+  draft and under peer review.
+- Full, live visibility of the Wheel Loader Jira backlog for FSE: every ticket I am assigned,
+  reported or watching is tracked with its status (Jira issues below). Eight are open today,
+  six of them under the MVP3 / PDP Phase 3 Closeout epic.
+- Onboarding checklist closed except one item: daily stand-up integrated, mentor meeting with
+  Darsh Patel held, FSE introductions with Adolfo held, Jira board access in place, working-hour
+  availability and check-in cadence established. Waiting on Rod DeMay's availability for the
+  introduction meeting; invitation sent.
+
+Miscellaneous issues
+
+  Platform Safety Plan deliverables, where each stands (10/28)
+
+  Phase 1 - Concept Development
+  - Safety Plan (Word document): in work. Dates still to be added to every deliverable; I need
+    the programme schedule for that. Sprint 1 target: dated and baselined.
+  - SCOPE Definition Report: draft.
+  - System Functions, Functional Architecture and its Interfaces: unsure whether I have compiled
+    all of these documents. Ask: confirmation from the systems team that the set is complete.
+  - ConOps / Use Case specification: not yet seen. Sprint 1 target: located.
+  - TOD/PRD document: unclear what this is. Ask: definition and owner to be confirmed.
+  - Activity Flow: draft. Sprint 1 target: reviewed and baselined.
+  - Preliminary Hazard List (STPA Step 1 outputs: losses, hazards, constraints): draft, under
+    peer review. Sprint 1 target: peer review closed, approval obtained.
+
+  Phase 2 - HARA / Risk Assessment
+  - STPA Step 2: draft, carried into Phase 3 for completion.
+  - HARA report with MPLr/PLr assignments: draft, carried into Phase 3 for completion.
+
+  People and cadence
+  - Introduction meeting with Rod DeMay: invitation sent 10/23; awaiting Rod's availability.
+    Sprint 1 target: held.
+  - Knowledge sharing on FSE best practices: format and cadence still to agree.
+
+  Status questions (answered 10/28)
+  - Where does FSE on Wheel Loader stand at the moment; any criticalities?
+    Entering Phase 3 with a heavy backlog carried over from Phase 2 (STPA Step 2, HARA report,
+    Preliminary Hazard List approval, Safety Plan dates).
+  - What is the main challenge for FSE on Wheel Loader?
+    Main challenge: clearing the Phase 2 backlog. Secondary challenge: establishing the dates
+    for the whole programme so that functional safety can be decoupled from the programme
+    timing and kept out of L0 and L1.
+
+Jira issues (project HWL, open items I am assigned, reported or watching, as of 10/28)
+
+  Epic HWL-1915 "MVP3 - PDP Phase 3 Closeout" (in progress; reporter of the six stories: Javier
+  Quintana)
+
+  HWL-2554  Story  Perform Platform Safety Plan
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Note: In progress, will be ready before November 10.
+            Sprint 1 target: dates added to every deliverable; plan baselined.
+
+  HWL-2553  Story  Perform Platform Activity Flow
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Note: In progress, will be ready before November 10.
+            Sprint 1 target: draft reviewed and baselined.
+
+  HWL-2572  Story  STPA Step 1 - Losses, Hazards and System Boundary - Peer Review
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Note: In progress, will be ready before November 10.
+            Sprint 1 target: peer review closed.
+
+  HWL-2573  Story  STPA Step 1 - Losses, Hazards and System Boundary - Approval
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Note: In progress, will be ready before November 10.
+            Sprint 1 target: approval obtained.
+
+  HWL-2574  Story  STPA Step 3 - Unsafe Control Actions - Work
+            Jira status: To Do | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Note: In progress, will be ready before November 10.
+            Sprint 1 target: work started.
+
+  HWL-2575  Story  STPA Step 4 - Loss Scenarios - Work
+            Jira status: To Do | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Note: In progress, will be ready before November 10.
+            Sprint 1 target: scoped and scheduled.
+
+  Watched, assigned to Matt Whale
+
+  HWL-2620  Bug    Control room E-stop has no actuator guard; confirm guard requirement or update
+                   test case (01-006 step 3, CONWLD-TSTRN-3788)
+            Jira status: To Do | Priority: High | Assignee: Matt Whale
+            Note: no FuSa impact
+            Sprint 1 target: followed to closure.
+
+  HWL-2652  Task   Review L0 test dependencies: define which test failures block which test
+                   cases, and record it in the case preconditions
+            Jira status: To Do | Priority: Un-Groomed | Assignee: Matt Whale
+            Note: no FuSa impact
+            Sprint 1 target: followed to closure.
+
+=====================================================================
+PHASE 2 - FINAL SPRINTS (10/12 - 10/27)   [closed 10/27]
+=====================================================================
+
+WEEK OF 10/19 - 10/25
+
+Outcomes
+- Integrated into the Wheel Loader daily stand-up (by 10/21).
+- Mentor meeting with Darsh Patel held (by 10/21).
+- FSE introductions with Adolfo held (by 10/23).
+- Introduction meeting with Rod DeMay requested; invitation sent (10/23).
+- Foundational FSE sprint planning drafted: the Phase 2 close-out and the Phase 3 Sprint 1
+  content laid out against the safety lifecycle.
+- Phase 2 deliverables advanced to draft: STPA Step 2, HARA report with MPLr/PLr assignments,
+  Preliminary Hazard List, SCOPE Definition Report.
+- Standards and process baseline assembled for the plan: IEC 61508 / ISO 25119 / ISO 13849
+  lifecycle mapping, the QMS procedures (QF/QP/QM) referenced per deliverable, STPA as the
+  hazard-analysis method.
+
+WEEK OF 10/12 - 10/18
+
+Outcomes
+- Onboarding sessions 10/12 to 10/14 completed: Wheel Loader programme, product development
+  process (PDP phases), safety mechanisms and administrative controls (layered stopping, E-stop,
+  all-stop, geofence, proximity monitor, heartbeat), verification and validation approach, Jira
+  and QMS working practices.
+- Working-knowledge base started from the sessions: tasks, facts, machine functions, use cases,
+  QMS documents and people, so nothing said in onboarding is lost to the plan.
+- Gaps identified for the Phase 1 document set (ConOps / Use Case specification, TOD/PRD,
+  architecture documents) and raised for clarification.
+- Access requested to the Wheel Loader Jira board and the FSE backlog.

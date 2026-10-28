@@ -1,0 +1,239 @@
+"""Brain: the in-process API that wires every layer together.
+
+A ``Brain`` owns one database. Front ends (CLI today, GUI and local server later)
+hold a Brain and call ``execute``; Python callers can also reach the services
+directly through ``service(entity)``.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any
+
+from .automation.events import EventBus
+from .commands import Dispatcher, Result
+from .locks import guard
+from .models import ModelFactory
+from .repositories import RepositoryFactory
+from .schema import LookupRegistry, SchemaRegistry, default_lookups, default_registry
+from .schema.definitions import SPRINT_CAPACITY, SPRINT_DAYS
+from .services import EntityService, JiraService, SprintService, TrackerService, TransferService
+from .storage import StorageFactory
+from .version import SCHEMA_VERSION, __version__
+
+DEFAULT_DB_NAME = "kletz.db"
+DEFAULT_WORKBOOK_NAME = "kletz.xlsx"
+DEFAULT_OUT_NAME = "out"
+ENV_DB = "ASI_KLETZ_DB"
+ENV_WORKBOOK = "ASI_KLETZ_WORKBOOK"
+ENV_OUT = "ASI_KLETZ_OUT"
+ENV_CONFIG = "ASI_KLETZ_CONFIG"
+CONFIG_NAME = "kletz.toml"
+CONFIG_KEYS = ("db", "workbook", "out")  # file paths, resolved against the config file
+CONFIG_TEXT_KEYS = (  # document metadata, the live JQL and the tracker's header lines, kept verbatim
+    "doc_id", "project", "jira_live_jql", "tracker_title", "tracker_byline", "tracker_scope", "tracker_jira_scope",
+)
+CONFIG_BOOL_KEYS = ("jira_live_autofetch",)  # copied only when the TOML value is a real boolean; absent = false
+CONFIG_INT_KEYS = ("sprint_capacity", "sprint_days")  # copied only when the TOML value is an integer
+REVISION_FIELDS = ("rev", "date", "author", "description")
+
+
+def load_config(path: str | Path | None = None) -> dict[str, Any]:
+    """Read ``kletz.toml``: the ``path`` given, else ``$ASI_KLETZ_CONFIG``, else ``./kletz.toml``.
+
+    Keys ``db``, ``workbook`` and ``out`` are paths; a relative one resolves against the config
+    file's own directory, so the workbook and the generated views can live in another folder.
+    ``doc_id`` and ``project`` are the Safety Plan document's metadata and ``[[revision]]``
+    tables are its revision history (``revisions``, a list of dicts in file order).
+    ``jira_live_jql`` is the JQL of the JIRA Live Data window and ``jira_live_autofetch`` (a TOML
+    boolean; a string is ignored so the default applies) whether its first show fetches. The
+    default is ``False`` (``services.jira_service.AUTOFETCH_DEFAULT``): the window never connects
+    to Jira unless the file says ``true`` or the engineer presses Refresh. ``tracker_title``,
+    ``tracker_byline``, ``tracker_scope`` and ``tracker_jira_scope`` are the header lines of the Weekly
+    Activity Tracker text; ``sprint_capacity`` (default 10) and ``sprint_days`` (default 14) are the
+    defaults of a new sprint (TOML integers; anything else is ignored so the default applies).
+    Missing file: ``{}``.
+    """
+    import tomllib
+
+    file = Path(path or os.environ.get(ENV_CONFIG) or Path.cwd() / CONFIG_NAME)
+    if not file.is_file():
+        return {}
+    with file.open("rb") as handle:
+        data = tomllib.load(handle)
+    config: dict[str, Any] = {"path": str(file)}
+    for key in CONFIG_KEYS:
+        value = data.get(key)
+        if value:
+            value = Path(str(value)).expanduser()
+            config[key] = str(value if value.is_absolute() else (file.parent / value).resolve())
+    for key in CONFIG_TEXT_KEYS:
+        value = data.get(key)
+        if value:
+            config[key] = str(value).strip()
+    for key in CONFIG_BOOL_KEYS:
+        value = data.get(key)
+        if isinstance(value, bool):
+            config[key] = value
+    for key in CONFIG_INT_KEYS:
+        value = data.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            config[key] = value
+    revisions = data.get("revision")
+    if isinstance(revisions, list):
+        config["revisions"] = [
+            {field: str(item.get(field, "")).strip() for field in REVISION_FIELDS}
+            for item in revisions
+            if isinstance(item, dict)
+        ]
+    return config
+
+
+def resolve_db_path(db_path: str | Path | None, config: dict[str, Any] | None = None) -> str:
+    """Explicit argument, else ``$ASI_KLETZ_DB``, else ``db`` in kletz.toml, else ./kletz.db."""
+    if db_path is not None:
+        return str(db_path)
+    config = load_config() if config is None else config
+    return os.environ.get(ENV_DB) or config.get("db") or str(Path.cwd() / DEFAULT_DB_NAME)
+
+
+def resolve_out_dir(out_dir: str | Path | None, db_path: str, config: dict[str, Any]) -> str:
+    """Explicit argument, else ``$ASI_KLETZ_OUT``, else ``out`` in kletz.toml, else ``out/`` next to the database."""
+    if out_dir is not None:
+        return str(out_dir)
+    if os.environ.get(ENV_OUT):
+        return os.environ[ENV_OUT]
+    if config.get("out"):
+        return str(config["out"])
+    if db_path == ":memory:":
+        return str(Path.cwd() / DEFAULT_OUT_NAME)
+    return str(Path(db_path).with_name(DEFAULT_OUT_NAME))
+
+
+class Brain:
+    def __init__(
+        self,
+        db_path: str | Path | None = None,
+        *,
+        registry: SchemaRegistry | None = None,
+        lookups: LookupRegistry | None = None,
+        backend: str = "sqlite",
+        workbook_path: str | Path | None = None,
+        out_dir: str | Path | None = None,
+        wait: float = 0.0,
+    ) -> None:
+        """Open the database at ``db_path`` after taking the family lock.
+
+        ``wait`` is how many seconds to queue for the slot (polling every 250 ms) before
+        ``PrimaryToolBusy`` is raised; the default refuses at once. A refused Brain never opens
+        the SQLite file.
+        """
+        from .schema import definitions  # noqa: F401  (registers the built-in entities)
+
+        self.registry = registry or default_registry
+        self.lookups = lookups or default_lookups
+        self.config = load_config()
+        self.db_path = resolve_db_path(db_path, self.config)
+        self._slot_held = False
+        guard.acquire(self.db_path, wait)  # raises PrimaryToolBusy; the family slot first, then this database
+        self._slot_held = True
+        try:
+            self.storage = StorageFactory.create(backend, path=self.db_path)
+        except BaseException:
+            guard.release(self.db_path)
+            self._slot_held = False
+            raise
+        self.migration = self.storage.ensure_schema(self.registry)
+        self.events = EventBus()
+        self.models = ModelFactory(self.registry)
+        self.repositories = RepositoryFactory(self.storage, self.registry)
+        self._services: dict[str, EntityService] = {}
+        self.transfer = TransferService(self)
+        self.jira = JiraService(self)  # read only; asi_hopper is imported when a jira verb runs, never here
+        self.tracker = TrackerService(self)  # the Weekly Activity Tracker text, in and out
+        self.sprints = SprintService(self)  # the agile rules: ten points a sprint, close and carry
+        self.dispatcher = Dispatcher(self)
+        if workbook_path is not None:
+            self.workbook_path = str(workbook_path)
+        elif os.environ.get(ENV_WORKBOOK):
+            self.workbook_path = os.environ[ENV_WORKBOOK]
+        elif self.config.get("workbook"):
+            self.workbook_path = self.config["workbook"]
+        elif self.db_path == ":memory:":
+            self.workbook_path = DEFAULT_WORKBOOK_NAME
+        else:
+            self.workbook_path = str(Path(self.db_path).with_name(DEFAULT_WORKBOOK_NAME))
+        # generated views (diagrams, documents) and the Safety Plan document's metadata
+        self.out_dir = resolve_out_dir(out_dir, self.db_path, self.config)
+        self.doc_id: str = self.config.get("doc_id", "")
+        self.project: str = self.config.get("project", "")
+        self.revisions: list[dict[str, str]] = [dict(r) for r in self.config.get("revisions", [])]
+        # sprint defaults: a sprint stores its own capacity and dates; these fill `sprint start` and the forms
+        self.sprint_capacity: int = int(self.config.get("sprint_capacity") or SPRINT_CAPACITY)
+        self.sprint_days: int = int(self.config.get("sprint_days") or SPRINT_DAYS)
+
+    # -- access ---------------------------------------------------------
+    def service(self, entity: str) -> EntityService:
+        schema = self.registry.get(entity)
+        if schema.name not in self._services:
+            self._services[schema.name] = EntityService(
+                schema, self.repositories.for_entity(schema), self.storage, self.lookups, self.events
+            )
+        return self._services[schema.name]
+
+    def execute(
+        self, verb: str, args: dict[str, Any] | None = None, *, actor: str = "python", **kwargs: Any
+    ) -> Result:
+        """Run a command.
+
+        ``brain.execute("get", {"entity": "safety_plan_row", "id": 1})`` and
+        ``brain.execute("get", entity="safety_plan_row", id=1)`` are the same call.
+        """
+        merged = dict(args or {})
+        merged.update(kwargs)
+        return self.dispatcher.execute(verb, merged, actor)
+
+    def execute_dict(self, payload: dict[str, Any], actor: str | None = None) -> Result:
+        return self.dispatcher.execute_dict(payload, actor)
+
+    def status(self) -> dict[str, Any]:
+        locks = guard.describe(self.db_path)
+        return {
+            "app_version": __version__,
+            "schema_version": SCHEMA_VERSION,
+            "database": self.storage.describe(),
+            "workbook_path": self.workbook_path,
+            "out_dir": self.out_dir,
+            "doc_id": self.doc_id,
+            "project": self.project,
+            "revisions": [dict(r) for r in self.revisions],
+            "sprint_capacity": self.sprint_capacity,
+            "sprint_days": self.sprint_days,
+            "tracker": {"title": self.tracker.title, "byline": self.tracker.byline, "scope": self.tracker.scope},
+            "config_path": self.config.get("path"),
+            "lock_dir": locks["lock_dir"],
+            "locks": {"family": locks["family"], "database": locks["database"]},
+            "entities": {s.name: self.service(s.name).count() for s in self.registry},
+            "commands": self.dispatcher.factory.verbs(),
+            "recent_audit": self.storage.audit_tail(5),
+            "recent_events": self.events.last(5),
+        }
+
+    def close(self) -> None:
+        """Close the storage and drop this Brain's hold on the slots. Idempotent."""
+        if self._slot_held:
+            try:
+                self.storage.close()
+            finally:
+                self._slot_held = False
+                guard.release(self.db_path)
+
+    def __enter__(self) -> Brain:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
+    def __repr__(self) -> str:
+        return f"Brain(db_path={self.db_path!r}, entities={len(self.registry)})"

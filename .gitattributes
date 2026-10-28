@@ -1,0 +1,2 @@
+# The tracker fixture is compared byte for byte with a built file that always has LF endings.
+tests/fixtures/*.txt text eol=lf

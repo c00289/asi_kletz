@@ -1,0 +1,63 @@
+[project]
+name = "asi_kletz"
+version = "0.8.1"
+description = "Schema-driven functional-safety safety-plan API with a CLI, a tkinter desktop window, SQLite storage, and JSON/Excel views"
+readme = "README.md"
+authors = [
+    { name = "ASI functional safety" }
+]
+requires-python = ">=3.13"
+keywords = ["functional-safety", "fusa", "safety-plan", "sqlite", "excel", "tkinter"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database :: Front-Ends",
+    "Topic :: Office/Business",
+    "Typing :: Typed",
+]
+dependencies = [
+    "asi-escher",
+    "asi-gutenberg",
+    "asi-hopper",
+    "openpyxl>=3.1",
+]
+
+[project.scripts]
+asi-kletz = "asi_kletz.automation.cli:main"
+asi-kletz-gui = "asi_kletz.gui.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# --capture=sys, not the default fd capture: re-dup'ing fds 1 and 2 between tests makes a
+# destroyed Tcl interpreter close a recycled handle, and the next Tk() then fails to read its
+# own library files ("couldn't read file ttk.tcl", "invalid command name tcl_findLibrary").
+addopts = "-q --capture=sys"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.uv]
+# OneDrive refuses hardlinks from the uv cache; copy instead so `uv sync` just works here
+link-mode = "copy"
+
+[tool.uv.sources]
+asi-gutenberg = { path = "../asi_gutenberg", editable = true }
+asi-escher = { path = "../asi_escher", editable = true }
+asi-hopper = { path = "../asi_hopper", editable = true }
