@@ -71,9 +71,10 @@ def test_registry_aliases_and_fingerprint():
     with pytest.raises(NotFound):
         default_registry.get("unicorns")
     assert default_registry.fingerprint() == default_registry.fingerprint()
-    assert default_registry.names() == [PLAN, "sprint", "sprint_item", "week"]
+    assert default_registry.names() == [PLAN, "sprint", "sprint_item", "week", "holiday"]
     assert set(default_lookups) == {
         "pdp_phase", "lifecycle_phase", "plan_status", "sprint_status", "item_status", "item_kind", "week_section",
+        "holiday_status",
     }
 
 

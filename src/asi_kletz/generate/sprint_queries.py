@@ -11,7 +11,7 @@ from ..errors import CommandError
 if TYPE_CHECKING:
     from ..brain import Brain
 
-SPRINT, ITEM, WEEK = "sprint", "sprint_item", "week"
+SPRINT, ITEM, WEEK, HOLIDAY = "sprint", "sprint_item", "week", "holiday"
 VELOCITY_WINDOW = 3  # closed sprints averaged
 OPEN_ITEM_STATUSES = ("To Do", "In Progress")
 
@@ -73,6 +73,21 @@ def weeks(brain: Brain, number: int | None = None) -> dict[str, list[dict[str, A
     for row in sorted(rows, key=lambda r: (r.get("start") or "", r.get("order") or 0, r["id"])):
         grouped.setdefault(row["start"], []).append(row)
     return grouped
+
+
+def holiday_dates(brain: Brain) -> dict[dt.date, str]:
+    """``{date: name}`` of every holiday in the table, whatever its status: the calendar the planner skips.
+
+    Two holidays on one date (an observed federal day landing on a company day) are one day off with both
+    names, joined by `` / ``.
+    """
+    out: dict[dt.date, str] = {}
+    for row in brain.service(HOLIDAY).list():
+        if not row.get("date"):
+            continue
+        day, name = parse_date(row["date"]), row.get("name") or ""
+        out[day] = f"{out[day]} / {name}" if day in out and name else out.get(day) or name
+    return out
 
 
 # -- points ----------------------------------------------------------------------------------

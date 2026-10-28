@@ -14,9 +14,10 @@ from asi_kletz.schema import FieldSpec, FieldType
 from tests.conftest import PLAN, REPO_ROOT
 
 # the registered screens, in navigation order: the list is the design, not a cap
-SCREENS = ["dashboard", "jira_live", "safety_plan", "safety_plan_matrix", "sprint_board", "tracker", "transfer"]
+SCREENS = ["dashboard", "jira_live", "safety_plan", "safety_plan_matrix", "sprint_board", "tracker", "holidays",
+           "transfer"]
 TITLES = ["Dashboard", "JIRA Live Data", "Safety Plan", "Safety Plan Matrix", "Sprint Board", "Weekly Status",
-          "Export / Import"]
+          "Holidays", "Export / Import"]
 # the identity column of the Safety Plan table: frozen on the left since 0.7.2; since 0.8.4 the three identity
 # fields are one stacked column; since 0.9.0 ``id`` and ``order`` are no columns at all (docs/hidden-identity-plan.md)
 FROZEN_PLAN = ["plan"]
@@ -1873,3 +1874,27 @@ def test_form_has_order_but_no_uid_and_the_details_title_names_the_row(window, s
     assert seeded.execute("count", entity=PLAN).data["count"] == 3
     screen.new()
     assert screen.form_box.cget("text") == "Safety Plan Row details"
+
+
+# -- the Holidays screen (0.10.0): the generic table and form, no stack, no frozen column ----------------
+
+
+def test_holidays_screen_lists_the_loaded_rows_without_a_frozen_column(window, seeded):
+    from tests.conftest import SEED_HOLIDAYS
+
+    assert window.factory.title("holidays") == "Holidays" and SCREENS.index("holidays") == SCREENS.index("tracker") + 1
+    screen = window.show("holidays")
+    assert screen.columns == ["date", "name", "status", "note"] and not screen.stacked
+    assert screen.pane.frozen == () and tuple(screen.tree["displaycolumns"]) == ("date", "name", "status", "note")
+    assert screen.tree.get_children() == () and screen.columns_box is None  # no flag groups, no Columns box
+    assert seeded.execute("holiday", action="load", file=str(SEED_HOLIDAYS), actor="agent").ok
+    deadline = time.time() + 2
+    while len(screen.tree.get_children()) != 52 and time.time() < deadline:
+        window.update()
+        time.sleep(0.02)
+    first = screen.tree.get_children()[0]
+    assert len(screen.tree.get_children()) == 52 and screen.tree.set(first, "name") == "New Year's Day"
+    screen.select(int(screen.tree.get_children()[0]))
+    assert screen.form_box.cget("text") == "Holiday details · row 1" and screen.widgets["status"].get() == "assumed"
+    assert set(screen.widgets) == {"date", "name", "status", "note"}
+    assert window.status_text() == "Holiday 1 selected"

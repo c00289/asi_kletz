@@ -1,5 +1,5 @@
-"""The built-in entities: the Safety Plan, and since 0.8.0 the sprints, sprint items and weeks of
-the Weekly Activity Tracker.
+"""The built-in entities: the Safety Plan, since 0.8.0 the sprints, sprint items and weeks of
+the Weekly Activity Tracker, and since 0.10.0 the holidays the sprint planner skips.
 
 Importing this module registers the entities and their lookups with the default registries.
 Column labels are the exact workbook headers so the Excel export reproduces the familiar sheet
@@ -167,4 +167,27 @@ WEEK = register_entity(EntitySchema(
     ),
 ))
 
-ALL_ENTITIES = (SAFETY_PLAN_ROW, SPRINT, SPRINT_ITEM, WEEK)
+# -- holidays (0.10.0) -----------------------------------------------------------------------------------
+# The owner's rule, 2026-10-28 (docs/sprint-planner-plan.md): a sprint spans 10 business days; Monday to
+# Friday count, weekends and holidays do not. The holidays live here, any status counts for the calendar;
+# ``assumed`` until the company confirms the date, then ``confirmed``.
+HOLIDAY_STATUSES = ("assumed", "confirmed")
+default_lookups.register("holiday_status", HOLIDAY_STATUSES)
+
+HOLIDAY = register_entity(EntitySchema(
+    name="holiday", table="holiday", label="Holiday", sheet="Holidays",
+    description=(
+        "One holiday the sprint planner skips: its date (observed), its name, whether it is assumed or "
+        "confirmed, and a note. Loaded from data/us-holidays-2026-2029.json by `holiday load`."
+    ),
+    order_by=("date", "id"),
+    fields=(
+        FieldSpec("date", D, "Date", required=True),
+        FieldSpec("name", T, "Name", required=True),
+        FieldSpec("status", E, "Status (assumed/ confirmed)", lookup="holiday_status"),
+        FieldSpec("note", M, "Note"),
+        uid_field(),
+    ),
+))
+
+ALL_ENTITIES = (SAFETY_PLAN_ROW, SPRINT, SPRINT_ITEM, WEEK, HOLIDAY)

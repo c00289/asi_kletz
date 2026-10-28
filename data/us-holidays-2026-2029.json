@@ -1,0 +1,262 @@
+[
+  {
+    "date": "2026-01-01",
+    "name": "New Year's Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-01-19",
+    "name": "Martin Luther King Jr. Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-02-16",
+    "name": "Presidents' Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-05-25",
+    "name": "Memorial Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-06-19",
+    "name": "Juneteenth",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-07-03",
+    "name": "Independence Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-09-07",
+    "name": "Labor Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-10-12",
+    "name": "Columbus Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-11-11",
+    "name": "Veterans Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-11-26",
+    "name": "Thanksgiving Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-11-27",
+    "name": "Day after Thanksgiving (company, assumed)",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-12-24",
+    "name": "Christmas Eve (company, assumed)",
+    "status": "assumed"
+  },
+  {
+    "date": "2026-12-25",
+    "name": "Christmas Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-01-01",
+    "name": "New Year's Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-01-18",
+    "name": "Martin Luther King Jr. Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-02-15",
+    "name": "Presidents' Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-05-31",
+    "name": "Memorial Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-06-18",
+    "name": "Juneteenth",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-07-05",
+    "name": "Independence Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-09-06",
+    "name": "Labor Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-10-11",
+    "name": "Columbus Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-11-11",
+    "name": "Veterans Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-11-25",
+    "name": "Thanksgiving Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-11-26",
+    "name": "Day after Thanksgiving (company, assumed)",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-12-24",
+    "name": "Christmas Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-12-24",
+    "name": "Christmas Eve (company, assumed)",
+    "status": "assumed"
+  },
+  {
+    "date": "2027-12-31",
+    "name": "New Year's Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-01-17",
+    "name": "Martin Luther King Jr. Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-02-21",
+    "name": "Presidents' Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-05-29",
+    "name": "Memorial Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-06-19",
+    "name": "Juneteenth",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-07-04",
+    "name": "Independence Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-09-04",
+    "name": "Labor Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-10-09",
+    "name": "Columbus Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-11-10",
+    "name": "Veterans Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-11-23",
+    "name": "Thanksgiving Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-11-24",
+    "name": "Day after Thanksgiving (company, assumed)",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-12-25",
+    "name": "Christmas Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2028-12-25",
+    "name": "Christmas Eve (company, assumed)",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-01-01",
+    "name": "New Year's Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-01-15",
+    "name": "Martin Luther King Jr. Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-02-19",
+    "name": "Presidents' Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-05-28",
+    "name": "Memorial Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-06-19",
+    "name": "Juneteenth",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-07-04",
+    "name": "Independence Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-09-03",
+    "name": "Labor Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-10-08",
+    "name": "Columbus Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-11-12",
+    "name": "Veterans Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-11-22",
+    "name": "Thanksgiving Day",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-11-23",
+    "name": "Day after Thanksgiving (company, assumed)",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-12-24",
+    "name": "Christmas Eve (company, assumed)",
+    "status": "assumed"
+  },
+  {
+    "date": "2029-12-25",
+    "name": "Christmas Day",
+    "status": "assumed"
+  }
+]

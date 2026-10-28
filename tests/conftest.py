@@ -19,11 +19,14 @@ DB_0_8_4 = FIXTURES / "kletz-0.8.4.db"
 # the real workbook, if kletz.toml in the repo names one; the seeding test skips otherwise
 WORKBOOK = Path(load_config(REPO_ROOT / "kletz.toml").get("workbook") or REPO_ROOT / "kletz.xlsx")
 
+SEED_HOLIDAYS = REPO_ROOT / "data" / "us-holidays-2026-2029.json"  # 52 weekday holidays, the planner's calendar
+
 PLAN = "safety_plan_row"
 # every registered entity, in registration order (the list is the design, not a cap), and its table
-ENTITIES = [PLAN, "sprint", "sprint_item", "week"]
-TABLES = {"safety_plan", "sprint", "sprint_item", "week"}
-SHEETS = ["Safety Plan", "Sprints", "Sprint Items", "Weekly Status"]
+ENTITIES = [PLAN, "sprint", "sprint_item", "week", "holiday"]
+TABLES = {"safety_plan", "sprint", "sprint_item", "week", "holiday"}
+TABLES_0_8_4 = TABLES - {"holiday"}  # what the 0.8.4 fixture database holds
+SHEETS = ["Safety Plan", "Sprints", "Sprint Items", "Weekly Status", "Holidays"]
 
 
 @pytest.fixture(autouse=True)

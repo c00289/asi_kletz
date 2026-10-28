@@ -8,7 +8,7 @@ import pytest
 from asi_kletz import Brain, __version__
 from asi_kletz.errors import CommandError, NotFound, ValidationError
 from asi_kletz.schema import UID, UID_PATTERN
-from tests.conftest import DB_0_8_4, ENTITIES, PLAN, TABLES
+from tests.conftest import DB_0_8_4, ENTITIES, PLAN, TABLES, TABLES_0_8_4
 
 
 def test_crud_round_trip(brain):
@@ -72,11 +72,13 @@ def test_audit_log_and_events(brain):
 def test_schema_and_status_commands(seeded):
     status = seeded.execute("status").data
     assert status["app_version"] == __version__
-    assert status["entities"] == {PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0} and "create" in status["commands"]
+    assert status["entities"] == {PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0, "holiday": 0}
+    assert "create" in status["commands"]
     full = seeded.execute("schema").data
     assert [e["name"] for e in full["entities"]] == ENTITIES
     assert set(full["lookups"]) == {
         "pdp_phase", "lifecycle_phase", "plan_status", "sprint_status", "item_status", "item_kind", "week_section",
+        "holiday_status",
     }
     assert full["commands"]
     one = seeded.execute("schema", entity="Safety Plan").data
@@ -189,7 +191,7 @@ def _raw_rows(path) -> dict[str, list[dict]]:
     try:
         return {
             table: [dict(r) for r in conn.execute(f'SELECT * FROM "{table}" ORDER BY rowid')]
-            for table in sorted(TABLES | {"audit_log", "schema_migrations"})
+            for table in sorted(TABLES_0_8_4 | {"audit_log", "schema_migrations"})
         }
     finally:
         conn.close()
@@ -213,9 +215,9 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
     assert len(before["schema_migrations"]) == 1 and not any(n.startswith("ix_") for n in _indexes(db))
 
     with Brain(db) as brain:
-        assert brain.migration["created"] == []
-        assert brain.migration["altered"] == {table: [UID] for table in TABLES}
-        assert brain.migration["uids_stamped"] == {PLAN: 3, "sprint": 1, "sprint_item": 0, "week": 0}
+        assert brain.migration["created"] == ["holiday"]  # the 0.10.0 table; the four of 0.8.4 are altered
+        assert brain.migration["altered"] == {table: [UID] for table in TABLES_0_8_4}
+        assert brain.migration["uids_stamped"] == {PLAN: 3, "sprint": 1, "sprint_item": 0, "week": 0, "holiday": 0}
         assert brain.execute("count", entity=PLAN).data["count"] == 3
         stamped = brain.storage.audit_tail(10)
         assert [(t["action"], t["actor"], t["entity"], t["payload"]) for t in stamped[:2]] == [
@@ -226,7 +228,7 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
     after = _raw_rows(db)
     assert _indexes(db) >= {f"ix_{table}_uid" for table in TABLES}
     uids = []
-    for table in TABLES:
+    for table in TABLES_0_8_4:
         for old, stamped_row in zip(before[table], after[table], strict=True):
             new = dict(stamped_row)
             uid = new.pop(UID)

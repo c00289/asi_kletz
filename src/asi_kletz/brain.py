@@ -18,7 +18,7 @@ from .models import ModelFactory
 from .repositories import RepositoryFactory
 from .schema import LookupRegistry, SchemaRegistry, default_lookups, default_registry
 from .schema.definitions import SPRINT_CAPACITY, SPRINT_DAYS
-from .services import EntityService, JiraService, SprintService, TrackerService, TransferService
+from .services import EntityService, HolidayService, JiraService, SprintService, TrackerService, TransferService
 from .storage import StorageFactory
 from .version import SCHEMA_VERSION, __version__
 
@@ -153,7 +153,8 @@ class Brain:
         self.transfer = TransferService(self)
         self.jira = JiraService(self)  # read only; asi_hopper is imported when a jira verb runs, never here
         self.tracker = TrackerService(self)  # the Weekly Activity Tracker text, in and out
-        self.sprints = SprintService(self)  # the agile rules: ten points a sprint, close and carry
+        self.sprints = SprintService(self)  # the agile rules: eight points a sprint, close and carry, the planner
+        self.holidays = HolidayService(self)  # the holidays the planner skips, loaded from a JSON list
         self.dispatcher = Dispatcher(self)
         if workbook_path is not None:
             self.workbook_path = str(workbook_path)
