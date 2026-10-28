@@ -118,7 +118,7 @@ class ScrollableFrame(ttk.Frame):
 
 
 NARROW_HEADING = 60  # a column narrower than this cannot show its heading: hover names it
-SASH_SHARE = 0.45  # the frozen pane opens at its fitted width, but never wider than this share of the split
+RIGHT_MIN = 120  # the frozen pane opens at its full fitted width; the scrolling pane keeps at least this many px
 
 
 def bind_horizontal_scroll(tree: ttk.Treeview) -> None:
@@ -197,7 +197,8 @@ class FrozenPane(ttk.Frame):
     with ``fit_columns`` (``stretch`` off, so ``left`` is exactly as wide as its columns and never
     needs a horizontal bar). The two trees are the panes of ``split``, a horizontal
     ``ttk.PanedWindow`` (``left`` weight 0, ``right`` weight 1): after every ``mirror`` the sash
-    sits where ``left`` shows its fitted columns, never past ``SASH_SHARE`` of the split
+    sits where ``left`` shows its fitted columns in full (its longest row), leaving ``right`` at least
+    ``RIGHT_MIN`` px
     (``place_sash``, once the split is mapped: Tk clamps a sash set before the split has its
     geometry to 0), and the user may drag it either way; dragging clips a tree, it never changes
     a column width. One vertical bar outside the split drives both trees and each tree's
@@ -270,10 +271,12 @@ class FrozenPane(ttk.Frame):
         return sum(int(self.left.column(column, "width")) for column in self.frozen)
 
     def place_sash(self) -> None:
-        """Put the sash where ``left`` shows its fitted columns, never past ``SASH_SHARE`` of the split.
+        """Put the sash where ``left`` shows its fitted columns in full: as wide as its longest row.
 
-        Runs after the idle so a mapped window has its geometry: the cap is ``SASH_SHARE`` of the
-        split's actual width. While the split is not mapped (a screen built but not yet shown, a
+        Owner, 2026-10-28: the left pane of the Safety Plan and of the Safety Plan Matrix is as wide as
+        the longest row it holds. Runs after the idle so a mapped window has its geometry: the one cap
+        is that ``right`` keeps ``RIGHT_MIN`` px of the split's actual width. While the split is not
+        mapped (a screen built but not yet shown, a
         withdrawn window) the placement waits for its ``<Map>``: Tk clamps a sash set on a split
         that has no geometry yet to 0, and a weight-0 pane never grows back from 0 on its own.
         Where the user drags the sash afterwards is the user's business until the next ``mirror``.
@@ -290,7 +293,7 @@ class FrozenPane(ttk.Frame):
             self._sash_pending = True
             return
         self._sash_pending = False
-        self.split.sashpos(0, min(self.fitted_width(), int(self.split.winfo_width() * SASH_SHARE)))
+        self.split.sashpos(0, max(1, min(self.fitted_width(), self.split.winfo_width() - RIGHT_MIN)))
         self._align_xbar()
 
     def _on_map(self, event: tk.Event | None = None) -> None:

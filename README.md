@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.9.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.9.1**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,14 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.9.1
+
+The frozen left pane of the **Safety Plan** and of the **Safety Plan Matrix** opens as wide as the
+longest row it holds (the stacked plan column, fitted by `fit_columns`), the owner's request of
+2026-10-28; the 45% cap of 0.7.3 is gone. The one guard left is that the scrolling pane keeps
+`RIGHT_MIN` (120 px) of the window, so the flags never vanish; the sash can still be dragged either
+way. `gui/screens.py:FrozenPane._place_sash`. No schema change.
 
 ## What is in 0.9.0
 
@@ -108,7 +116,7 @@ never waits for Jira; the late Result is dropped.
 
 Everything of 0.7.2 plus a **draggable split** on both Safety Plan screens: the pinned and the
 scrolling tables are the two panes of a horizontal `ttk.PanedWindow`, the sash opens at the fitted
-width of the pinned columns but never past 45% of the window, and dragging it either way clips a
+width of the pinned columns (since 0.9.1 in full, the longest row of the left pane; the scrolling pane keeps 120 px), and dragging it either way clips a
 table without changing a column width. The rest is a broken-windows sweep (see the CHANGELOG):
 stale "four screens" wording in the plan documents, the missing compare links, `session` in the
 command list below, `uv.lock` no longer matched by the lock-file ignore pattern.
@@ -198,7 +206,8 @@ Everything of 0.1.0 plus diagrams and documents (see Diagrams and documents).
     column, `plan`): a Treeview cannot pin a column, so the table is two of them in lock-step
     (`gui/screens.py:FrozenPane`: one vertical bar, the selection, the striping and the sort
     shared; a heading on either side sorts). Since 0.7.3 the split between the two is a sash you
-    can drag: it opens at the pinned columns' fitted width, never past 45% of the window, and
+    can drag: it opens at the pinned columns' full fitted width, the longest row of the left pane
+    (since 0.9.1; before, never past 45% of the window; the scrolling pane keeps 120 px), and
     dragging it never changes a column width.
   - **Safety Plan Matrix**: the plan stacked as PDP phase > safety lifecycle phase > safety
     deliverable (one column, indented, since 0.8.3; alone on the left since 0.9.0), one flag group

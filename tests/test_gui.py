@@ -1584,10 +1584,11 @@ def test_safety_plan_group_rows_are_headings_not_records(window, seeded):
 
 
 def test_frozen_pane_split_is_draggable(window, monkeypatch):
-    """The two trees are the panes of a horizontal PanedWindow; the sash lands on the fitted width, capped at 45%."""
+    """The two trees are the panes of a horizontal PanedWindow; the sash lands on the full fitted width (the
+    longest row of the left pane), leaving the right pane RIGHT_MIN px."""
     from tkinter import ttk
 
-    from asi_kletz.gui.screens import SASH_SHARE
+    from asi_kletz.gui.screens import RIGHT_MIN
 
     screen = window.show("safety_plan")
     pane, split = screen.pane, screen.pane.split
@@ -1598,14 +1599,14 @@ def test_frozen_pane_split_is_draggable(window, monkeypatch):
     assert pane.xbar.grid_info()["row"] == 1 and pane.xbar.grid_info()["column"] == 0
     widths = {c: int(pane.left.column(c, "width")) for c in pane.frozen}
     fitted = sum(widths.values())
-    assert pane.fitted_width() == fitted > 0 and SASH_SHARE == 0.45
+    assert pane.fitted_width() == fitted > 0 and RIGHT_MIN == 120
 
     window.update_idletasks()  # runs the after_idle that places the sash
     assert pane._sash_job is None
     pos = split.sashpos(0)  # a withdrawn window is never mapped, so Tk may answer 0; the call itself must work
     width = split.winfo_width()
-    if split.winfo_ismapped() and width > 1:  # a mapped window has a width: the cap holds
-        assert pos <= SASH_SHARE * width and pos == min(fitted, int(width * SASH_SHARE))
+    if split.winfo_ismapped() and width > 1:  # a mapped window has a width: the full fitted width, right keeps its room
+        assert pos == max(1, min(fitted, width - RIGHT_MIN))
         assert not pane._sash_pending
     else:  # not mapped: the placement waits for <Map> (a sash set before the split has its geometry clamps to 0)
         assert pane._sash_pending
@@ -1620,19 +1621,23 @@ def test_frozen_pane_split_is_draggable(window, monkeypatch):
     monkeypatch.setattr(split, "winfo_width", lambda: 1000)
     monkeypatch.setattr(split, "sashpos", lambda index, newpos=None: calls.append((index, newpos)) or newpos)
     pane._place_sash()
-    assert calls == [(0, min(fitted, 450))]
-    monkeypatch.setattr(split, "winfo_width", lambda: 400)  # a narrow window: the cap wins over the fitted width
+    assert calls == [(0, min(fitted, 880))]  # the longest row in full; a 1000 px split has the room
+    monkeypatch.setattr(split, "winfo_width", lambda: 400)  # a narrow window: right keeps RIGHT_MIN px
     pane._place_sash()
-    assert calls[-1] == (0, min(fitted, 180)) and calls[-1][1] <= SASH_SHARE * 400
+    assert calls[-1] == (0, max(1, min(fitted, 280))) and calls[-1][1] <= 400 - RIGHT_MIN
+    monkeypatch.setattr(split, "winfo_width", lambda: 100)  # narrower than the reserve: the sash stays at 1, never 0
+    pane._place_sash()
+    assert calls[-1] == (0, 1)
+    monkeypatch.setattr(split, "winfo_width", lambda: 400)
     assert not pane._sash_pending
     monkeypatch.setattr(split, "winfo_ismapped", lambda: False)  # not mapped: nothing is set, the <Map> will
     pane._place_sash()
-    assert len(calls) == 2 and pane._sash_pending
+    assert len(calls) == 3 and pane._sash_pending
     monkeypatch.setattr(split, "winfo_ismapped", lambda: True)
     pane._on_map()  # the pending placement runs on <Map>, after the idle
     assert pane._sash_job is not None
     window.update_idletasks()
-    assert calls[-1] == (0, min(fitted, 180)) and len(calls) == 3 and not pane._sash_pending
+    assert calls[-1] == (0, max(1, min(fitted, 280))) and len(calls) == 4 and not pane._sash_pending
     pane._on_map()  # a <Map> with nothing pending (the screen shown again) leaves the user's sash alone
     assert pane._sash_job is None
 
@@ -1640,7 +1645,7 @@ def test_frozen_pane_split_is_draggable(window, monkeypatch):
     assert pane._sash_job is not None
     pane.mirror(screen._domain())
     window.update_idletasks()
-    assert pane._sash_job is None and calls[-1] == (0, min(fitted, 180)) and len(calls) == 4
+    assert pane._sash_job is None and calls[-1] == (0, max(1, min(fitted, 280))) and len(calls) == 5
 
 
 # -- the Sprint Board, the Weekly Status and the dashboard's sprint tiles (0.8.1) ------------------------

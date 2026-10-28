@@ -12,6 +12,23 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.9.1] - 2026-10-28
+
+The owner, 2026-10-28: "make it so that the left pane in Safety Plan and the left pane in Safety Plan
+Matrix are both as wide as the longest row of each screen's left pane." Schema version unchanged (3).
+
+### Changed
+- **The frozen pane opens at its full fitted width** (`gui/screens.py:FrozenPane._place_sash`): the
+  sash lands on `fitted_width()`, the sum of the left tree's fitted columns, which `fit_columns` sizes
+  to the longest row (the stacked plan text) and the heading. `SASH_SHARE` (0.45, 0.7.3) is gone;
+  `RIGHT_MIN = 120` px is the one cap, so the scrolling pane keeps room for its flags and bar; a
+  split narrower than that leaves the sash at 1, never 0 (a weight-0 pane never grows back from 0).
+  Dragging still clips a tree and never changes a column width.
+
+### Tests
+- `test_frozen_pane_split_is_draggable`: the sash arithmetic at 1000 px (the full fitted width),
+  400 px (the reserve wins) and 100 px (the sash stays at 1).
+
 ## [0.9.0] - 2026-10-28
 
 Every row has a hidden identity (`uid`), and no table shows `id` or `order`: `docs/hidden-identity-plan.md`,
