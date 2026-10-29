@@ -12,6 +12,17 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.14.1] - 2026-10-29
+
+The owner, 2026-10-29: "the report was portrait; we should strive to make the Word product as close as
+possible to the original." The QF-17 original is portrait with its plan table on landscape pages.
+
+### Changed
+- **The export no longer turns the whole document landscape** (`services/standards_service.py`): the
+  standard's source carries its own page turns (asi_gutenberg 0.6.0 `section` blocks, `<!-- section:
+  landscape -->` before the plan table and back after it), so the PDF and the Word file are portrait with
+  the table on landscape pages, as the original. `LANDSCAPE` is gone.
+
 ## [0.14.0] - 2026-10-29
 
 The owner, 2026-10-29: "in the safety plan window when you select a safety plan deliverable the bottom pane

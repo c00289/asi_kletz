@@ -32,7 +32,6 @@ PARAMETER = "parameter"
 ROW_PARAM = re.compile(r"^row_(\d+)_(points|sprint_end|status)$")
 PARAM_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 UNFILLED = "unfilled parameter: "
-LANDSCAPE = {"orientation": "landscape"}  # the plan table is wide; the whole document is landscape
 NO_STANDARD = "No standard for this deliverable: its QMS references name none in {root}"
 
 
@@ -191,7 +190,7 @@ class StandardsService:
     def export(
         self, row_id: int, out_dir: str | Path | None = None, standard: str | None = None, actor: str = "python"
     ) -> dict[str, Any]:
-        """Build each standard of the row (or the one named) with asi_gutenberg, landscape, the parameters
+        """Build each standard of the row (or the one named) with asi_gutenberg, in the source's own page orientations, the parameters
         filled from the ``parameter`` table, the plan and Jira, the rest left and reported; audited once."""
         from asi_gutenberg import build, from_markdown
 
@@ -203,7 +202,7 @@ class StandardsService:
         for std in plan["standards"]:
             doc = from_markdown(Path(std["path"]).read_text(encoding="utf-8"))
             paths = build(
-                doc, str(target), name=std["folder"], theme=dict(LANDSCAPE),
+                doc, str(target), name=std["folder"], 
                 params=std["values"], strict_params=False, mark_params=True,
             )
             issues = [str(i) for i in paths.pop("issues", [])]

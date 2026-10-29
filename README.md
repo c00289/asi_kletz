@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.14.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.14.1**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -34,7 +34,7 @@ the chosen points and never the default; `row_N_sprint_end`, the date the owning
 `row_N_status`, the live status of the Jira ticket in the new **Jira key** field ("this company ties
 deliverables to Jira tickets"). `standards list` and `standards for --row <id>` say what is there and
 what a row has (by its QMS reference flags); `plan parameters --row <id>` prints the value set; `plan
-export --row <id> --out <dir>` builds the Markdown / PDF / Word triplet with asi_gutenberg, landscape,
+export --row <id> --out <dir>` builds the Markdown / PDF / Word triplet with asi_gutenberg, in the source's own page orientations,
 every filled value highlighted, every blank still a blank and named in the warnings. In the window the
 Safety Plan's details pane starts with **Export document…** (a folder, then the export), the row's
 standard, a **Document parameters** box with **Save parameters**, and the row's own values as the export
@@ -407,11 +407,11 @@ folder starting `qf-17`.
 asi-kletz standards                                      # list: folder, title, document parameters, row parameters
 asi-kletz standards for --row 1                          # the standards row 1 has
 asi-kletz plan parameters --row 1                        # the value set an export would fill, nothing built
-asi-kletz plan export --row 1 --out out                  # out/qf-17-safety-plan.{md,pdf,docx}, landscape
+asi-kletz plan export --row 1 --out out                  # out/qf-17-safety-plan.{md,pdf,docx}
 asi-kletz plan export --row 1 --out out --standard qf-17-safety-plan
 ```
 
-The export builds every standard the row has (or the one named) with `asi_gutenberg.build` (landscape, the
+The export builds every standard the row has (or the one named) with `asi_gutenberg.build` (the source's own page orientations, the
 parameters filled, a blank left as `{{ name }}` and reported as `unfilled parameter: name`, every filled
 value highlighted in mint in the PDF and the Word file and written `==value==` in the Markdown); the
 result lists the files, the pages, the filled count and the unfilled names, also as warnings; one audit entry
