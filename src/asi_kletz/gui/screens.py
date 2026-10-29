@@ -42,17 +42,25 @@ def stack(rows: list[dict[str, Any]]) -> list[tuple[str, int, str, dict[str, Any
     Level 0 is a PDP phase (iid ``pdp:<value>``), level 1 a lifecycle phase under it
     (``phase:<pdp>:<value>``), level 2 a deliverable (the row id, ``row`` set). A group line opens
     whenever the value changes between consecutive rows, so a plan kept in order (as the Safety
-    Plan is, by ``order``) shows every phase once; a plan out of order shows the truth of its order.
+    Plan is, by ``order``) shows every phase once; a plan out of order shows the truth of its order:
+    the same phase opens again, its iid suffixed ``#2``, ``#3``, ... since a Treeview item id must be
+    unique (0.15.1: a plan with PDP phase 2 at order 1 and again at order 8 broke every stacked screen).
     """
     lines: list[tuple[str, int, str, dict[str, Any] | None]] = []
+    opened: dict[str, int] = {}
+
+    def iid_of(group: str) -> str:
+        opened[group] = opened.get(group, 0) + 1
+        return group if opened[group] == 1 else f"{group}#{opened[group]}"
+
     pdp = phase = object()
     for row in rows:
         if row.get("pdp_phase") != pdp:
             pdp, phase = row.get("pdp_phase"), object()
-            lines.append((f"pdp:{pdp}", 0, pdp_title(pdp), None))
+            lines.append((iid_of(f"pdp:{pdp}"), 0, pdp_title(pdp), None))
         if row.get("lifecycle_phase") != phase:
             phase = row.get("lifecycle_phase")
-            lines.append((f"phase:{pdp}:{phase}", 1, INDENT + phase_title(phase), None))
+            lines.append((iid_of(f"phase:{pdp}:{phase}"), 1, INDENT + phase_title(phase), None))
         deliverable = "" if row.get("deliverable") is None else str(row["deliverable"]).replace("\n", " ")
         lines.append((str(row["id"]), 2, INDENT * 2 + deliverable, row))
     return lines

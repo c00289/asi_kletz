@@ -12,6 +12,24 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.15.1] - 2026-10-29
+
+The owner, 2026-10-29, after attaching Jira tickets to several deliverables: "as I was flipping through
+screens at some point the deliverables scroller got stuck and I could only see the first couple of rows",
+with `_tkinter.TclError: Item pdp:2 already exists` from every stacked screen's `_populate`. Schema version
+unchanged (8).
+
+### Fixed
+- **A plan out of phase order broke every stacked screen** (`gui/screens.py:stack`): the plan's first row
+  had been saved under PDP phase 2 while rows 2-7 stayed under phase 1 and phase 2 opened again at row 8.
+  `stack` opens a group line whenever the phase changes between consecutive rows, by design (the truth of
+  the plan's order), but gave the second opening the same iid `pdp:2`; a Treeview item id must be unique,
+  so the insert raised, the table kept the rows painted before it, and every refresh (a save, a navigation,
+  the event poll) raised again. A group that opens again now takes the iid `pdp:2#2`, `phase:2:...#2` and so
+  on (`#3` for a third opening); `is_group` still holds, the group tags and the stripe style unchanged, the
+  Safety Plan table, the matrix and its frozen pane paint the whole plan, and a search on the matrix finds a
+  deliverable under a reopened phase.
+
 ## [0.15.0] - 2026-10-29
 
 The owner, 2026-10-29, on the exported QF-17: "the expected duration value has to change: right now we have

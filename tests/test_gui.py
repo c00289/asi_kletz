@@ -1468,7 +1468,7 @@ def test_matrix_stacks_pdp_phase_over_lifecycle_phase_over_deliverable(window, s
     """Owner, 2026-10-28: the three identity columns were crowded; stack them instead."""
     from types import SimpleNamespace
 
-    from asi_kletz.gui.matrix_screen import INDENT, PDP_TAG, PHASE_TAG, stack
+    from asi_kletz.gui.matrix_screen import INDENT, PDP_TAG, PHASE_TAG, is_group, stack
 
     rows = seeded.execute("list", entity=PLAN).data
     lines = stack(rows)
@@ -1479,11 +1479,12 @@ def test_matrix_stacks_pdp_phase_over_lifecycle_phase_over_deliverable(window, s
     ]
     assert lines[0][2] == "PDP phase 1" and lines[1][2] == INDENT + "1. Concept Development"
     assert lines[2][2] == INDENT * 2 + "Safety Plan" and lines[2][3] is rows[0]
-    # a plan out of order shows the truth of its order: the same phase opens again
+    # a plan out of order shows the truth of its order: the same phase opens again, under its own iid
     twice = stack([rows[0], rows[1], rows[0]])
     assert [iid for iid, _, _, _ in twice] == ["pdp:1", "phase:1:1. Concept Development", "1",
                                               "pdp:2", "phase:2:2. HARA / Risk Assessment", "2",
-                                              "pdp:1", "phase:1:1. Concept Development", "1"]
+                                              "pdp:1#2", "phase:1:1. Concept Development#2", "1"]
+    assert twice[6][2] == "PDP phase 1" and all(is_group(iid) for iid, level, _, _ in twice if level < 2)
     # a row without phases still has a place
     assert [t for _, _, t, _ in stack([{"id": 9, "deliverable": "Loose"}])] == [
         "(no PDP phase)", INDENT + "(no lifecycle phase)", INDENT * 2 + "Loose"]
@@ -1517,6 +1518,30 @@ def test_matrix_stacks_pdp_phase_over_lifecycle_phase_over_deliverable(window, s
     assert _rows(left) == _rows(right)
     screen.search_var.set("")
     assert len(_rows(right)) == 9
+
+
+def test_stacked_screens_survive_a_plan_out_of_phase_order(window, seeded):
+    """Owner, 2026-10-29: 'the deliverables scroller got stuck, I could only see the first couple of rows',
+    `TclError: Item pdp:2 already exists`: the plan's first row had been moved to PDP phase 2 while rows
+    under phase 1 followed and phase 2 came again (here: phase 1, phase 2, phase 1 again). Every stacked
+    screen paints the whole plan regardless."""
+    from asi_kletz.gui.matrix_screen import PDP_TAG
+
+    seeded.execute("update", entity=PLAN, id=3, data={"pdp_phase": "1", "lifecycle_phase": "1. Concept Development"})
+    screen = window.show("safety_plan")
+    iids = [iid for iid, _ in _rows(screen.tree)]
+    assert iids == ["pdp:1", "phase:1:1. Concept Development", "1",
+                    "pdp:2", "phase:2:2. HARA / Risk Assessment", "2",
+                    "pdp:1#2", "phase:1:1. Concept Development#2", "3"]
+    assert screen.tree.item("pdp:1#2", "tags")[0] == PDP_TAG
+    assert screen.tree.set("pdp:1#2", "plan") == "PDP phase 1"
+    screen.select(3)
+    screen.save()  # the save's refresh repaints the same stack without a trace
+    assert [iid for iid, _ in _rows(screen.tree)] == iids
+    matrix = window.show("safety_plan_matrix")
+    assert [iid for iid, _ in _rows(matrix.tree)] == iids
+    matrix.search_var.set("functional safety concept")
+    assert [iid for iid, _ in _rows(matrix.tree)] == ["pdp:1#2", "phase:1:1. Concept Development#2", "3"]
 
 
 def test_safety_plan_group_rows_are_headings_not_records(window, seeded):
