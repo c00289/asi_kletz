@@ -440,6 +440,25 @@ class UrlsWidget(MultilineWidget):
         self.refresh_links()
 
 
+class ListWidget(MultilineWidget):
+    """A JSON list (0.24.0: the lists of a control structure and of an STPA analysis) edited one item per line;
+    ``get`` answers the list (``[]`` when empty), ``set`` takes a list or the JSON text a row carries."""
+
+    def get(self) -> Any:
+        from ..schema.lists import list_of
+
+        text = self.text.get("1.0", "end-1c")
+        try:
+            return list_of(text)
+        except ValueError:
+            return [line.strip() for line in text.splitlines() if line.strip()]
+
+    def set(self, value: Any) -> None:
+        from ..schema.lists import lines_of
+
+        super().set(None if value in (None, "", []) else lines_of(value))
+
+
 class EnumWidget(FieldWidget):
     def build(self) -> None:
         self.var = tk.StringVar()

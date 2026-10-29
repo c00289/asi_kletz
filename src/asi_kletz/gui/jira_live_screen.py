@@ -19,22 +19,16 @@ its own: ``on_show`` fetches only when ``jira_live_autofetch`` is explicitly tru
 from __future__ import annotations
 
 import datetime as dt
-import threading
 import time
 import tkinter as tk
 import webbrowser
 from tkinter import ttk
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ..commands import Result
 from ..services.jira_service import AUTOFETCH_DEFAULT, LIVE_LIMIT
+from .background import POLL_MS, WAIT_FETCH_TIMEOUT, BackgroundFetch  # noqa: F401  (re-exported for the windows)
 from .screens import Screen, fit_columns
-
-if TYPE_CHECKING:
-    from .main_window import MainWindow
-
-POLL_MS = 100  # how often the Tk thread looks at a running fetch
-WAIT_FETCH_TIMEOUT = 5.0  # `wait_fetch`, the test helper: pump the loop at most this long
 
 ALL = "(all)"
 NONE = "(none)"
@@ -99,40 +93,6 @@ def local_clock(fetched_at: Any) -> str:
         return dt.datetime.fromisoformat(str(fetched_at)).astimezone().strftime("%H:%M")
     except (TypeError, ValueError):
         return str(fetched_at or "?")
-
-
-class BackgroundFetch:
-    """One ``window.execute_quiet(verb, **args)`` on a daemon thread; ``result`` is set when it is done.
-
-    The thread touches no widget: ``execute_quiet`` is ``Brain.execute`` and nothing else, and the
-    ``jira`` verb reads no database row. The one thing it publishes, ``jira.live``, reaches
-    ``MainWindow._on_event`` on this thread, where that topic returns before any Tk call. Whoever
-    started the fetch polls ``done`` from the Tk thread with ``after``; nobody joins the thread, so
-    a window closed mid-fetch never waits for Jira.
-    """
-
-    def __init__(self, window: MainWindow, verb: str, **args: Any) -> None:
-        self.verb = verb
-        self.args = dict(args)
-        self.result: Result | None = None
-        self.thread = threading.Thread(
-            target=self._run, args=(window, args), daemon=True, name=f"asi-kletz {verb} {args.get('action', '')}"
-        )
-
-    def start(self) -> BackgroundFetch:
-        self.thread.start()
-        return self
-
-    @property
-    def done(self) -> bool:
-        return self.result is not None
-
-    def _run(self, window: MainWindow, args: dict[str, Any]) -> None:
-        try:
-            result = window.execute_quiet(self.verb, **args)
-        except Exception as exc:  # the API answers with a Result, but the poll must end whatever happens
-            result = Result.failure(f"{type(exc).__name__}: {exc}", verb=self.verb)
-        self.result = result  # the last write: `done` flips only once everything else is in place
 
 
 class JiraLiveScreen(Screen):

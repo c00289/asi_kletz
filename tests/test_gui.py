@@ -15,9 +15,9 @@ from tests.conftest import PLAN, REPO_ROOT
 
 # the registered screens, in navigation order: the list is the design, not a cap
 SCREENS = ["dashboard", "jira_live", "safety_plan", "safety_plan_matrix", "sprint_board", "tracker", "holidays",
-           "parameters", "transfer"]
+           "parameters", "control_structures", "stpa", "transfer"]
 TITLES = ["Dashboard", "JIRA Live Data", "Safety Plan", "Safety Plan Matrix", "Sprint Board", "Weekly Status",
-          "Holidays", "Parameters", "Export / Import"]
+          "Holidays", "Parameters", "Control structures", "STPA analyses", "Export / Import"]
 # the identity column of the Safety Plan table: frozen on the left since 0.7.2; since 0.8.4 the three identity
 # fields are one stacked column; since 0.9.0 ``id`` and ``order`` are no columns at all (docs/hidden-identity-plan.md)
 FROZEN_PLAN = ["plan"]
@@ -382,10 +382,11 @@ def test_transfer_screen_builds_diagrams_and_documents(window, tmp_path, seeded)
     screen = window.show("transfer")
     assert [k for k, _ in window.factory.items()] == SCREENS  # generation lives inside Export / Import
     assert [s["key"] for s in screen.diagram_specs] == [
-        "lifecycle_overview", "phase_flow", "status_board", "pdp_map", "sprint_burndown", "velocity", "plan_roadmap",
-    ]  # the graphs, then the charts (0.12.0)
+        "lifecycle_overview", "phase_flow", "status_board", "pdp_map", "stpa_trace", "sprint_burndown", "velocity",
+        "plan_roadmap",
+    ]  # the graphs (the STPA trace since 0.24.0), then the charts (0.12.0)
     assert [s["key"] for s in screen.document_specs] == [
-        "safety_plan", "status_report", "phase_checklist", "sprint_report", "plan_roadmap",
+        "safety_plan", "status_report", "phase_checklist", "sprint_report", "plan_roadmap", "stpa_report",
     ]
     assert screen.out_var.get() == seeded.out_dir
     screen.select_diagram("lifecycle_overview")

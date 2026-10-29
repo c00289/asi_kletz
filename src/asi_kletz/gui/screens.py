@@ -16,6 +16,10 @@ if TYPE_CHECKING:
     from .theme import Theme
 
 PLAN_ENTITY = "safety_plan_row"
+# 0.24.0: the two STPA screens (the owner: "move everything to Kletz"); the thirteen STPA entities have no table
+# screen of their own, these two paint them (`/screen {"show": "control_structures"}`, `{"show": "stpa"}`)
+CONTROL_STRUCTURES_SCREEN = "control_structures"
+STPA_SCREEN = "stpa"
 
 # -- the plan as a stack (0.8.3 on the matrix, 0.8.4 on the table) ------------------------------------
 # Owner, 2026-10-28: the PDP phase, the lifecycle phase and the deliverable side by side crowded the
@@ -400,17 +404,20 @@ class ScreenFactory:
 
 def build_default_screens(brain: Brain) -> ScreenFactory:
     """The screens of the window, in navigation order: Dashboard, JIRA Live Data, Safety Plan,
-    Safety Plan Matrix, Sprint Board, Weekly Status, Holidays, Parameters, Export / Import.
+    Safety Plan Matrix, Sprint Board, Weekly Status, Holidays, Parameters, Control structures, STPA
+    analyses, Export / Import.
 
     A screen is added by registration here; the list is the design, not a cap. Registering
     another entity still gives it a table, commands, JSON and a workbook sheet, never a screen
-    by itself.
+    by itself (the thirteen STPA entities of 0.24.0 share the two STPA screens).
     """
+    from .control_structure_screen import ControlStructureScreen
     from .dashboard import DashboardScreen
     from .entity_screen import EntityScreen
     from .jira_live_screen import JiraLiveScreen
     from .matrix_screen import SafetyPlanMatrixScreen
     from .sprint_board_screen import SprintBoardScreen
+    from .stpa_screen import StpaScreen
     from .tracker_screen import TrackerScreen
     from .transfer_screen import TransferScreen
 
@@ -426,5 +433,7 @@ def build_default_screens(brain: Brain) -> ScreenFactory:
     factory.register("tracker", "Weekly Status", TrackerScreen)
     factory.register("holidays", "Holidays", lambda master, window: EntityScreen(master, window, holiday))
     factory.register("parameters", "Parameters", lambda master, window: EntityScreen(master, window, parameter))
+    factory.register(CONTROL_STRUCTURES_SCREEN, "Control structures", ControlStructureScreen)
+    factory.register(STPA_SCREEN, "STPA analyses", StpaScreen)
     factory.register("transfer", "Export / Import", TransferScreen)
     return factory

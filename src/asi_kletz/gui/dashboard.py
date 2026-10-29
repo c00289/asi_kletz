@@ -29,6 +29,12 @@ NO_SPRINT = "No active sprint (click to open the Sprint Board)"
 # the placeholder still among them, with no URL at all (``plan_queries.counts_by_link``)
 LINK_TILES = (("confluence", "CONFLUENCE PAGE"), ("placeholder", "PLACEHOLDER"), ("none", "NO URL"))
 LINK_TITLE = "Work product links (click to open the plan)"
+# 0.24.0: STPA lives here (the owner: "move everything to Kletz"). Two tiles, the structures and the analyses;
+# the parts have no tile of their own, the two screens count them. A click opens the screen.
+STPA_TILES = (
+    ("control_structure", "CS STRUCTURES", "control_structures"), ("stpa_analysis", "STPA ANALYSES", "stpa"),
+)
+STPA_TITLE = "STPA (click to open the screen)"
 
 
 class DashboardScreen(Screen):
@@ -54,6 +60,7 @@ class DashboardScreen(Screen):
             self.tiles.columnconfigure(index, weight=1)
         self._build_sprint_tiles()
         self._build_link_tiles()
+        self._build_stpa_tiles()
 
         lower = ttk.PanedWindow(self, orient="horizontal")
         lower.pack(fill="both", expand=True)
@@ -102,6 +109,28 @@ class DashboardScreen(Screen):
         counts = q.counts_by_link(self.brain, rows)
         for key, _caption in LINK_TILES:
             self._link_vars[key].set(str(counts[key]))
+
+    def _build_stpa_tiles(self) -> None:
+        """The control structures and the STPA analyses (0.24.0), one tile each; a click opens its screen."""
+        self.stpa_tiles = ttk.LabelFrame(self, text=STPA_TITLE)
+        self.stpa_tiles.pack(fill="x", pady=(0, 8))
+        self._stpa_vars: dict[str, tk.StringVar] = {}
+        for index, (entity, caption, screen) in enumerate(STPA_TILES):
+            var = tk.StringVar(value="0")
+            self._stpa_vars[entity] = var
+            tile = ttk.Frame(self.stpa_tiles, padding=8, style="Tile.TFrame")
+            tile.grid(row=0, column=index, padx=4, pady=4, sticky="nsew")
+            ttk.Label(tile, textvariable=var, style="TileCount.TLabel").pack()
+            ttk.Label(tile, text=caption, style="TileName.TLabel").pack()
+            for widget in (tile, *tile.winfo_children()):
+                widget.bind("<Button-1>", lambda e, k=screen: self.window.show(k))
+                widget.bind("<Enter>", lambda e, t=tile: t.configure(style="TileHover.TFrame"))
+                widget.bind("<Leave>", lambda e, t=tile: t.configure(style="Tile.TFrame"))
+            self.stpa_tiles.columnconfigure(index, weight=1)
+
+    def _refresh_stpa_tiles(self) -> None:
+        for entity, _caption, _screen in STPA_TILES:
+            self._stpa_vars[entity].set(str(self.brain.service(entity).count()))
 
     def _refresh_sprint_tiles(self) -> None:
         active = sq.active_sprint(self.brain)
@@ -159,6 +188,7 @@ class DashboardScreen(Screen):
             self._tile_vars[status].set(str(counts.get(status, 0)))
         self._refresh_sprint_tiles()
         self._refresh_link_tiles(rows)
+        self._refresh_stpa_tiles()
         self._fill(self.phase_table, q.counts_by_phase(self.brain, rows), PHASE_COLUMNS)
         open_rows = q.open_rows(rows)
         self._fill(self.open_table, open_rows, OPEN_COLUMNS)

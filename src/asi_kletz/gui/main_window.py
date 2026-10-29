@@ -4,11 +4,12 @@ The window never touches storage directly. Every change goes through ``run`` whi
 ``Brain.execute`` with actor ``gui``; the event bus then refreshes whatever screen is open,
 so edits made by the CLI or an agent against the same Brain appear live too. The theme picker
 at the foot of the navigation column is the same: it runs the ``theme`` verb, and the window
-repaints when the bus reports ``theme.changed``, whoever raised it. Two topics never refresh a
-screen: ``theme.changed`` repaints instead, and ``jira.live`` changes no database row (the JIRA
-Live Data screen paints its own Result, which lives on the window as ``jira_live``). ``jira.live``
-is also the one topic published from a worker thread (the Jira fetches run off the Tk thread
-through ``execute_quiet``), so its branch in ``_on_event`` must return without touching a widget.
+repaints when the bus reports ``theme.changed``, whoever raised it. Three topics never refresh a
+screen: ``theme.changed`` repaints instead, ``jira.live`` changes no database row (the JIRA
+Live Data screen paints its own Result, which lives on the window as ``jira_live``) and neither does
+``cs.exported`` (files written, 0.24.0). Those two are also the topics published from a worker
+thread (the Jira fetches and ``cs export`` run off the Tk thread through ``execute_quiet``,
+``gui/background.py``), so their branch in ``_on_event`` must return without touching a widget.
 
 The window also owns the local automation server (``automation/server.py``): started after the
 body is built, its port shown in the online indicator and written to the session file, stopped
@@ -400,6 +401,15 @@ class MainWindow(tk.Tk):
         """The status-bar half of ``run_quiet`` for a Result obtained elsewhere (a worker thread)."""
         self._report(result, quiet=True)
 
+    def report(self, result: Result, verb: str | None = None) -> Result:
+        """What ``run`` says about a Result obtained elsewhere (a ``BackgroundFetch`` that ran off the Tk
+        thread, 0.24.0): a failure is a status-bar line plus a dialog when interactive, warnings a status-bar
+        line. Called on the Tk thread, after the poll."""
+        if result.verb is None:
+            result.verb = verb
+        self._report(result, quiet=False)
+        return result
+
     def _report(self, result: Result, *, quiet: bool) -> None:
         if not result.ok:
             message = "; ".join(result.errors) or "unknown error"
@@ -460,11 +470,12 @@ class MainWindow(tk.Tk):
             if ThemeFactory.known(key) and ThemeFactory.canonical(key) != self.theme.key:
                 self.set_theme(key)
             return
-        if topic == "jira.live":
-            # No database row changed; the live screen paints its own Result. This handler runs on
-            # the worker thread that ran `jira live`, so it must return before any Tk call: the
-            # `after` below would be a cross-thread Tk call. No other verb runs off the Tk thread
-            # (`jira comments` publishes nothing), so no other topic reaches here from a worker.
+        if topic in ("jira.live", "cs.exported"):
+            # No database row changed: the live screen paints its own Result, an export wrote files. These
+            # handlers run on the worker thread that ran `jira live` or `cs export` (0.24.0), so they must
+            # return before any Tk call: the `after` below would be a cross-thread Tk call. No other verb
+            # runs off the Tk thread (`jira comments`, `confluence search`, `people lookup` and `stpa
+            # refresh` without --apply publish nothing), so no other topic reaches here from a worker.
             return
         if self._refresh_job is not None:
             return
