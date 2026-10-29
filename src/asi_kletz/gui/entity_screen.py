@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog, ttk
 from typing import TYPE_CHECKING, Any
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from ..generate.plan_schedule import SOURCE_DEFAULT, SOURCE_POINTS, weight_of
 from ..schema import EntitySchema, FieldSpec, FieldType
 from ..schema.people import is_role, people_lines, people_of, people_text
+from ..schema.urls import urls_text
 from .screens import (
     INDENT,
     PDP_TAG,
@@ -26,10 +28,11 @@ from .screens import (
     stack,
     style_group_rows,
 )
-from .widgets import FieldWidget, JiraPickerWidget, PeopleWidget, PointsWidget, WidgetFactory
+from .widgets import LOOK_UP, FieldWidget, JiraPickerWidget, PeopleWidget, PointsWidget, WidgetFactory, append_line
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
+    from .people_lookup import PeopleLookup
 
 TRUNCATE = 70  # a cell shows this much of a long text; the column fits the clipped text, not the value
 HANDLES = ("id", "order")  # the handles have no column anywhere (0.9.0): the status bar and the details title name them
@@ -58,8 +61,9 @@ def cell_text(spec: FieldSpec | None, value: Any) -> str:
         return ""
     if spec is not None and spec.type is FieldType.BOOL:
         return "✓" if value else ""
-    if isinstance(value, (list, tuple)):  # the people of a role: ``Ann Lee <ann@...>; Ben Ray <ben@...>``
-        value = people_text(value)
+    if isinstance(value, (list, tuple)):  # the people of a role: ``Ann Lee <ann@...>; Ben Ray <ben@...>``;
+        # the work product URLs: ``https://a; https://b`` (0.20.0)
+        value = urls_text(value) if spec is not None and spec.picker == "urls" else people_text(value)
     text = str(value).replace("\n", " ")
     return text if len(text) <= TRUNCATE else text[: TRUNCATE - 1] + "…"
 
@@ -91,6 +95,8 @@ class EntityScreen(Screen):
         self.param_initial: dict[str, str] = {}  # what each role's box showed when built: unchanged is not saved
         self.jira_statuses: dict[str, str | None] = {}  # the statuses the last export of this session fetched
         self.ticket_loader: Any = None  # the Load tickets fetch in flight, made on the first press (0.15.0)
+        self.lookup_buttons: dict[str, ttk.Button] = {}  # the pane's Look up button per role (0.20.0)
+        self.lookup_window: PeopleLookup | None = None  # the Outlook search window, one at a time (0.20.0)
         super().__init__(master, window)
 
     # -- layout ---------------------------------------------------------
@@ -179,7 +185,11 @@ class EntityScreen(Screen):
             ttk.Label(parent, text=spec.header + (" *" if spec.required else "")).grid(
                 row=row, column=0, sticky="ne", padx=(4, 8), pady=3
             )
-            extra = {"load": self.load_tickets} if spec.picker == "jira" else {}
+            extra: dict[str, Any] = {}
+            if spec.picker == "jira":
+                extra["load"] = self.load_tickets
+            elif spec.picker == "people":  # 0.20.0: the Look up button opens the Outlook search
+                extra["lookup"] = self.lookup_people
             widget = factory.create(parent, spec, **extra)
             widget.grid(row=row, column=1, sticky="ew", pady=3)
             self.widgets[spec.name] = widget
@@ -253,9 +263,32 @@ class EntityScreen(Screen):
             self.ticket_loader = TicketLoader(self)
         return self.ticket_loader.fetch()
 
+    # -- the Outlook lookup (0.20.0) ---------------------------------------------------------------------
+    def lookup_people(self, insert: Callable[[str], None], initial: str = "") -> PeopleLookup:
+        """Look up: the Outlook search window (one at a time; a second press brings it to the front with the
+        new target); the picked ``Name <email>`` line goes to ``insert``, the editor that asked."""
+        from .people_lookup import PeopleLookup
+
+        win = self.lookup_window
+        if win is not None and win.winfo_exists():
+            win.on_pick = insert
+            if initial:
+                win.query_var.set(initial)
+            win.lift()
+            win.entry.focus_set()
+            return win
+        win = self.lookup_window = PeopleLookup(self.window, insert, initial)
+        return win
+
+    def lookup_for_role(self, name: str) -> PeopleLookup:
+        """The pane's Look up button of a role: the pick lands as a new line of that role's box."""
+        return self.lookup_people(lambda line, n=name: append_line(self.param_texts[n], line))
+
     def destroy(self) -> None:
         if self.ticket_loader is not None:
             self.ticket_loader.cancel()
+        if self.lookup_window is not None and self.lookup_window.winfo_exists():
+            self.lookup_window.destroy()
         super().destroy()
 
     # -- the standards pane (0.14.0) ---------------------------------------------------------------
@@ -311,6 +344,7 @@ class EntityScreen(Screen):
         self.save_params_button.grid_forget()
         self.params_note.grid_forget()
         self.param_vars, self.param_entries, self.param_texts, self.param_initial = {}, {}, {}, {}
+        self.lookup_buttons = {}
         names: list[str] = []
         for standard in self.standards:
             names.extend(n for n in standard.get("document_parameters", ()) if n not in names)
@@ -330,7 +364,10 @@ class EntityScreen(Screen):
                 ttk.Label(self.params_box, text=role_caption(row), style="Muted.TLabel").grid(
                     row=index, column=2, sticky="nw", padx=(0, 4), pady=1
                 )
+                button = ttk.Button(self.params_box, text=LOOK_UP, command=lambda n=name: self.lookup_for_role(n))
+                button.grid(row=index, column=3, sticky="nw", padx=(0, 4), pady=1)
                 self.param_texts[name], self.param_initial[name] = box, initial
+                self.lookup_buttons[name] = button
                 continue
             var = tk.StringVar(value=str((row or {}).get("value") or ""))
             entry = ttk.Entry(self.params_box, textvariable=var, width=40)
@@ -476,8 +513,8 @@ class EntityScreen(Screen):
                 v = r.get(key)
                 if v is None:
                     return (1, 0)
-                if isinstance(v, (list, tuple)):  # the people column sorts by its text
-                    v = people_text(v)
+                if isinstance(v, (list, tuple)):  # the people column, the urls column: sorted by their text
+                    v = urls_text(v) if self.schema.field(key).picker == "urls" else people_text(v)
                 return (0, v.casefold() if isinstance(v, str) else v)
 
             rows = sorted(rows, key=sort_value, reverse=self.sort_desc)

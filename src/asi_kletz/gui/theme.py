@@ -129,6 +129,7 @@ class Theme:
     def paint(self, root: tk.Tk, style: ttk.Style) -> None:
         """Configure styles and option defaults. The plain theme only names its label styles."""
         style.configure("Muted.TLabel", foreground=self.palette.muted)
+        style.configure("Link.TLabel", foreground=self.palette.primary)  # a clickable URL (0.20.0)
         style.configure("Title.TLabel", font=self.display, foreground=self.palette.primary)
         style.configure("Subtitle.TLabel", font=self.heading, foreground=self.palette.muted)
         style.configure("Tile.TFrame", relief="groove", borderwidth=1)
@@ -223,6 +224,7 @@ class GridTheme(Theme):
         style.configure("TLabel", background=p.bg, foreground=p.text)
         style.configure("Nav.TLabel", background=p.panel, foreground=p.text)
         style.configure("Muted.TLabel", foreground=p.muted)
+        style.configure("Link.TLabel", foreground=p.primary)  # a clickable URL (0.20.0)
         style.configure("Title.TLabel", background=p.panel, foreground=p.primary, font=self.display)
         style.configure("Subtitle.TLabel", background=p.panel, foreground=p.muted, font=self.mono)
         style.configure("Status.TLabel", background=p.panel, foreground=p.primary, font=self.mono)

@@ -273,6 +273,20 @@ class JiraPickerWidget(FieldWidget):
 
 PEOPLE_HINT = "one per line: Name <email>"
 NOT_A_ROLE = "not a role: the Value holds the text"
+LOOK_UP = "Look up"
+
+
+def append_line(text: tk.Text, line: str) -> None:
+    """``line`` on a line of its own at the end of ``text`` (a disabled box is opened for the write)."""
+    state = str(text.cget("state"))
+    text.configure(state="normal")
+    try:
+        current = text.get("1.0", "end-1c")
+        if current and not current.endswith("\n"):
+            text.insert("end", "\n")
+        text.insert("end", line)
+    finally:
+        text.configure(state=state)
 
 
 class PeopleWidget(MultilineWidget):
@@ -280,16 +294,32 @@ class PeopleWidget(MultilineWidget):
     email alongside name"): a small text box, one person per line as ``Name <email>``, with the hint beside it.
     ``get()`` is the typed text (the verb's guard parses, validates and sorts it; an error names the role and
     the line); ``set()`` takes the stored array and shows it one line per person. ``set_enabled(False)`` greys
-    the box for a parameter that is not a role (the Parameters screen: the Value entry holds its text)."""
+    the box for a parameter that is not a role (the Parameters screen: the Value entry holds its text).
+    0.20.0: a **Look up** button beside it (``options["lookup"]``, the screen's Outlook search; the picked
+    ``Name <email>`` line lands through ``insert_line``)."""
 
     def build(self) -> None:
         self.options.setdefault("height", 3)
         self.options.setdefault("width", 48)
         super().build()
+        side = ttk.Frame(self)
+        side.pack(side="left", anchor="n", padx=(6, 0))
         self.hint_var = tk.StringVar(value=PEOPLE_HINT)
-        self.hint = ttk.Label(self, textvariable=self.hint_var, style="Muted.TLabel")
-        self.hint.pack(side="left", anchor="n", padx=(6, 0))
+        self.hint = ttk.Label(side, textvariable=self.hint_var, style="Muted.TLabel")
+        self.hint.pack(anchor="w")
+        self.lookup_button: ttk.Button | None = None
+        if self.options.get("lookup") is not None:
+            self.lookup_button = ttk.Button(side, text=LOOK_UP, command=self.look_up)
+            self.lookup_button.pack(anchor="w", pady=(4, 0))
         self.enabled = True
+
+    def look_up(self) -> Any:
+        """The Outlook search (0.20.0): the screen opens it; the pick is appended as a line."""
+        lookup = self.options.get("lookup")
+        return lookup(self.insert_line) if lookup is not None and self.enabled else None
+
+    def insert_line(self, line: str) -> None:
+        append_line(self.text, line)
 
     def set(self, value: Any) -> None:
         from ..schema.people import people_lines
@@ -303,6 +333,77 @@ class PeopleWidget(MultilineWidget):
         self.enabled = enabled
         self.text.configure(state="normal" if enabled else "disabled")
         self.hint_var.set(PEOPLE_HINT if enabled else NOT_A_ROLE)
+        if self.lookup_button is not None:
+            self.lookup_button.state(["!disabled"] if enabled else ["disabled"])
+
+
+URLS_HINT = "one per line, http(s); the first is the link"
+THE_LINK = " (the link)"
+OPEN = "Open"
+
+
+class UrlsWidget(MultilineWidget):
+    """The work product URLs of a deliverable (0.20.0, the owner: "each deliverable may have multiple url...
+    on multiple urls just go to first; list of urls is sequential"): a small text box, one URL per line, in
+    the order typed (the verb's guard validates: absolute http(s), none twice; it never sorts), and beside it
+    the links as clickable text, one per line, the first marked as the link, with an **Open** button that
+    launches the first in the browser; a click (left or right) on any line launches that one."""
+
+    def build(self) -> None:
+        self.options.setdefault("height", 3)
+        self.options.setdefault("width", 56)
+        super().build()
+        self.side = ttk.Frame(self)
+        self.side.pack(side="left", anchor="n", padx=(6, 0))
+        head = ttk.Frame(self.side)
+        head.pack(anchor="w")
+        self.open_button = ttk.Button(head, text=OPEN, width=6, command=self.open_first, state="disabled")
+        self.open_button.pack(side="left")
+        ttk.Label(head, text=URLS_HINT, style="Muted.TLabel").pack(side="left", padx=(6, 0))
+        self.links_box = ttk.Frame(self.side)
+        self.links_box.pack(anchor="w", pady=(2, 0))
+        self.link_labels: list[ttk.Label] = []
+        self.text.bind("<KeyRelease>", lambda e: self.refresh_links(), add="+")
+        self.text.bind("<FocusOut>", lambda e: self.refresh_links(), add="+")
+
+    def urls(self) -> list[str]:
+        """The lines of the box that look like URLs, in order (what the links show; the guard has the last word)."""
+        from ..schema.urls import is_url
+
+        text = self.text.get("1.0", "end-1c")
+        return [line.strip() for line in text.replace(";", "\n").splitlines() if is_url(line.strip())]
+
+    def refresh_links(self) -> list[str]:
+        for label in self.link_labels:
+            label.destroy()
+        self.link_labels = []
+        urls = self.urls()
+        for index, url in enumerate(urls):
+            label = ttk.Label(self.links_box, text=url + (THE_LINK if index == 0 else ""), style="Link.TLabel",
+                              cursor="hand2")
+            label.pack(anchor="w")
+            label.bind("<Button-1>", lambda e, u=url: self.open_url(u))
+            label.bind("<Button-3>", lambda e, u=url: self.open_url(u))
+            self.link_labels.append(label)
+        self.open_button.configure(state="normal" if urls else "disabled")
+        return urls
+
+    def open_first(self) -> str | None:
+        urls = self.urls()
+        if not urls:
+            return None
+        self.open_url(urls[0])
+        return urls[0]
+
+    @staticmethod
+    def open_url(url: str) -> None:
+        webbrowser.open(url)
+
+    def set(self, value: Any) -> None:
+        from ..schema.urls import urls_lines
+
+        super().set(urls_lines(value) if isinstance(value, (list, tuple)) else value)
+        self.refresh_links()
 
 
 class EnumWidget(FieldWidget):
@@ -354,8 +455,10 @@ class WidgetFactory:
             return PointsWidget(master, spec, self.lookups, **options)
         if spec.picker == "jira":  # a ticket picked from the last live fetch; `load` runs the fetch
             return JiraPickerWidget(master, spec, self.lookups, **options)
-        if spec.picker == "people":  # a role's people, one per line (0.19.0)
+        if spec.picker == "people":  # a role's people, one per line (0.19.0); `lookup` opens the Outlook search
             return PeopleWidget(master, spec, self.lookups, **options)
+        if spec.picker == "urls":  # the work product URLs, one per line, the first the link (0.20.0)
+            return UrlsWidget(master, spec, self.lookups, **options)
         if spec.type is FieldType.INT:
             options.setdefault("width", 10)
         return self._registry[spec.type](master, spec, self.lookups, **options)
