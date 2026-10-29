@@ -30,7 +30,7 @@ wheels = [
 
 [[package]]
 name = "asi-escher"
-version = "0.1.2"
+version = "0.1.3"
 source = { editable = "../asi_escher" }
 dependencies = [
     { name = "matplotlib" },
@@ -51,7 +51,7 @@ dev = [
 
 [[package]]
 name = "asi-gutenberg"
-version = "0.7.0"
+version = "0.7.1"
 source = { editable = "../asi_gutenberg" }
 dependencies = [
     { name = "asi-escher" },
@@ -95,7 +95,7 @@ dev = [
 
 [[package]]
 name = "asi-kletz"
-version = "0.16.0"
+version = "0.16.1"
 source = { editable = "." }
 dependencies = [
     { name = "asi-escher" },

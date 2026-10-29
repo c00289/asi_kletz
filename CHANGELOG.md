@@ -12,6 +12,24 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.16.1] - 2026-10-29
+
+The family's integration review of 2026-10-29. Schema version unchanged (8). The lock takes asi_gutenberg
+0.7.1 and asi_escher 0.1.3.
+
+### Fixed
+- **An export whose Word print failed named a PDF that was gone** (`services/standards_service.py:export`,
+  through asi_gutenberg 0.7.1): 0.16.0 promised that when Word cannot print, the PDF stays Gutenberg's
+  rendering with a warning, but asi_gutenberg 0.7.0's `pdf_with_word` removed that rendering before asking
+  Word, so a failed print (no Word on the machine, as on the CI runner; a COM failure) left `files.pdf` and
+  `primary` pointing at a file that did not exist. asi_gutenberg 0.7.1 prints to a working name and replaces
+  the target only once the print is there; the export's promise holds as written, and the extra role lines
+  of a filled cell take the template's run formatting too (the same release).
+
+### Tests
+- `test_a_failed_print_keeps_gutenbergs_pdf`: Word made unreachable (the PowerShell call raises), the export
+  answers `exact.pdf` false, the warning, and a PDF that exists.
+
 ## [0.16.0] - 2026-10-29
 
 The owner, 2026-10-29, on the exported QF-17: "can we make it exactly like the template? I still want all the
@@ -1485,7 +1503,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://example.invalid/asi-kletz/compare/v0.16.0...HEAD
+[Unreleased]: https://example.invalid/asi-kletz/compare/v0.16.1...HEAD
+[0.16.1]: https://example.invalid/asi-kletz/compare/v0.16.0...v0.16.1
 [0.16.0]: https://example.invalid/asi-kletz/compare/v0.15.3...v0.16.0
 [0.15.3]: https://example.invalid/asi-kletz/compare/v0.15.2...v0.15.3
 [0.15.2]: https://example.invalid/asi-kletz/compare/v0.15.1...v0.15.2

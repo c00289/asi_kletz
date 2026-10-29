@@ -88,6 +88,30 @@ def test_export_fills_the_word_original_when_the_standard_has_one(seeded, standa
         assert any("the PDF is Gutenberg's rendering" in w for w in result.warnings)
 
 
+def test_a_failed_print_keeps_gutenbergs_pdf(seeded, standards, tmp_path, monkeypatch):
+    """0.16.1: when Word cannot print, the PDF is Gutenberg's rendering, as 0.16.0 promised. asi_gutenberg 0.7.0
+    removed that rendering before asking Word, so a failed print (no Word on the machine, as on the CI runner)
+    left the export naming a PDF that was gone; 0.7.1 prints to a working name and leaves the target alone."""
+    import subprocess
+
+    _original(standards / "qf-17-test" / "source" / "QF-17 test.docx")
+    for data in PARAMETERS:
+        assert seeded.execute("create", entity="parameter", data=data).ok
+    _stub(seeded, monkeypatch, {})
+
+    def no_word(*args, **kwargs):
+        raise OSError("no Word here")
+
+    monkeypatch.setattr(subprocess, "run", no_word)  # what asi_gutenberg's pdf_with_word calls
+    result = seeded.execute("plan", action="export", row=1, out=str(tmp_path / "out"))
+    assert result.ok, result.errors
+    [built] = result.data["exports"]
+    assert built["exact"] == {"docx": True, "pdf": False}
+    assert Path(built["files"]["pdf"]) == tmp_path / "out" / "qf-17-test.pdf" and Path(built["primary"]).is_file()
+    assert Path(built["primary"]).stat().st_size > 1000
+    assert any("pdf through Word failed: no Word here; the PDF is Gutenberg's rendering" in w for w in result.warnings)
+
+
 def test_a_folder_without_an_original_exports_as_before(seeded, standards):
     listed = seeded.execute("standards", action="list")
     assert listed.ok and listed.data["standards"][0]["template"] is None
