@@ -12,6 +12,21 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.13.1] - 2026-10-29
+
+The owner, 2026-10-29: "change the colour of the little widget that you pull up and down or side to
+side to interact with a scroll bar."
+
+### Changed
+- **The scrollbar thumb** (`gui/theme.py`, the grid recipe): `TScrollbar` `background`, `lightcolor`
+  and `darkcolor` are the palette's `primary_dim` (they were the panel colour, the same as the
+  trough's neighbours, so the thumb was hard to find), and `active` maps to `primary`; the trough
+  stays `bg`, the arrows as before. Implemented the same way in the sister tool: a convention, not
+  shared code.
+
+### Tests
+- `test_scrollbar_thumb_is_the_primary`.
+
 ## [0.13.0] - 2026-10-28
 
 Open question 1 of `docs/hidden-identity-plan.md`: a sprint item pointed at its plan row by id alone, so a

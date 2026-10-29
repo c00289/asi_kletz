@@ -283,11 +283,13 @@ class GridTheme(Theme):
         )
         style.map("Treeview.Heading", background=[("active", p.grid)], foreground=[("active", p.accent)])
 
+        # the thumb (the slider a person drags) is the live element: the dimmed primary at rest, the neon
+        # under the pointer; the trough stays the background (owner, 2026-10-29)
         style.configure(
-            "TScrollbar", background=p.panel, troughcolor=p.bg, bordercolor=p.bg,
-            lightcolor=p.panel, darkcolor=p.panel, arrowcolor=p.primary_dim, arrowsize=12,
+            "TScrollbar", background=p.primary_dim, troughcolor=p.bg, bordercolor=p.bg,
+            lightcolor=p.primary_dim, darkcolor=p.primary_dim, arrowcolor=p.primary_dim, arrowsize=12,
         )
-        style.map("TScrollbar", background=[("active", p.grid)], arrowcolor=[("active", p.primary)])
+        style.map("TScrollbar", background=[("active", p.primary)], arrowcolor=[("active", p.primary)])
 
         style.configure("TPanedwindow", background=p.bg)
         style.configure("Sash", sashthickness=4, gripcount=0, background=p.grid)

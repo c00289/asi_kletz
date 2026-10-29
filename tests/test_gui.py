@@ -1907,3 +1907,14 @@ def test_points_entry_shows_the_default_and_names_it_when_the_value_differs(wind
     matrix = window.show("safety_plan_matrix")
     flag_prefixes = ("loc", "ref", "author", "verify", "reviewer")
     assert all(c == "plan" or c.split("_")[0] in flag_prefixes for c in matrix.tree["columns"])
+
+
+def test_scrollbar_thumb_is_the_primary(window):
+    """Owner, 2026-10-29: the slider of a scrollbar is the dimmed primary at rest and the neon while dragged."""
+    from tkinter import ttk
+
+    style = ttk.Style(window)
+    p = window.theme.palette
+    assert style.lookup("TScrollbar", "background") == p.primary_dim
+    assert style.lookup("TScrollbar", "troughcolor") == p.bg  # the trough is the background, the thumb stands on it
+    assert dict(style.map("TScrollbar", "background")) == {"active": p.primary}
