@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.11.3**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.11.4**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,17 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.11.4
+
+**A deliverable's own sprint items are the committed part of its weight** (open question 1 of
+`docs/plan-points-plan.md`, answered by the owner on 2026-10-28). The scheduler subtracts from a
+deliverable's points the points of its own sprint items (any sprint, any status but Carried; an
+unpointed item subtracts nothing), pours the remainder from the last sprint holding one of its items
+onward, and counts the items' points against their sprints' capacity once, as any committed item's; a
+fully committed deliverable finishes where its last item is. A 7-point deliverable with a 4-point item
+in Sprint 3 now finishes in Sprint 3, not a sprint late. `plan schedule` prints the committed points
+beside the weight. No schema change.
 
 ## What is in 0.11.3
 

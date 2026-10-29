@@ -12,6 +12,34 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.11.4] - 2026-10-28
+
+Open question 1 of `docs/plan-points-plan.md`, answered by the owner, 2026-10-28: a deliverable with a
+sprint item in sprint n was pinned to n and the item's points also reduced n's free capacity, so a 7-point
+deliverable with a 4-point item in its sprint finished a sprint late. The owner's rule: the item's points
+are the part of the deliverable already committed. Schema version unchanged (6).
+
+### Changed
+- **The scheduler** (`generate/plan_schedule.py`): `own_items` (kind Deliverable, pointing at a plan row,
+  not Carried), `committed_points` (their points per plan row, any sprint, any status but Carried; an
+  unpointed item commits nothing) and `pins` over any sprint. The committed points come off the
+  deliverable's weight; the remainder pours from the last sprint holding one of its items onward, as before;
+  the items' points reduce their sprints' free capacity once, as any committed item's do; a remainder of 0
+  finishes in that last sprint, Closed or not. `Schedule.committed`; `plan schedule` prints `committed`
+  beside `weight`.
+- The plan's open question 1 is struck through and answered; its change log says so.
+
+### Deviations
+- None from the brief. One reading the brief left open: a deliverable whose remainder is 0 and whose last
+  item sits in a Closed sprint finishes in that Closed sprint (its dates become the deadline), the row
+  itself staying whatever status it has; a Done row still keeps what it has.
+
+### Tests
+- 302 → 303: `test_own_items_are_the_committed_part_of_the_weight` (the 7-with-4 case, a fully committed
+  deliverable, an unpointed item, two items in two sprints, an item in a Closed sprint, the pins and the
+  committed points); `test_a_committed_item_pins_the_start` on an unpointed item; the end-to-end recompute
+  test rewritten for the new dates.
+
 ## [0.11.3] - 2026-10-28
 
 The owner, 2026-10-28: "the Safety Plan must not have the right pane because it is redundant with the
