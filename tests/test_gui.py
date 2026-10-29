@@ -180,7 +180,7 @@ def test_safety_plan_table_shows_the_plan_and_the_non_flag_columns(window, seede
     ]
     assert screen.columns == expected == [
         "points", "default_points", "sprint", "sprint_start", "sprint_end", "work_product_location",
-        "work_product_reference", "author", "gate_reviewer", "deadline", "status", "jira_key",
+        "work_product_reference", "author", "gate_reviewer", "deadline", "status", "jira_key", "urls",
     ]
     assert list(screen.tree["columns"]) == ["plan", *screen.columns] and "uid" not in screen.tree["columns"]
     assert screen.tree.heading("status", "text") == schema.field("status").header

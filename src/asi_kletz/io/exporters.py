@@ -2,6 +2,12 @@
 
 Since 0.9.0 both carry the hidden ``uid`` of every row: the JSON dump as any key, the workbook as the
 last column of every sheet, headed ``uid`` and hidden, so the sheet reads as before and still round-trips.
+
+0.20.0, the owner: "make sure that the excel export includes links to the work products wherever they may
+be... on multiple urls just go to first". The Safety Plan sheet gets a derived **Work product** column (no
+field; a clickable hyperlink to the row's first URL, the cell text the URL's host, the Hyperlink style) before
+the **Work product URLs** column (the ``urls`` field, one URL per line, read back by the import). A row with
+no Jira ticket prints ``no ticket attached`` in its Jira key cell, which the import reads as no key.
 """
 
 from __future__ import annotations
@@ -15,7 +21,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..errors import NotFound
 from ..schema import EntitySchema, FieldType
+from ..schema.definitions import NO_TICKET, WORK_PRODUCT_HEADER
 from ..schema.fields import json_text
+from ..schema.urls import first_url, url_host, urls_lines
 from ..version import SCHEMA_VERSION, __version__
 
 if TYPE_CHECKING:
@@ -57,6 +65,17 @@ class ExporterFactory:
 
 def _schemas(brain: Brain, entity: str | None) -> list[EntitySchema]:
     return [brain.registry.get(entity)] if entity else list(brain.registry)
+
+
+def sheet_columns(schema: EntitySchema) -> list[tuple[str, Any]]:
+    """The sheet's columns in order, ``(header, FieldSpec or None)``: every field, and before the ``urls``
+    field the derived ``Work product`` column (``None``), the hyperlink to the row's first URL (0.20.0)."""
+    columns: list[tuple[str, Any]] = []
+    for spec in schema.fields:
+        if spec.picker == "urls":
+            columns.append((WORK_PRODUCT_HEADER, None))
+        columns.append((spec.header, spec))
+    return columns
 
 
 def _save_with_fallback(save: Callable[[Path], None], out: Path, suffix: str) -> tuple[Path, str | None]:
@@ -118,19 +137,32 @@ class ExcelExporter(Exporter):
             ws = wb.create_sheet(schema.sheet[:31])
             rows = brain.service(schema.name).list()
             counts[schema.name] = len(rows)
+            columns = sheet_columns(schema)
             widths: list[int] = []
-            for col, spec in enumerate(schema.fields, start=1):
-                cell = ws.cell(row=1, column=col, value=spec.header)
+            for col, (header, _spec) in enumerate(columns, start=1):
+                cell = ws.cell(row=1, column=col, value=header)
                 cell.font = Font(bold=True)
                 cell.fill = PatternFill("solid", fgColor=self.HEADER_FILL)
                 cell.alignment = Alignment(vertical="center", wrap_text=True)
-                widths.append(len(spec.header))
+                widths.append(len(header))
             for r, row in enumerate(rows, start=2):
-                for col, spec in enumerate(schema.fields, start=1):
+                for col, (_header, spec) in enumerate(columns, start=1):
+                    cell = ws.cell(row=r, column=col)
+                    if spec is None:  # the derived Work product column: the link to the first URL
+                        link = first_url(row.get("urls"))
+                        if not link:
+                            continue
+                        cell.value = url_host(link)
+                        cell.hyperlink = link
+                        cell.style = "Hyperlink"
+                        widths[col - 1] = max(widths[col - 1], min(len(str(cell.value)), 60))
+                        continue
                     value = row.get(spec.name)
                     if value is None:
+                        if spec.name == "jira_key":  # 0.20.0, the owner: say so instead of an empty cell
+                            cell.value = NO_TICKET
+                            widths[col - 1] = max(widths[col - 1], len(NO_TICKET))
                         continue
-                    cell = ws.cell(row=r, column=col)
                     if spec.type is FieldType.BOOL:
                         cell.value = 1 if value else 0
                     elif spec.type is FieldType.DATE:
@@ -140,6 +172,9 @@ class ExcelExporter(Exporter):
                         cell.value = value
                         cell.hyperlink = value
                         cell.style = "Hyperlink"
+                    elif spec.picker == "urls":  # the work product URLs: one per line, read back by the import
+                        cell.value = urls_lines(value)
+                        cell.alignment = Alignment(wrap_text=True, vertical="top")
                     elif spec.type is FieldType.JSON:  # the people of a role: JSON text, read back by the import
                         cell.value = value if isinstance(value, str) else json_text(value)
                     else:
@@ -147,7 +182,10 @@ class ExcelExporter(Exporter):
                         if spec.type is FieldType.MULTILINE:
                             cell.alignment = Alignment(wrap_text=True, vertical="top")
                     widths[col - 1] = max(widths[col - 1], min(len(str(value)), 60))
-            for col, spec in enumerate(schema.fields, start=1):
+            for col, (_header, spec) in enumerate(columns, start=1):
+                if spec is None:
+                    ws.column_dimensions[get_column_letter(col)].width = max(6, min(widths[col - 1] + 2, 62))
+                    continue
                 base = spec.width or widths[col - 1]
                 if spec.type is FieldType.BOOL:
                     base = min(base, 14)

@@ -217,7 +217,9 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
     with Brain(db) as brain:
         assert brain.migration["created"] == ["holiday", "parameter"]  # 0.10.0 and 0.14.0; the four of 0.8.4 altered
         altered = {table: [UID] for table in TABLES_0_8_4}
-        altered["safety_plan"] = ["points", "default_points", "sprint", "sprint_start", "sprint_end", "jira_key", UID]
+        altered["safety_plan"] = [
+            "points", "default_points", "sprint", "sprint_start", "sprint_end", "jira_key", "urls", UID,
+        ]
         altered["sprint_item"] = ["plan_uid", UID]  # 0.13.0: the plan row's uid beside its id
         assert brain.migration["plan_uids_filled"] == 0  # the fixture has no item
         assert brain.migration["altered"] == altered
@@ -239,7 +241,7 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
         for old, stamped_row in zip(before[table], after[table], strict=True):
             new = dict(stamped_row)
             uid = new.pop(UID)
-            added = ("points", "default_points", "sprint", "sprint_start", "sprint_end", "jira_key")  # 0.11+, empty
+            added = ("points", "default_points", "sprint", "sprint_start", "sprint_end", "jira_key", "urls")  # 0.11+
             for column in added:
                 if table == "safety_plan":
                     assert new.pop(column) is None

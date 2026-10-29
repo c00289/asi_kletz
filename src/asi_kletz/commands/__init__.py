@@ -6,6 +6,7 @@ from . import (  # noqa: F401  (registers the built-in commands)
     gui,
     holiday,
     jira,
+    people,
     plan,
     session,
     sprint,

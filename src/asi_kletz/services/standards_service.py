@@ -5,7 +5,8 @@ A *standard* is one folder of the standards directory (``standards_dir`` in klet
 (``qf-17-safety-plan/qf-17-safety-plan.md``): a controlled QMS document whose blanks are ``{{ name }}``
 parameters. A person supplies the document-level ones (``vehicle_type``, the roles) once, through the
 ``parameter`` entity; Kletz supplies the row-level ones (``row_N_points``, ``row_N_sprint_end``,
-``row_N_status``, N the plan row's order) from the plan and from Jira. A plan row has a standard when one
+``row_N_jira_key``, ``row_N_status``, and since 0.20.0 ``row_N_url`` and ``row_N_urls``, the work product's
+links, N the plan row's order) from the plan and from Jira. A plan row has a standard when one
 of its QMS reference flags (``ref_qf_17``) names a folder that starts with that QMS id in slug form
 (``qf-17-...``).
 
@@ -33,12 +34,13 @@ from ..generate import plan_queries as pq
 from ..generate.plan_schedule import SOURCE_FLOOR, weight_of
 from ..schema.definitions import ROLE_SLUGS
 from ..schema.people import PeopleError, is_role, parse_people, people_json, people_of, render_people
+from ..schema.urls import urls_of
 
 if TYPE_CHECKING:
     from ..brain import Brain
 
 PARAMETER = "parameter"
-ROW_PARAM = re.compile(r"^row_(\d+)_(points|sprint_end|jira_key|status)$")
+ROW_PARAM = re.compile(r"^row_(\d+)_(points|sprint_end|jira_key|status|url|urls)$")
 PARAM_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 UNFILLED = "unfilled parameter: "
 NO_STANDARD = "No standard for this deliverable: its QMS references name none in {root}"
@@ -61,7 +63,8 @@ class Standard:
 
     @property
     def row_parameters(self) -> list[str]:
-        """The names Kletz supplies: ``row_N_points``, ``row_N_sprint_end``, ``row_N_jira_key``, ``row_N_status``."""
+        """The names Kletz supplies: ``row_N_points``, ``row_N_sprint_end``, ``row_N_jira_key``, ``row_N_status``,
+        ``row_N_url`` and ``row_N_urls`` (0.20.0)."""
         return [p for p in self.parameters if ROW_PARAM.match(p)]
 
     @property
@@ -273,8 +276,8 @@ class StandardsService:
     def row_values(
         self, rows: list[dict[str, Any]], statuses: dict[str, str | None], warnings: list[str] | None = None
     ) -> dict[str, str]:
-        """``row_N_points``, ``row_N_sprint_end``, ``row_N_jira_key``, ``row_N_status`` for every plan row that
-        has an order.
+        """``row_N_points``, ``row_N_sprint_end``, ``row_N_jira_key``, ``row_N_status``, ``row_N_url`` and
+        ``row_N_urls`` for every plan row that has an order.
 
         The points are the weight the schedule used for the row, as ``plan_schedule.weight_of`` resolves it
         (the owner's revision of 2026-10-29): the chosen ``points`` when set, else the row's
@@ -282,7 +285,9 @@ class StandardsService:
         with one warning naming the rows. So the points and the sprint end printed under them agree. The
         status is the Jira status of the row's key; absent when unknown. The key is the row's ``jira_key``
         upper-cased, the part before a colon when one was typed (the owner, 2026-10-29: "the prefix before
-        the colon of the assigned Jira ticket name", stacked over the status in the Status column).
+        the colon of the assigned Jira ticket name", stacked over the status in the Status column). The url is
+        the row's first work product URL (0.20.0, the owner: "on multiple urls just go to first"), the urls
+        every one of them joined by a line break; a row with none leaves both unfilled.
         """
         values: dict[str, str] = {}
         floored: list[str] = []
@@ -302,6 +307,10 @@ class StandardsService:
                 values[f"row_{order}_jira_key"] = key.split(":", 1)[0].strip()
             if key and statuses.get(key):
                 values[f"row_{order}_status"] = str(statuses[key])
+            urls = urls_of(row.get("urls"))
+            if urls:
+                values[f"row_{order}_url"] = urls[0]
+                values[f"row_{order}_urls"] = "\n".join(urls)
         if floored and warnings is not None:
             warnings.append(
                 f"row(s) {', '.join(floored)} have neither points nor a default: their points stay unfilled"

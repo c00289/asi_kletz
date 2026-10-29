@@ -81,16 +81,18 @@ def test_registry_aliases_and_fingerprint():
 def test_safety_plan_matrix_fields_are_unique_and_grouped():
     schema = default_registry.get(PLAN)
     names = schema.field_names
-    assert len(names) == len(set(names)) == 70 and names[-1] == UID  # 63 of the sheet, 3 + 2 calculated, jira_key, uid
-    assert len(schema.visible_fields) == 69 and len(schema.source_fields) == 63
-    assert names[-3:] == ("status", "jira_key", UID) and schema.field("jira_key").editable
+    # 63 of the sheet, 3 + 2 calculated, jira_key, urls (0.20.0), uid
+    assert len(names) == len(set(names)) == 71 and names[-1] == UID
+    assert len(schema.visible_fields) == 70 and len(schema.source_fields) == 63
+    assert names[-4:] == ("status", "jira_key", "urls", UID) and schema.field("jira_key").editable
+    assert schema.field("urls").editable and schema.field("urls").picker == "urls"
     assert names[3:7] == ("deliverable", "points", "default_points", "sprint")
     assert [f.name for f in schema.calculated_fields] == ["sprint", "sprint_start", "sprint_end", "deadline"]
     assert not schema.field("default_points").editable and schema.field("points").default_from == "default_points"
     assert [f.name for f in schema.visible_fields if not f.editable] == [
         "default_points", "sprint", "sprint_start", "sprint_end", "deadline",
     ]
-    assert len(schema.editable_fields) == 64 and schema.field("deadline").header == "Expected Duration/Deadline"
+    assert len(schema.editable_fields) == 65 and schema.field("deadline").header == "Expected Duration/Deadline"
     groups = schema.groups()
     assert len(groups["reference"]) == 23 and len(groups["author"]) == 18 and len(groups["reviewer"]) == 8
     assert "author_tech_lead_functional_safety" in names and "reviewer_tech_lead_functional_safety" in names

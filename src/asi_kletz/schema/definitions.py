@@ -71,6 +71,13 @@ ROLE_SLUGS = tuple(sorted({slugify(header) for header in (*AUTHOR_FLAGS, *REVIEW
 # points switch to some default value enforced globally". The floor below is what a row with neither points nor
 # a default weighs; `default_points` in kletz.toml overrides it.
 DEFAULT_POINTS = 2
+# 0.20.0: the Excel export's Safety Plan sheet. ``Work product`` is a derived column (no field): a hyperlink to
+# the row's first URL, read by nobody; ``Work product URLs`` is the ``urls`` field, one URL per line. A row
+# without a Jira ticket prints ``no ticket attached`` in its Jira key cell (the owner, 2026-10-29), and the
+# import reads that text back as no key.
+WORK_PRODUCT_HEADER = "Work product"
+WORK_PRODUCT_URLS_HEADER = "Work product URLs"
+NO_TICKET = "no ticket attached"
 CALCULATED_RULE = "sprint, sprint start, sprint end and deadline are calculated from points and the sprint chain"
 DEFAULTS_RULE = "default_points is set by `plan weights load` (the estimation panel's record)"
 
@@ -116,6 +123,13 @@ SAFETY_PLAN_ROW = register_entity(EntitySchema(
         # Status column of an exported standard (docs: README, Standards and export)
         FieldSpec("jira_key", T, "Jira key", source=False, picker="jira",
                   help="The Jira ticket that tracks the deliverable; its live status fills an exported standard."),
+        # 0.20.0, the owner: "add the ability to add url parameters to each deliverable... each deliverable may
+        # have multiple url... on multiple urls just go to first; list of urls is sequential while lists of names
+        # are alphabetical". An ORDERED JSON list of absolute http(s) URLs; the first is the link (the Excel
+        # hyperlink, the window's Open button, a standard's ``row_N_url``); see ``schema/urls.py``.
+        FieldSpec("urls", J, WORK_PRODUCT_URLS_HEADER, source=False, picker="urls",
+                  help="The work product's URLs, in order, one per line; the first is the link; JSON [url, ...] on "
+                       "the API."),
         uid_field(),
     ),
 ))

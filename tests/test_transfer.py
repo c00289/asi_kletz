@@ -17,7 +17,7 @@ def test_json_dump_and_load_modes(seeded, tmp_path):
         PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0, "holiday": 0, "parameter": 0,
     }
     payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 9 and list(payload["entities"]) == ENTITIES
+    assert payload["schema_version"] == 10 and list(payload["entities"]) == ENTITIES
 
     uids = {r["id"]: r["uid"] for r in payload["entities"][PLAN]}
     assert len(uids) == 3 and all(uids.values())  # the dump carries the hidden identity like any field
@@ -86,16 +86,18 @@ def test_excel_export_and_reimport(seeded, tmp_path):
     ws = wb["Safety Plan"]
     headers = [c.value for c in ws[1]]
     assert headers[:4] == ["order", "PDP Phases", "Safety Lifecycle Phase", "Safety Deliverables"]
-    assert headers.count("Tech Lead - Functional Safety") == 2 and len(headers) == 70 and headers[-1] == "uid"
-    assert headers[-3:] == ["Status (Pending/ Ongoing/ Blocked/ Alternative/Out-of-Scope/ Done)", "Jira key", "uid"]
+    assert headers.count("Tech Lead - Functional Safety") == 2 and len(headers) == 72 and headers[-1] == "uid"
+    # 0.20.0: the derived Work product column (the hyperlink) before the Work product URLs field, then the uid
+    assert headers[-5:] == ["Status (Pending/ Ongoing/ Blocked/ Alternative/Out-of-Scope/ Done)", "Jira key",
+                            "Work product", "Work product URLs", "uid"]
     assert headers[3:7] == ["Safety Deliverables", "Points", "Default points", "Sprint"]  # 0.11.0, after deliverable
     assert ws.freeze_panes == "A2"
     assert ws["D2"].value == "Safety Plan" and ws["K2"].value == 1  # deliverable, DMS flag (K since 0.11.2)
     assert ws.data_validations.dataValidation  # dropdowns from the lookups
     # the uid is the last column of every sheet, hidden, present in the data (3.1 of the hidden-identity plan)
     uids = {r["id"]: r["uid"] for r in seeded.execute("list", entity=PLAN).data}
-    assert ws.column_dimensions["BR"].hidden is True and not ws.column_dimensions["BQ"].hidden  # uid, 70th
-    assert [ws.cell(row=r, column=70).value for r in (2, 3, 4)] == [uids[1], uids[2], uids[3]]
+    assert ws.column_dimensions["BT"].hidden is True and not ws.column_dimensions["BS"].hidden  # uid, 72nd
+    assert [ws.cell(row=r, column=72).value for r in (2, 3, 4)] == [uids[1], uids[2], uids[3]]
     for name, width in (("Sprints", 10), ("Sprint Items", 17), ("Weekly Status", 6), ("Holidays", 5),
                         ("Parameters", 6)):
         sheet = wb[name]
@@ -115,7 +117,7 @@ def test_excel_export_and_reimport(seeded, tmp_path):
         assert {r["id"]: r["uid"] for r in rows} == uids  # export then import on a fresh database keeps every uid
         # a workbook saved by 0.8.x has no uid column: it still imports, and the new rows are stamped
         wb_old = load_workbook(path)
-        wb_old["Safety Plan"].delete_cols(70)  # the uid column, last (70th since 0.14.0)
+        wb_old["Safety Plan"].delete_cols(72)  # the uid column, last (72nd since 0.20.0)
         old = tmp_path / "plan-0.8.xlsx"
         wb_old.save(old)
         with Brain(tmp_path / "old.db") as third:
@@ -176,6 +178,7 @@ def test_seed_from_real_workbook(tmp_path):
 def test_source_workbook_columns_match_the_schema():
     """The table shows the sheet's columns in source order by construction, not by coincidence."""
     from asi_kletz.schema import default_registry
+    from asi_kletz.schema.definitions import WORK_PRODUCT_HEADER
 
     ws = load_workbook(WORKBOOK, read_only=True)["Safety Plan"]
     headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
@@ -186,6 +189,7 @@ def test_source_workbook_columns_match_the_schema():
     # neither; the table shows whichever in source order by construction
     if headers and headers[-1] == "uid":
         headers.pop()
+    headers = [h for h in headers if h != WORK_PRODUCT_HEADER]  # 0.20.0: the export's own column, no field
     schema = default_registry.get(PLAN)
     source = [f.header for f in schema.source_fields]
     visible = [f.header for f in schema.visible_fields]

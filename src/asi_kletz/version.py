@@ -1,4 +1,4 @@
 """Single source of truth for the package version."""
 
-__version__ = "0.19.0"
-SCHEMA_VERSION = 9
+__version__ = "0.20.0"
+SCHEMA_VERSION = 10

@@ -1,4 +1,5 @@
-"""The ``plan`` verb: the Safety Plan's points, and the sprint and deadline calculated from them.
+"""The ``plan`` verb: the Safety Plan's points, the sprint and deadline calculated from them, the standards an
+export fills, and since 0.20.0 the work product URLs (``plan urls --placeholder <url>``).
 
 ``plan schedule`` recomputes now and prints the table (order, deliverable, points, the weight and its
 source, sprint, deadline, status, warnings); ``plan weights load <file>`` sets ``default_points`` from the
@@ -25,13 +26,15 @@ class PlanCommand(Command):
         "weights load <file> sets each row's default points from the estimation panel's record; "
         "export --row <id> [--out <dir>] [--standard <folder>] builds the row's standards with asi_gutenberg, "
         "the parameters filled (the weight the schedule used; the sprint's end; the Jira ticket's status; a "
-        "role's people inline, Name (email), alphabetical); parameters --row <id> prints that value set without "
-        "building, with the people per role and the roles still legacy or empty; tickets lists every work "
-        "product with its Jira key and the ones still without one."
+        "role's people inline, Name (email), alphabetical; the work product's first URL and all of them); "
+        "parameters --row <id> prints that value set without building, with the people per role and the roles "
+        "still legacy or empty; tickets lists every work product with its Jira key and the ones still without "
+        "one; urls --placeholder <url> puts that URL on every work product that has none (idempotent; --check "
+        "names the rows and writes nothing)."
     )
     arguments = (
-        Argument("action", "schedule | weights | export | parameters | tickets", required=True,
-                 choices=("schedule", "weights", "export", "parameters", "tickets")),
+        Argument("action", "schedule | weights | export | parameters | tickets | urls", required=True,
+                 choices=("schedule", "weights", "export", "parameters", "tickets", "urls")),
         Argument("what", "weights: load"),
         Argument("file", "weights load: the JSON list of {id, order, deliverable, points[, uid]}", type="path"),
         Argument("row", "export / parameters: the Safety Plan row (id or uid)", flag=True, type="ref"),
@@ -39,12 +42,22 @@ class PlanCommand(Command):
                  "the database)", flag=True, type="path"),
         Argument("standard", "export / parameters: one standard's folder (default: every standard the row has)",
                  flag=True),
+        Argument("placeholder", "urls: the URL every row with no work product URL gets", flag=True),
+        Argument("check", "urls: a dry run; the rows that would be filled are named and nothing is written",
+                 flag=True, type="bool"),
     )
 
     def run(self, ctx: Context, args: dict[str, Any]) -> Result:
         service = ctx.brain.schedule
         if args["action"] == "tickets":
             return Result.success(tickets(ctx.brain))
+        if args["action"] == "urls":
+            if not (args.get("placeholder") or "").strip():
+                return Result.failure("plan urls needs --placeholder <url>")
+            data = ctx.brain.work_products.fill_placeholder(
+                args["placeholder"], actor=ctx.actor, check=bool(args.get("check"))
+            )
+            return Result.success(data)
         if args["action"] in ("export", "parameters"):
             if args.get("row") is None:
                 return Result.failure(f"plan {args['action']} needs --row <id>")

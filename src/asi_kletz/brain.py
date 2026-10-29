@@ -28,6 +28,7 @@ from .services import (
     StandardsService,
     TrackerService,
     TransferService,
+    WorkProductService,
 )
 from .storage import StorageFactory
 from .version import SCHEMA_VERSION, __version__
@@ -178,6 +179,7 @@ class Brain:
         self.sprints = SprintService(self)  # the agile rules: eight points a sprint, close and carry, the planner
         self.schedule = PlanScheduleService(self)  # the plan's calculated sprint and deadline, kept current
         self.standards = StandardsService(self)  # the parametrised standards a plan row is exported into
+        self.work_products = WorkProductService(self)  # the work product URLs of a plan row (0.20.0)
         self._standards_dir = str(standards_dir) if standards_dir is not None else None
         self.transfer = TransferService(self)
         self.jira = JiraService(self)  # read only; asi_hopper is imported when a jira verb runs, never here
@@ -240,7 +242,9 @@ class Brain:
             if schema.name == "sprint":
                 service.guard = self.sprints.guard  # the capacity rule on every create and update of a sprint
             if schema.name == "safety_plan_row":
-                service.guard = self.schedule.guard  # the calculated fields and the panel's default stay out
+                # the calculated fields and the panel's default stay out; the urls parsed, in order (0.20.0)
+                service.guard = self._plan_guard
+                service.on_load = self.work_products.loaded  # a file's urls parsed; `no ticket attached` is no key
             if schema.name == "parameter":
                 service.guard = self.standards.parameter_guard  # a name once per standard; a role holds people
                 service.on_load = self.standards.parameter_loaded  # a file's people parsed, validated, sorted
@@ -251,6 +255,13 @@ class Brain:
                 service.after = self.schedule.on_change  # a change here can move a deadline
             self._services[schema.name] = service
         return self._services[schema.name]
+
+    def _plan_guard(self, current: dict[str, Any] | None, clean: dict[str, Any]) -> list[str]:
+        """The plan row's rules, in order: the schedule's (calculated fields, defaults, points), then the
+        work product's (urls, the no-ticket text)."""
+        warnings = list(self.schedule.guard(current, clean) or ())
+        warnings.extend(self.work_products.guard(current, clean) or ())
+        return warnings
 
     def execute(
         self, verb: str, args: dict[str, Any] | None = None, *, actor: str = "python", **kwargs: Any

@@ -1,4 +1,9 @@
-"""Importers: JSON dumps (round trip) and the Excel workbook (seeding, and edits made in Excel)."""
+"""Importers: JSON dumps (round trip) and the Excel workbook (seeding, and edits made in Excel).
+
+0.20.0: the Safety Plan sheet's ``Work product`` column is the export's own (a hyperlink to the first URL) and
+is skipped silently; ``Work product URLs`` (one per line) and a Jira key cell reading ``no ticket attached``
+are read back by the plan row's ``on_load`` (``WorkProductService.loaded``): the list parsed, the text no key.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..errors import NotFound
 from ..schema import EntitySchema
+from ..schema.definitions import WORK_PRODUCT_HEADER
+
+DERIVED_HEADERS = {WORK_PRODUCT_HEADER}  # the export's own columns (0.20.0): not fields, ignored without a word
 
 if TYPE_CHECKING:
     from ..brain import Brain
@@ -118,7 +126,8 @@ def map_columns(schema: EntitySchema, headers: list[Any]) -> tuple[dict[str, int
                 mapping[spec.name] = idx
                 used.add(idx)
                 break
-    unmapped = [str(headers[idx]).strip() for idx, _ in columns if idx not in used]
+    derived = {normalise_header(h) for h in DERIVED_HEADERS}
+    unmapped = [str(headers[idx]).strip() for idx, h in columns if idx not in used and h not in derived]
     return mapping, unmapped
 
 

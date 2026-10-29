@@ -8,8 +8,9 @@ from .sprint_service import SprintService
 from .standards_service import StandardsService
 from .tracker_service import TrackerService
 from .transfer_service import TransferService
+from .work_product_service import WorkProductService
 
 __all__ = [
     "LOAD_MODES", "EntityService", "HolidayService", "JiraService", "PlanScheduleService", "SprintService",
-    "StandardsService", "TrackerService", "TransferService",
+    "StandardsService", "TrackerService", "TransferService", "WorkProductService",
 ]
