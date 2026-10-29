@@ -17,7 +17,7 @@ def test_json_dump_and_load_modes(seeded, tmp_path):
         PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0, "holiday": 0, "parameter": 0,
     }
     payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 8 and list(payload["entities"]) == ENTITIES
+    assert payload["schema_version"] == 9 and list(payload["entities"]) == ENTITIES
 
     uids = {r["id"]: r["uid"] for r in payload["entities"][PLAN]}
     assert len(uids) == 3 and all(uids.values())  # the dump carries the hidden identity like any field
@@ -97,7 +97,7 @@ def test_excel_export_and_reimport(seeded, tmp_path):
     assert ws.column_dimensions["BR"].hidden is True and not ws.column_dimensions["BQ"].hidden  # uid, 70th
     assert [ws.cell(row=r, column=70).value for r in (2, 3, 4)] == [uids[1], uids[2], uids[3]]
     for name, width in (("Sprints", 10), ("Sprint Items", 17), ("Weekly Status", 6), ("Holidays", 5),
-                        ("Parameters", 5)):
+                        ("Parameters", 6)):
         sheet = wb[name]
         assert sheet.cell(row=1, column=width).value == "uid" and sheet.cell(row=1, column=width + 1).value is None
         assert sheet.column_dimensions[get_column_letter(width)].hidden is True

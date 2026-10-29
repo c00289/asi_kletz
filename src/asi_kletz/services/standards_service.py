@@ -13,6 +13,12 @@ The owner, 2026-10-29: the Expected Duration/Deadline is "x points" (the chosen 
 then the date the sprint is expected to conclude; the Status is the status of the Jira ticket tied to the
 deliverable, not the spreadsheet's names. asi_gutenberg is imported inside the methods that need it, so
 ``import asi_kletz`` never loads it.
+
+0.19.0, the owner: "each safety deliverable can have multiple authors, so for any safety case field, instead
+of the parameter being a string it is now an array of human names sorted alphabetically; also must include
+email alongside name." A role parameter (``schema.people.is_role``) holds ``people``; its ``value`` is a
+legacy string written before 0.19.0 (a name with no email yet), kept, printed verbatim and replaced the moment
+people are saved. A role renders inline as ``Ann Lee (ann@...), Ben Ray (ben@...)``.
 """
 
 from __future__ import annotations
@@ -25,6 +31,8 @@ from typing import TYPE_CHECKING, Any
 from ..errors import CommandError, NotFound, ValidationError
 from ..generate import plan_queries as pq
 from ..generate.plan_schedule import SOURCE_FLOOR, weight_of
+from ..schema.definitions import ROLE_SLUGS
+from ..schema.people import PeopleError, is_role, parse_people, people_json, people_of, render_people
 
 if TYPE_CHECKING:
     from ..brain import Brain
@@ -34,6 +42,8 @@ ROW_PARAM = re.compile(r"^row_(\d+)_(points|sprint_end|jira_key|status)$")
 PARAM_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 UNFILLED = "unfilled parameter: "
 NO_STANDARD = "No standard for this deliverable: its QMS references name none in {root}"
+NO_EMAIL_YET = "a legacy value with no email yet"
+LEGACY, PEOPLE, EMPTY = "legacy", "people", "empty"  # the three states of a role (``role_summary``)
 
 
 @dataclass
@@ -54,12 +64,17 @@ class Standard:
         """The names Kletz supplies: ``row_N_points``, ``row_N_sprint_end``, ``row_N_jira_key``, ``row_N_status``."""
         return [p for p in self.parameters if ROW_PARAM.match(p)]
 
+    @property
+    def role_parameters(self) -> list[str]:
+        """The document parameters that are roles (0.19.0): each holds people, name and email, alphabetical."""
+        return [p for p in self.document_parameters if is_role(p)]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "folder": self.folder, "path": str(self.path), "title": self.title,
             "template": str(self.template) if self.template else None,
             "parameters": len(self.parameters), "document_parameters": self.document_parameters,
-            "row_parameters": len(self.row_parameters),
+            "role_parameters": self.role_parameters, "row_parameters": len(self.row_parameters),
         }
 
 
@@ -115,8 +130,15 @@ class StandardsService:
         return [s for s in self.list() if any(folder_names(s.folder, slug) for slug in slugs)]
 
     # -- the parameter entity's rule -----------------------------------------------------------
-    def parameter_guard(self, current: dict[str, Any] | None, clean: dict[str, Any]) -> None:
-        """A parameter's name is unique within its standard (``""`` is the standard of every document)."""
+    def parameter_guard(self, current: dict[str, Any] | None, clean: dict[str, Any]) -> list[str]:
+        """A parameter's name is unique within its standard (``""`` is the standard of every document).
+
+        0.19.0, the people rule: a role parameter holds ``people`` (parsed from the API's array, its JSON text
+        or the ``Name <email>; ...`` text; validated, stored sorted), never a value: the moment people are
+        saved the ``value`` is cleared (a differing value sent in the same call is ignored with a warning), and
+        a value on a role that already holds people is refused. A value on a role that has no people (a name
+        with no email yet, as every role was before 0.19.0) is kept with a warning; people on a parameter that
+        is not a role are refused. Returns the warnings."""
         name = clean.get("name", (current or {}).get("name"))
         standard = clean.get("standard", (current or {}).get("standard")) or ""
         if name is not None and not PARAM_NAME.match(str(name)):
@@ -127,17 +149,126 @@ class StandardsService:
             if (other.get("standard") or "") == standard and (current is None or other["id"] != current["id"]):
                 where = f"standard {standard!r}" if standard else "every standard"
                 raise ValidationError(PARAMETER, [f"parameter {name!r} already exists for {where} (row {other['id']})"])
+        return self._people_rule(str(name), current, clean)
+
+    def _people_rule(self, name: str, current: dict[str, Any] | None, clean: dict[str, Any]) -> list[str]:
+        warnings: list[str] = []
+        role = is_role(name)
+        if "people" in clean:
+            if clean["people"] in (None, "", "[]"):
+                clean["people"] = None
+            elif not role:
+                raise ValidationError(PARAMETER, [
+                    f"{name} is not a role: it holds a value, not people (the roles: {', '.join(ROLE_SLUGS)})"
+                ])
+            else:
+                try:
+                    clean["people"] = people_json(parse_people(clean["people"], name))
+                except PeopleError as exc:
+                    raise ValidationError(PARAMETER, exc.errors) from None
+        people_now = bool(clean["people"]) if "people" in clean else bool((current or {}).get("people"))
+        value_given = clean.get("value") not in (None, "")
+        if people_now and value_given:
+            if "people" in clean:  # people saved: they replace the value, whatever was sent with them
+                if clean["value"] != (current or {}).get("value"):
+                    warnings.append(f"{name}: the value {clean['value']!r} is ignored; a role holds people")
+                clean["value"] = None
+            else:
+                raise ValidationError(PARAMETER, [
+                    f"{name} holds people: set people (Name <email>; ...) instead of a value, or clear them first"
+                ])
+        elif people_now and "people" in clean:
+            clean["value"] = None  # replaced the moment people are saved
+        elif role and value_given and not people_now:
+            warnings.append(
+                f"{name}: a role holds people (Name <email>; ...); {clean['value']!r} is kept as {NO_EMAIL_YET}"
+            )
+        return warnings
+
+    def parameter_loaded(self, clean: dict[str, Any]) -> list[str]:
+        """A row of a dump or a workbook (``EntityService.load_rows`` runs no guard): its people parsed,
+        validated and sorted as on a create; a bad people value is dropped with the messages as warnings, so
+        the row still loads; people on a name that is not a role are dropped too; people clear the value."""
+        warnings: list[str] = []
+        name = str(clean.get("name") or "")
+        if clean.get("people") in (None, "", "[]"):
+            clean["people"] = None
+            return warnings
+        if not is_role(name):
+            warnings.append(f"{name}: people ignored, not a role")
+            clean["people"] = None
+            return warnings
+        try:
+            clean["people"] = people_json(parse_people(clean["people"], name))
+        except PeopleError as exc:
+            warnings.extend(f"{e}; people ignored" for e in exc.errors)
+            clean["people"] = None
+        if clean["people"]:
+            clean["value"] = None
+        return warnings
 
     # -- the values ------------------------------------------------------------------------------------
-    def document_values(self, standard: Standard) -> dict[str, str]:
-        """The document-level values: every ``parameter`` row whose standard is empty or this one, the
+    def document_rows(self, standard: Standard) -> dict[str, dict[str, Any]]:
+        """The ``parameter`` row per name a standard sees: every row whose standard is empty or this one, the
         standard's own row winning over the global one."""
+        rows: dict[str, dict[str, Any]] = {}
+        for row in self.brain.service(PARAMETER).list(order_by=("standard", "name", "id")):
+            if (row.get("standard") or "") in ("", standard.folder):
+                rows[row["name"]] = row  # "" sorts first, so a standard's own row overwrites the global one
+        return rows
+
+    @staticmethod
+    def parameter_text(row: dict[str, Any]) -> str:
+        """What a parameter row fills: its people rendered inline, alphabetical, ``Name (email)`` joined by
+        ``, ``; else its value verbatim (a plain parameter, or a role's legacy name); ``""`` for nothing."""
+        if row.get("people"):
+            return render_people(row["people"])
+        value = row.get("value")
+        return "" if value in (None, "") else str(value)
+
+    def document_values(self, standard: Standard) -> dict[str, str]:
+        """The document-level values a standard fills: ``parameter_text`` per row, the empty ones left out."""
         values: dict[str, str] = {}
-        rows = self.brain.service(PARAMETER).list(order_by=("standard", "name", "id"))
-        for row in rows:  # "" sorts first, so a standard's own row overwrites the global value
-            if (row.get("standard") or "") in ("", standard.folder) and row.get("value") not in (None, ""):
-                values[row["name"]] = str(row["value"])
+        for name, row in self.document_rows(standard).items():
+            text = self.parameter_text(row)
+            if text:
+                values[name] = text
         return values
+
+    def role_summary(self, standard: Standard) -> dict[str, Any]:
+        """Per role of the standard: how many people, their names, and the state: ``people``, ``legacy`` (a
+        value with no email yet, printed verbatim) or ``empty`` (no one: the blank stays unfilled); plus the
+        roles still legacy and the roles still empty, as lists."""
+        rows = self.document_rows(standard)
+        roles: dict[str, dict[str, Any]] = {}
+        for name in standard.role_parameters:
+            row = rows.get(name) or {}
+            people = people_of(row.get("people")) if row.get("people") else []
+            if people:
+                roles[name] = {
+                    "state": PEOPLE, "people": len(people), "names": [p.name for p in people], "legacy": None,
+                }
+            elif row.get("value") not in (None, ""):
+                roles[name] = {"state": LEGACY, "people": 0, "names": [], "legacy": str(row["value"])}
+            else:
+                roles[name] = {"state": EMPTY, "people": 0, "names": [], "legacy": None}
+        return {
+            "roles": roles,
+            "legacy_roles": [n for n, r in roles.items() if r["state"] == LEGACY],
+            "empty_roles": [n for n, r in roles.items() if r["state"] == EMPTY],
+        }
+
+    @staticmethod
+    def role_warnings(folder: str, summary: dict[str, Any]) -> list[str]:
+        """One line for the roles still legacy, one for the roles with no one."""
+        out = []
+        if summary["legacy_roles"]:
+            out.append(f"{folder}: {len(summary['legacy_roles'])} role(s) with {NO_EMAIL_YET} (printed verbatim): "
+                       + ", ".join(summary["legacy_roles"]))
+        if summary["empty_roles"]:
+            out.append(f"{folder}: {len(summary['empty_roles'])} role(s) with no one (left unfilled): "
+                       + ", ".join(summary["empty_roles"]))
+        return out
 
     def row_values(
         self, rows: list[dict[str, Any]], statuses: dict[str, str | None], warnings: list[str] | None = None
@@ -206,8 +337,10 @@ class StandardsService:
         for std in standards:
             values = {**self.document_values(std), **row_values}
             used = {name: values[name] for name in std.parameters if name in values}
+            summary = self.role_summary(std)
+            warnings.extend(self.role_warnings(std.folder, summary))
             out.append({
-                **std.to_dict(), "values": used,
+                **std.to_dict(), "values": used, **summary,
                 "filled": len(used), "unfilled": [name for name in std.parameters if name not in values],
             })
         return {"row": row_id, "order": row.get("order"), "standards": out, "statuses": statuses, "warnings": warnings}

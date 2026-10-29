@@ -7,6 +7,7 @@ from typing import Any
 
 from ..errors import CommandError
 from ..schema import SYSTEM_FIELDS, UID, EntitySchema, FieldType, coerce
+from ..schema.fields import json_value
 from ..storage.base import Storage
 from ..storage.sqlite import now_iso, quote
 
@@ -31,6 +32,8 @@ class SqlRepository:
         for spec in self.schema.fields:
             if spec.type is FieldType.BOOL and spec.name in out:
                 out[spec.name] = bool(out[spec.name])
+            elif spec.type is FieldType.JSON and spec.name in out:  # the API answers with the value, not its text
+                out[spec.name] = json_value(out[spec.name])
         return out
 
     def _check_columns(self, names: Iterable[str]) -> None:

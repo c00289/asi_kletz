@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..errors import NotFound
 from ..schema import EntitySchema, FieldType
+from ..schema.fields import json_text
 from ..version import SCHEMA_VERSION, __version__
 
 if TYPE_CHECKING:
@@ -139,6 +140,8 @@ class ExcelExporter(Exporter):
                         cell.value = value
                         cell.hyperlink = value
                         cell.style = "Hyperlink"
+                    elif spec.type is FieldType.JSON:  # the people of a role: JSON text, read back by the import
+                        cell.value = value if isinstance(value, str) else json_text(value)
                     else:
                         cell.value = value
                         if spec.type is FieldType.MULTILINE:

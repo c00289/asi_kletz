@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import datetime as dt
 
-from .entity import EntitySchema, flag_fields
+from .entity import EntitySchema, flag_fields, slugify
 from .fields import FieldSpec, FieldType, uid_field
 from .lookups import default_lookups
 from .registry import register_entity
 
-T, M, N, E, D = FieldType.TEXT, FieldType.MULTILINE, FieldType.INT, FieldType.ENUM, FieldType.DATE
+T, M, N, E, D, J = (
+    FieldType.TEXT, FieldType.MULTILINE, FieldType.INT, FieldType.ENUM, FieldType.DATE, FieldType.JSON,
+)
 
 # -- lookups ----------------------------------------------------------------
 LIFECYCLE_PHASES = (
@@ -59,6 +61,10 @@ REVIEWER_FLAGS = (
     "Tech Lead - Functional Safety", "Tech Lead - Occupational Safety", "Tech Lead - Respective Area",
     "Tech Lead - Safety and Compliance", "Tech Lead - Systems", "PAT", "Technical Training Team",
 )
+# 0.19.0: the roles a standard's document parameters name (``fusa_engineer``, ``tech_lead_functional_safety``):
+# the slugs of the author and reviewer headers, 22 of them. A ``parameter`` so named holds people (name and
+# email each, alphabetical), never a plain value; see ``schema/people.py``.
+ROLE_SLUGS = tuple(sorted({slugify(header) for header in (*AUTHOR_FLAGS, *REVIEWER_FLAGS)}))
 
 # The owner, 2026-10-28: "the expected duration and deadline field is now a calculated field; another calculated
 # field would be sprint, which tells you which sprint this deadline belongs to; when displaying the number of
@@ -264,17 +270,25 @@ HOLIDAY = register_entity(EntitySchema(
 # A parametrised standard (asi_standards) has blanks a person fills once: the vehicle type, the people in the
 # roles. One row per name; ``standard`` is the folder the value belongs to, empty for every standard. The
 # row-level parameters (points, sprint end, Jira status per plan row) are never stored: Kletz fills them.
+# 0.19.0, the owner: "each safety deliverable can have multiple authors, so for any safety case field, instead
+# of the parameter being a string it is now an array of human names sorted alphabetically; also must include
+# email alongside name." A role parameter (its name in ``ROLE_SLUGS``) holds ``people``, a JSON list of
+# ``{"name", "email"}`` kept alphabetical by name; ``value`` stays the plain string of ``vehicle_type`` and of
+# a role written before 0.19.0 (a legacy name with no email yet, replaced the moment people are saved).
 PARAMETER = register_entity(EntitySchema(
     name="parameter", table="parameter", label="Parameter", sheet="Parameters",
     description=(
         "One document-level parameter of the parametrised standards: its name (as the standard's source "
-        "names it), the standard it belongs to (empty for every standard), its value and a note."
+        "names it), the standard it belongs to (empty for every standard), its value (a plain parameter such "
+        "as vehicle_type), its people (a role: name and email each, alphabetical) and a note."
     ),
     order_by=("standard", "name", "id"),
     fields=(
         FieldSpec("name", T, "Name", required=True),
         FieldSpec("standard", T, "Standard"),
-        FieldSpec("value", T, "Value"),
+        FieldSpec("value", T, "Value", help="A plain parameter's text (vehicle_type); a role holds people instead."),
+        FieldSpec("people", J, "People", picker="people",
+                  help="A role's people, alphabetical: one per line as Name <email>; JSON [{name, email}] on the API."),
         FieldSpec("note", M, "Note"),
         uid_field(),
     ),

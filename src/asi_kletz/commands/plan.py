@@ -24,8 +24,9 @@ class PlanCommand(Command):
         "a sprint, committed items first) and deadline (that sprint's end) and prints the table; "
         "weights load <file> sets each row's default points from the estimation panel's record; "
         "export --row <id> [--out <dir>] [--standard <folder>] builds the row's standards with asi_gutenberg, "
-        "the parameters filled (the chosen points, never the default; the sprint's end; the Jira ticket's "
-        "status); parameters --row <id> prints that value set without building; tickets lists every work "
+        "the parameters filled (the weight the schedule used; the sprint's end; the Jira ticket's status; a "
+        "role's people inline, Name (email), alphabetical); parameters --row <id> prints that value set without "
+        "building, with the people per role and the roles still legacy or empty; tickets lists every work "
         "product with its Jira key and the ones still without one."
     )
     arguments = (

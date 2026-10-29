@@ -242,7 +242,8 @@ class Brain:
             if schema.name == "safety_plan_row":
                 service.guard = self.schedule.guard  # the calculated fields and the panel's default stay out
             if schema.name == "parameter":
-                service.guard = self.standards.parameter_guard  # a name once per standard
+                service.guard = self.standards.parameter_guard  # a name once per standard; a role holds people
+                service.on_load = self.standards.parameter_loaded  # a file's people parsed, validated, sorted
             if schema.name == "sprint_item":
                 service.guard = self.sprints.link_item  # plan_row and plan_uid name the same row; the uid wins
                 service.on_load = self.sprints.link_loaded  # a file's plan_uid re-resolves plan_row

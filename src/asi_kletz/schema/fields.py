@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import enum
+import json
 import re
 import uuid
 from collections.abc import Mapping, Sequence
@@ -31,6 +32,11 @@ class FieldType(enum.StrEnum):
     DATE = "date"
     URL = "url"
     ENUM = "enum"
+    # 0.19.0: a structured value stored as JSON text (the people of a role parameter). A list or a dict handed
+    # in is stored as JSON; a string is kept as typed, so an entity's own text form (``Ann Lee <ann@...>; Ben
+    # Ray <ben@...>``) reaches that entity's guard, which parses it and writes the canonical JSON back. Read
+    # back as the Python value (``SqlRepository._decode``), so the JSON API answers with an array.
+    JSON = "json"
 
 
 SQL_TYPES: dict[FieldType, str] = {
@@ -41,6 +47,7 @@ SQL_TYPES: dict[FieldType, str] = {
     FieldType.DATE: "TEXT",
     FieldType.URL: "TEXT",
     FieldType.ENUM: "TEXT",
+    FieldType.JSON: "TEXT",
 }
 
 PY_TYPES: dict[FieldType, type] = {
@@ -51,7 +58,24 @@ PY_TYPES: dict[FieldType, type] = {
     FieldType.DATE: str,
     FieldType.URL: str,
     FieldType.ENUM: str,
+    FieldType.JSON: object,
 }
+
+
+def json_text(value: Any) -> str:
+    """The canonical JSON text of a structured value (compact separators, non-ASCII kept)."""
+    return json.dumps(value, ensure_ascii=False, separators=(", ", ": "))
+
+
+def json_value(text: Any) -> Any:
+    """The Python value behind a JSON column's text; text that is not JSON (an old or hand-written row)
+    comes back as the string it is."""
+    if not isinstance(text, str):
+        return text
+    try:
+        return json.loads(text)
+    except ValueError:
+        return text
 
 
 # -- the hidden identity (0.9.0; section 3.1 of docs/hidden-identity-plan.md, shared with the sister tool) ---
@@ -196,6 +220,11 @@ def coerce(
         if clean is None:
             raise ValueError(f"{spec.name}: {value!r} is not a uid (a lowercase UUID4 with dashes)")
         return clean, None
+
+    if kind is FieldType.JSON:
+        if isinstance(value, (list, dict)):
+            return json_text(value), None
+        return str(value), None  # JSON text, or the entity's own text form: its guard parses either
 
     if kind is FieldType.INT:
         if isinstance(value, bool):
