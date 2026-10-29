@@ -12,6 +12,70 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.12.0] - 2026-10-28
+
+The last open items of `docs/weekly-tracker-plan.md` (the burndown and velocity diagrams and the sprint report
+of phase 4) and the roadmap the owner asked for beside them. Schema version unchanged (6). The sprint rule
+(10 business days, 8 points fixed, consecutive sprints, 1 point = one productive day) is quoted in the roadmap
+document from `schema/definitions.py:SPRINT_RULE`, now the one place the owner's words live (the `sprint`
+verb's help imports it).
+
+### Added
+- **Charts in the diagram catalog** (`generate/charts.py`): `Chart` (a title, the plain ``data`` the picture is
+  drawn from, a ``draw(ax)``), rendered by matplotlib into PNG and SVG; `figures.render_diagram` dispatches on
+  it (`dot` / `mmd` dropped with a warning, refused when nothing is left), `figures.add_diagram` renders it
+  into `<out>/figures/` and embeds it as an asi_gutenberg `figure` block. `sprint_burndown` (param `sprint`,
+  default the active sprint): the sprint's items that are not Carried, a Done item burning its points on its
+  `done_on` (one without a date burns on day one, with a warning), the ideal line from `capacity_of` to zero
+  over the business days, weekends and holidays as shaded gaps with the holiday named. `velocity`: one bar per
+  Closed sprint (points done) and the three-sprint mean as a line (`VELOCITY_WINDOW`); empty with a warning
+  until a sprint is Closed. `plan_roadmap`: `roadmap_data` runs the scheduler once and gives the rows in plan
+  order with the sprints each occupies and finishes in, the columns from the active sprint to the last one any
+  deliverable finishes in with their holidays, the total points, the completion sprint and date, the unreached
+  rows and the scheduler's warnings; the chart draws one mark per occupied sprint, the finishing one darker, a
+  star on a holiday-bearing sprint.
+- **`Schedule.occupancy`** (`generate/plan_schedule.py`): the sprints a deliverable takes points from, its own
+  items' sprints included, so the roadmap is drawn from the scheduler and nothing else.
+- **`sprint_report`** (`generate/documents.py`, kind report, param `sprint`): the sprint's facts (`sq.board`),
+  the goal, the board table in status order (To Do, In Progress, Done, Carried) with points and plan row, the
+  generated sprint line, the burndown and velocity charts, the items carried out and in, the holidays inside the
+  sprint. **`plan_roadmap`** (kind plan, "Safety Plan Roadmap"): purpose, the sprint rule verbatim, the totals
+  (deliverables, done, scheduled, beyond the chain, points to schedule, completion), the roadmap chart, one
+  table per lifecycle phase (deliverable, points, sprint, start, end, status), a "Not scheduled" section when
+  the chain runs out, a holidays appendix naming each holiday's sprint.
+- README rows for the three charts and the two documents; the tracker plan's Status says fully implemented.
+
+### Fixed
+- Deleting a sprint whose items still point at it crashed the recompute (`KeyError` on the vanished sprint);
+  a fully committed deliverable whose last item's sprint is gone now pours like any other.
+
+### Deviations from the brief, and what it got wrong once it met the code
+- **Not Escher diagrams.** The brief asked for the burndown, the velocity and the roadmap "as an Escher
+  diagram"; asi_escher's kinds are `activity`, `flowchart`, `state`, `bdd`, `ibd` and `req`, node-and-edge
+  graphs with an automatic layout, with no chart, axis, bar or grid. A burndown drawn as a chain of day
+  nodes would not be a burndown. The three are matplotlib charts (asi_escher's own plotting library, already
+  a dependency) in the same catalog, built by the same verb, listed by the same screen, embedded by the same
+  helper; they write PNG and SVG, not `dot` or `mmd`, and a document's result lists them under the figures it
+  wrote rather than in `diagrams` (asi_gutenberg's list of its own diagram blocks).
+- **The Generate screen has no `sprint` entry.** Its only parameter widget is the phase combobox; from the
+  screen `sprint_burndown` and `sprint_report` take the active sprint. The CLI and an agent pass `--param
+  sprint=n`.
+- **A document's stem is its key**, so `document sprint_report --param sprint=1` overwrites
+  `sprint_report.{md,pdf,docx}` of another sprint; the figures inside are per sprint
+  (`figures/sprint_burndown_1.png`). A per-sprint document stem is a later change if the owner wants the
+  reports kept side by side.
+- `plan_roadmap` is both a diagram key and a document key (two catalogs, two stems: `plan_roadmap.png` and
+  `plan_roadmap.{md,pdf,docx}` plus `figures/plan_roadmap.png`).
+
+### Tests
+- 303 → 308: the burndown's numbers (committed without the Carried item, nine business days around a
+  Monday holiday, the burn on day one and on `done_on`, the ideal line, the gaps, the holiday), its files and
+  formats, the sprint parameter forms; the velocity on no, one and two Closed sprints; the roadmap from the
+  scheduler (occupied and finishing sprints, the holiday column, the totals and completion, the unreached row
+  and the chain extended by `sprint plan`); the sprint report's triplet, figures, board order and carried
+  items; the roadmap document's rule, phase tables, holidays appendix and "Not scheduled" section; the catalog
+  lists.
+
 ## [0.11.4] - 2026-10-28
 
 Open question 1 of `docs/plan-points-plan.md`, answered by the owner, 2026-10-28: a deliverable with a

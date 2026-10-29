@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.11.4**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.12.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,23 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.12.0
+
+**The sprint charts, the sprint report and the roadmap** (the last open items of `docs/weekly-tracker-plan.md`,
+plus the roadmap). Three charts join the diagram catalog (`generate/charts.py`, drawn with matplotlib, the
+plotting library asi_escher brings, because asi_escher draws graphs and not charts): **`sprint_burndown`**
+(`--param sprint=n`, default the active sprint: points remaining per business day from the sprint's items, a
+Done item burning on its `done_on`, the ideal line from the capacity to zero, weekends and holidays as gaps),
+**`velocity`** (one bar per Closed sprint, the three-sprint mean as a line) and **`plan_roadmap`** (the
+deliverables in plan order against the sprint chain, one mark per sprint a deliverable occupies, the finishing
+sprint emphasised, holidays marked on the sprint axis). Two documents join the document catalog:
+**`sprint_report`** (one sprint: its facts and goal, the board table, the burndown and velocity, the carried
+items, the holidays inside it) and **`plan_roadmap`** (for the tech lead and the team: the sprint rule, the
+totals and the completion sprint and date, one table per lifecycle phase, the roadmap chart, the rows the
+chain does not reach, a holidays appendix). Both the chart and the document read the scheduler
+(`generate/plan_schedule.py`, which now also reports the sprints a deliverable occupies), never a second
+computation. A chart writes PNG and SVG; `diagram` says so when asked for `dot` or `mmd`. No schema change.
 
 ## What is in 0.11.4
 
@@ -347,12 +364,17 @@ asi-kletz document safety_plan --out out             # out/safety_plan.{md,pdf,d
 | `phase_flow` | one phase as an activity diagram with Author, Verification and Reviewer lanes (`--param phase=<n>` required) |
 | `status_board` | one state per plan status with its count and the conventional transitions (a convention, not data) |
 | `pdp_map` | a SysML block definition diagram: the Safety Plan composed of the six PDP phases, each listing its lifecycle phases |
+| `sprint_burndown` | a chart: points remaining per business day of one sprint (`--param sprint=n`, default the active one), a Done item burning on its `done_on`, the ideal line from the capacity to zero, weekends and holidays as gaps |
+| `velocity` | a chart: one bar per Closed sprint (points done) and the three-sprint mean as a line |
+| `plan_roadmap` | a chart: the deliverables in plan order against the sprint chain from the active sprint to the last one scheduled, one mark per sprint a deliverable occupies, the finishing sprint darker, a holiday-bearing sprint starred |
 
 | Document | Kind | Contents |
 |---|---|---|
 | `safety_plan` | plan, "Platform Safety Plan" | purpose, scope, lifecycle overview with its diagram, one section per lifecycle phase with a **Deliverables** table, an **Ownership** table and the phase flow diagram, appendices for roles, QMS references and the status legend |
 | `status_report` | report, "Safety Plan Status" | totals by status with the status board, blocked deliverables, deliverables due within 30 days (and open ones without a parsable date), lifecycle overview, the last 20 audit entries |
 | `phase_checklist` | checklist, "Safety Plan Checklist" | one task list per phase, a deliverable ticked when Done, the PDP map, totals |
+| `sprint_report` | report, "Sprint Report" (`--param sprint=n`, default the active one) | the sprint's facts and goal, the board table (To Do, In Progress, Done, Carried, with points), the burndown and velocity charts, the carried items, the holidays inside the sprint |
+| `plan_roadmap` | plan, "Safety Plan Roadmap" | for the tech lead and the team: the sprint rule verbatim, the totals and the completion sprint and date, one table per lifecycle phase (deliverable, points, sprint, start, end, status), the roadmap chart, the rows the chain does not reach, a holidays appendix |
 
 Every document is written as a Markdown / PDF / Word triplet that cannot disagree (the PDF and
 the Word file are rendered from the Markdown). **The reviewed artefact is the PDF**: the result's
@@ -360,8 +382,12 @@ the Word file are rendered from the Markdown). **The reviewed artefact is the PD
 convenience for reviewers who mark up text and the Markdown is the source. A diagram's `primary`
 is the PNG. Figures inside a document are asi_escher diagrams carried as `diagram` blocks and
 rendered by asi_gutenberg into `<out>/figures/`; the result's `diagrams` list has one entry per
-figure. Layout issues the diagram engine had to settle for come back as `warnings`, never as a
-Python warning. Both verbs write an audit entry (`generate`) and publish `generated` on the
+figure. A chart (`sprint_burndown`, `velocity`, `plan_roadmap`) is a matplotlib figure: asi_escher
+draws node-and-edge diagrams only, so the charts render themselves (PNG and SVG; `dot` and `mmd` are
+refused or dropped with a warning) and go into a document as `figure` blocks in the same
+`<out>/figures/` folder, not in the `diagrams` list. Layout issues the diagram engine had to settle
+for come back as `warnings`, never as a Python warning. Both verbs write an audit entry (`generate`)
+and publish `generated` on the
 event bus, so the dashboard's recent changes show who generated what.
 
 Output goes to `--out`, else `$ASI_KLETZ_OUT`, else `out` in `kletz.toml`, else `out/` next to the

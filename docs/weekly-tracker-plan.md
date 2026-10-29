@@ -1,10 +1,11 @@
 # ASI Kletz — Plan: the Weekly Activity Tracker and sprints
 
-**Status:** Phases 1 to 3 implemented 2026-10-28 (asi_kletz 0.8.0); phase 4's screens and dashboard strip
-implemented the same day (0.8.1), its burndown and velocity diagrams and the sprint report still open; phase 5's
-family tables carried by each release. Deviations recorded by the implementing
-agent in the CHANGELOG entry: weeks start on Monday; People and Questions stay inside the Issues text; `sprint
-close` always opens the next sprint.
+**Status:** Fully implemented 2026-10-28: phases 1 to 3 as asi_kletz 0.8.0, phase 4's screens and dashboard
+strip as 0.8.1, phase 4's burndown and velocity charts and the sprint report as 0.12.0 (with the roadmap chart
+and document beside them; charts are matplotlib figures in the diagram catalog, since asi_escher draws graphs
+only), phase 5's family tables carried by each release. Deviations recorded by the implementing agent in the
+CHANGELOG entries: weeks start on Monday; People and Questions stay inside the Issues text; `sprint close`
+always opens the next sprint; the burndown and velocity are charts, not Escher diagrams.
 **Written:** 2026-10-28
 **Owner:** FuSa engineer
 **Target version:** asi_kletz 0.8.0 (after 0.7.4; schema version 1 → 2, two new entities; Kletz only, the

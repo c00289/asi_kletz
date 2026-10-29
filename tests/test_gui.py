@@ -381,8 +381,12 @@ def test_online_indicator_shows_the_port_and_the_server_survives_a_repaint(windo
 def test_transfer_screen_builds_diagrams_and_documents(window, tmp_path, seeded):
     screen = window.show("transfer")
     assert [k for k, _ in window.factory.items()] == SCREENS  # generation lives inside Export / Import
-    assert [s["key"] for s in screen.diagram_specs] == ["lifecycle_overview", "phase_flow", "status_board", "pdp_map"]
-    assert [s["key"] for s in screen.document_specs] == ["safety_plan", "status_report", "phase_checklist"]
+    assert [s["key"] for s in screen.diagram_specs] == [
+        "lifecycle_overview", "phase_flow", "status_board", "pdp_map", "sprint_burndown", "velocity", "plan_roadmap",
+    ]  # the graphs, then the charts (0.12.0)
+    assert [s["key"] for s in screen.document_specs] == [
+        "safety_plan", "status_report", "phase_checklist", "sprint_report", "plan_roadmap",
+    ]
     assert screen.out_var.get() == seeded.out_dir
     screen.select_diagram("lifecycle_overview")
     assert not screen.phase_enabled()
