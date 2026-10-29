@@ -164,86 +164,37 @@ def test_search_sort_and_select(window):
 def test_safety_plan_form_has_groups(window):
     screen = window.show("safety_plan")
     assert "loc_dms" in screen.widgets and "reviewer_pat" in screen.widgets
-    assert "loc_dms" in screen.columns and "reviewer_pat" in screen.columns  # every source column is in the table
+    assert "loc_dms" not in screen.columns and "reviewer_pat" not in screen.columns  # flags: the Matrix (0.11.3)
     screen.select(1)
     assert screen.widgets["loc_dms"].get() is True and screen.widgets["loc_jama"].get() is False
 
 
-def test_safety_plan_table_shows_every_column(window, seeded):
+def test_safety_plan_table_shows_the_plan_and_the_non_flag_columns(window, seeded):
+    """0.11.3: one table, the stacked plan column first, then every visible non-flag field; no flag column."""
     from asi_kletz.gui import entity_screen
 
     screen = window.show("safety_plan")
     schema = seeded.registry.get(PLAN)
-    assert screen.columns == [f.name for f in schema.visible_fields if f.name != "order"] and len(screen.columns) == 67
-    assert list(screen.tree["columns"]) == [*screen.columns, "plan"]  # the stacked column rides along
-    assert screen.columns[:3] == ["pdp_phase", "lifecycle_phase", "deliverable"] and "uid" not in screen.columns
-    assert screen.tree.heading("loc_dms", "text") == "DMS"
-    long_author = "author_electronics_engineer_mechanical_and_electrical"
-    assert screen.tree.heading(long_author, "text") == "Electronics Engineer (Mechanical and Electrical)"
-    assert screen.tree.heading("status", "text") == schema.field("status").header
-    assert screen.tree.heading("status", "text").startswith("Status (Pending/")
-    body, head = _fonts(screen.tree)  # since 0.7.1 a column is as wide as its widest text, heading included
-    assert int(screen.tree.column("loc_dms", "width")) == head.measure("DMS") + 24  # the heading, not 36 px
-    assert str(screen.tree.column("loc_dms", "anchor")) == "center" and screen.tree.column("loc_dms", "stretch") == 0
-    widest_deliverable = body.measure("Hazard Analysis and Risk Assessment") + 24
-    assert int(screen.tree.column("deliverable", "width")) == widest_deliverable
-    assert screen.tree.column("deliverable", "stretch") == 0  # fitted columns never stretch: Tk would shrink them
-    assert screen.tree.set("1", "loc_dms") == "✓" and screen.tree.set("1", "loc_jama") == ""
-    assert screen.tree.set("2", "loc_jama") == "✓"
-    assert screen.tree.set("1", "reviewer_tech_lead_functional_safety") == "✓"
-    assert screen.tree.set("1", "author_tech_lead_functional_safety") == ""  # the duplicate header maps to two fields
-    screen.sort_by("loc_dms", desc=True)
-    assert next(i for i in screen.tree.get_children() if i.isdigit()) == "1"  # the first deliverable row
-    assert "Sorted by DMS" in window.status_text()
-    assert not hasattr(entity_screen, "MAX_FLAG_COLUMNS") and not hasattr(entity_screen, "FLAG_WIDTH")
-
-
-def test_columns_selector_narrows_the_flags(window, seeded):
-    from asi_kletz.prefs import read_prefs
-
-    screen = window.show("safety_plan")
-    assert screen.columns_var.get() == "All"
-    assert str(screen.columns_box.cget("state")) == "readonly"
-    groups = ["Location", "Reference", "Author", "Verification", "Reviewer"]
-    assert list(screen.columns_box.cget("values")) == ["All", *groups]
-    # since 0.7.2 the frozen identity columns live in the left tree: the right one never displays them
-    unfrozen = tuple(c for c in screen.columns if c not in FROZEN_PLAN and c not in STACKED_PLAN)
-    assert screen.tree["displaycolumns"] == unfrozen and len(unfrozen) == 64  # 67 columns minus the three stacked
-
-    screen.set_columns("Location")
-    assert list(screen.tree["displaycolumns"]) == [
-        "points", "default_points", "sprint", "sprint_start", "sprint_end", "work_product_location", "loc_dms",
-        "loc_jama", "loc_sharepoint",
+    expected = [
+        f.name for f in schema.visible_fields if f.name != "order" and not f.is_flag and f.name not in STACKED_PLAN
+    ]
+    assert screen.columns == expected == [
+        "points", "default_points", "sprint", "sprint_start", "sprint_end", "work_product_location",
         "work_product_reference", "author", "gate_reviewer", "deadline", "status",
     ]
-    assert len(screen.tree["columns"]) == 68  # nothing rebuilt
-    assert screen.tree.set("1", "reviewer_pat") == ""  # still readable while hidden
-
-    screen.set_columns("Reviewer")
-    shown = list(screen.tree["displaycolumns"])
-    assert len(shown) == 18 and shown[-3:] == ["reviewer_technical_training_team", "deadline", "status"]
-    assert not any(c.startswith("loc_") for c in shown)
-
-    screen.select(2)
-    seeded.execute("update", entity=PLAN, id=2, data={"gate_reviewer": "x"}, actor="agent")
-    deadline = time.time() + 2
-    while screen.tree.set("2", "gate_reviewer") != "x" and time.time() < deadline:
-        window.update()
-        time.sleep(0.02)
-    assert len(screen.tree.get_children()) == STACK_ROWS and screen.tree.set("2", "gate_reviewer") == "x"
-    assert list(screen.tree["displaycolumns"]) == shown and screen.selected_id == 2
-    window.show("dashboard")
-    assert window.show("safety_plan") is screen and screen.columns_var.get() == "Reviewer"
-
-    screen.set_columns("All")
-    assert screen.tree["displaycolumns"] == unfrozen and screen.columns_var.get() == "All"
-
-    screen.set_columns("Author")
-    assert window.pick_theme("pink-noir").ok
-    rebuilt = window.show("safety_plan")
-    assert rebuilt is not screen and rebuilt.columns_var.get() == "All"  # session memory, not a latch
-    assert rebuilt.tree["displaycolumns"] == unfrozen
-    assert "columns" not in read_prefs()
+    assert list(screen.tree["columns"]) == ["plan", *screen.columns] and "uid" not in screen.tree["columns"]
+    assert screen.tree.heading("status", "text") == schema.field("status").header
+    assert screen.tree.heading("status", "text").startswith("Status (Pending/")
+    _assert_fitted(screen.tree, _enum_extra(screen))  # since 0.7.1 a column is as wide as its widest text
+    assert screen.tree.column("plan", "stretch") == 0  # fitted columns never stretch: Tk would shrink them
+    assert screen.tree.set("1", "status") == "Done" and screen.tree.set("3", "work_product_location") == "DMS"
+    assert screen.tree.set("2", "plan").strip() == "Hazard Analysis and Risk Assessment"
+    screen.sort_by("status", desc=True)
+    assert next(i for i in screen.tree.get_children() if i.isdigit()) == "3"  # Pending, Ongoing, Done
+    assert "Sorted by Status" in window.status_text()
+    for name in ("MAX_FLAG_COLUMNS", "FLAG_WIDTH", "FROZEN", "IDENTITY", "ALL_COLUMNS"):
+        assert not hasattr(entity_screen, name)
+    assert not hasattr(screen, "pane") and not hasattr(screen, "columns_box")  # no split, no Columns box
 
 
 def test_safety_plan_table_scrolls_both_ways(window):
@@ -251,12 +202,9 @@ def test_safety_plan_table_scrolls_both_ways(window):
 
     screen = window.show("safety_plan")
     assert isinstance(screen.xbar, ttk.Scrollbar) and str(screen.xbar.cget("orient")) == "horizontal"
-    assert screen.xbar is screen.pane.xbar and screen.ybar is screen.pane.ybar  # the pane's bars (0.7.2)
-    assert screen.xbar.grid_info()["row"] == 1 and screen.xbar.grid_info()["column"] == 0  # past the sash
+    assert screen.xbar.grid_info()["row"] == 1 and screen.xbar.grid_info()["column"] == 0
     assert isinstance(screen.ybar, ttk.Scrollbar) and str(screen.ybar.cget("orient")) == "vertical"
-    assert screen.ybar.grid_info()["row"] == 0 and screen.ybar.grid_info()["column"] == 1  # outside the split (0.7.3)
-    assert screen.pane.split.panes() == (str(screen.pane.left), str(screen.tree))  # the two trees are its panes
-    assert screen.pane.left.cget("xscrollcommand") == ""  # the frozen tree never scrolls sideways
+    assert screen.ybar.grid_info()["row"] == 0 and screen.ybar.grid_info()["column"] == 1
     assert screen.tree.cget("xscrollcommand") and screen.tree.cget("yscrollcommand")
     window.update_idletasks()  # the window is withdrawn, so requested sizes are what Tk can report
     width = int(window.geometry().split("x")[0])
@@ -1255,16 +1203,20 @@ def test_wide_tables_scroll_sideways_and_name_clipped_headings(window, seeded, m
         assert moves == [(3, "units"), (-3, "units"), (3, "units")]
         # columns fit their headings since 0.7.1, so the hint needs one squeezed by hand (as a user can drag it):
         # a 36 px heading cannot show "JAMA", and hovering it names the column
-        tree.column("loc_jama", width=36)
+        narrow, label = ("loc_jama", "JAMA") if key == "safety_plan_matrix" else ("sprint_end", "Sprint end")
+        tree.column(narrow, width=36)
         shown = list(tree["displaycolumns"])  # "#n" counts displayed columns; the frozen ones are on the left
+        if shown == ["#all"]:
+            shown = list(tree["columns"])
         monkeypatch.setattr(tree, "identify", lambda region, x, y: "heading")
-        monkeypatch.setattr(tree, "identify_column", lambda x, c=shown: "#" + str(c.index("loc_jama") + 1))
+        monkeypatch.setattr(tree, "identify_column", lambda x, c=shown, n=narrow: "#" + str(c.index(n) + 1))
         screen._on_heading_motion(SimpleNamespace(x=5, y=5))
-        assert window.status_text() == "Column: JAMA"
+        assert window.status_text() == f"Column: {label}"
         window.set_status("untouched")
         screen._on_heading_motion(SimpleNamespace(x=5, y=5))  # same heading: no repeat
         assert window.status_text() == "untouched"
-        wide = "reviewer_tech_lead_functional_safety"  # "Tech Lead - Functional Safety", shown on the right
+        # a wide heading needs no hint: a reviewer flag on the Matrix, the location on the plan's one table
+        wide = "reviewer_tech_lead_functional_safety" if key == "safety_plan_matrix" else "work_product_location"
         monkeypatch.setattr(tree, "identify_column", lambda x, c=shown, w=wide: "#" + str(c.index(w) + 1))
         screen._on_heading_motion(SimpleNamespace(x=5, y=5))  # a wide heading needs no hint
         assert window.status_text() == "untouched"
@@ -1317,33 +1269,26 @@ def test_safety_plan_columns_fit_their_domain(window, seeded):
     assert set(extra) == {"pdp_phase", "lifecycle_phase", "status"}
     _assert_fitted(tree, extra)
     body, head = _fonts(tree)
-    title = "Tech Lead - Functional Safety"  # a flag column is as wide as its heading, the source column title
-    assert tree.heading("reviewer_tech_lead_functional_safety", "text") == title
-    assert int(tree.column("reviewer_tech_lead_functional_safety", "width")) == head.measure(title) + 24
     assert int(tree.column("status", "width")) >= body.measure("Out-of-Scope") + 24
-    screen.set_columns("Reviewer")  # a narrowed column set is fitted again
-    _assert_fitted(tree, extra)
+    assert int(tree.column("sprint_end", "width")) >= head.measure("Sprint end") + 24
     screen.search_var.set("no such row")  # an empty table keeps its heading-fitted widths
     assert tree.get_children() == ()
     _assert_fitted(tree, extra)
-    assert int(tree.column("reviewer_tech_lead_functional_safety", "width")) == head.measure(title) + 24
-    assert int(tree.column("lifecycle_phase", "width")) >= max(body.measure(p) for p in extra["lifecycle_phase"]) + 24
+    assert int(tree.column("status", "width")) >= body.measure("Out-of-Scope") + 24
 
 
 def test_enum_column_fits_the_longest_lookup_value(window, seeded):
-    for row_id in (2, 3):  # keep row 1 alone: lifecycle "1. Concept Development", status "Done"
-        assert seeded.execute("delete", entity=PLAN, id=row_id, actor="agent").ok
-    screen = window.show("safety_plan")
-    screen.refresh()
+    """An enum column fits every value of its lookup before any row holds it (the Holidays screen's status)."""
+    screen = window.show("holidays")
     tree = screen.tree
-    assert [tree.set(i, "lifecycle_phase") for i in tree.get_children() if i.isdigit()] == ["1. Concept Development"]
+    assert tree.get_children() == ()
     body, head = _fonts(tree)
-    phases = seeded.lookups["lifecycle_phase"]
-    longest = max(phases, key=body.measure)
-    on_screen = max(head.measure(tree.heading("lifecycle_phase", "text")), body.measure("1. Concept Development"))
-    assert body.measure(longest) > on_screen  # the rows alone would leave the column narrower
-    assert int(tree.column("lifecycle_phase", "width")) == body.measure(longest) + 24
-    assert int(tree.column("pdp_phase", "width")) >= max(body.measure(v) for v in seeded.lookups["pdp_phase"]) + 24
+    values = seeded.lookups["holiday_status"]
+    longest = max(values, key=body.measure)
+    heading = head.measure(tree.heading("status", "text"))
+    assert screen._domain()["status"] == values  # every lookup value is a candidate, rows or no rows
+    assert int(tree.column("status", "width")) == max(heading, body.measure(longest)) + 24
+    assert int(tree.column("name", "width")) == head.measure(tree.heading("name", "text")) + 24  # no lookup
 
 
 def test_matrix_columns_fit_their_headings(window, seeded):
@@ -1479,60 +1424,6 @@ def test_frozen_pane_keeps_two_trees_in_step():
         gc.collect()
 
 
-def test_safety_plan_freezes_the_identity_columns(window, seeded):
-    from asi_kletz.gui.entity_screen import FROZEN
-    from asi_kletz.gui.screens import PLAN_HEADER, FrozenPane
-
-    screen = window.show("safety_plan")
-    pane, left, right = screen.pane, screen.pane.left, screen.tree
-    assert isinstance(pane, FrozenPane) and list(FROZEN) == FROZEN_PLAN and pane.frozen == tuple(FROZEN_PLAN)
-    assert right is pane.right and screen.ybar is pane.ybar and screen.xbar is pane.xbar
-    assert list(right["columns"]) == [*screen.columns, "plan"]  # the right tree still owns every column
-    hidden = (*FROZEN, *STACKED_PLAN)
-    assert not any(c in hidden for c in right["displaycolumns"]) and len(right["displaycolumns"]) == 64
-    assert tuple(left["columns"]) == tuple(FROZEN_PLAN)
-    assert _rows(left) == _rows(right) and [t for _, t in _rows(left)] == [
-        ("pdp", "even"), ("phase", "odd"), ("even",), ("pdp", "odd"), ("phase", "even"), ("odd",),
-        ("pdp", "even"), ("phase", "odd"), ("even",),
-    ]
-    for column in FROZEN:
-        assert _cells(left, column) == _cells(right, column)
-        assert left.heading(column, "text") == right.heading(column, "text")
-    assert left.heading("plan", "text") == PLAN_HEADER
-    assert _cells(left, "plan")[:3] == ["PDP phase 1", "    1. Concept Development", "        Safety Plan"]
-    _assert_fitted(left, _enum_extra(screen))  # the frozen enum columns fit their whole lookup too
-    assert int(left.column("plan", "width")) == int(right.column("plan", "width"))
-    assert left.tag_configure("odd")["background"] == right.tag_configure("odd")["background"]
-
-    screen.set_columns("Location")  # a column choice hides nothing frozen and leaves the left tree alone
-    assert "loc_dms" in right["displaycolumns"] and not any(c in hidden for c in right["displaycolumns"])
-    assert _rows(left) == _rows(right)
-
-    screen.sort_by("deliverable")  # sorting reorders both identically; the stack follows the sorted order
-    titles = [t for t in _cells(right, "deliverable") if t]
-    assert titles == sorted(titles, key=str.casefold)
-    assert [t.strip() for t in _cells(left, "plan") if t.startswith("        ")] == titles
-    assert _rows(left) == _rows(right)
-    screen.sort_by("deliverable")  # again: descending
-    assert [t for t in _cells(right, "deliverable") if t] == titles[::-1]
-    assert window.status_text() == "Sorted by Safety Deliverables, descending"
-    assert _rows(left) == _rows(right)
-    _click_heading(left, "plan")  # the stacked heading, on either side, is the way back to the plan's order
-    assert [t for t in _cells(right, "deliverable") if t] == [r["deliverable"] for r in screen.rows]
-    assert window.status_text() == "Plan order" and screen.sort_key is None and _rows(left) == _rows(right)
-
-    left.selection_set("2")  # selecting through the frozen tree fills the form
-    window.update()
-    assert right.selection() == ("2",) and screen.selected_id == 2
-    assert screen.widgets["deliverable"].get() == screen.by_id[2]["deliverable"]
-    screen.select(3)  # and the other way round
-    window.update()
-    assert left.selection() == ("3",)
-
-    screen.refresh()  # a refresh keeps both in step, selection included
-    assert _rows(left) == _rows(right) and left.selection() == ("3",)
-
-
 def test_matrix_freezes_the_fixed_columns(window, seeded, monkeypatch):
     from asi_kletz.gui.matrix_screen import FIXED, PLAN_HEADER
 
@@ -1629,7 +1520,7 @@ def test_safety_plan_group_rows_are_headings_not_records(window, seeded):
     from asi_kletz.gui.screens import PDP_TAG, PHASE_TAG
 
     screen = window.show("safety_plan")
-    left, right = screen.pane.left, screen.tree
+    right = screen.tree
     screen.select(2)
     assert screen.selected_id == 2 and screen.widgets["deliverable"].get() == "Hazard Analysis and Risk Assessment"
     right.selection_set("pdp:3")
@@ -1639,11 +1530,10 @@ def test_safety_plan_group_rows_are_headings_not_records(window, seeded):
     assert right.item("phase:3:3. Functional Safety Concept (FSC)", "tags")[0] == PHASE_TAG
     assert all(right.set("pdp:3", c) == "" for c in screen.columns)  # a group row has no data cells
     palette = window.theme.palette
-    for tree in (left, right):
-        assert str(tree.tag_configure(PDP_TAG, "foreground")) == palette.primary
-        assert str(tree.tag_configure(PHASE_TAG, "foreground")) == palette.accent
+    assert str(right.tag_configure(PDP_TAG, "foreground")) == palette.primary
+    assert str(right.tag_configure(PHASE_TAG, "foreground")) == palette.accent
     window.update()
-    left.selection_set("3")  # a deliverable through the frozen tree still fills the form
+    right.selection_set("3")  # a deliverable row fills the form
     window.update()
     assert screen.selected_id == 3 and screen.widgets["deliverable"].get() == "Functional Safety Concept"
 
@@ -1655,7 +1545,7 @@ def test_frozen_pane_split_is_draggable(window, monkeypatch):
 
     from asi_kletz.gui.screens import RIGHT_MIN
 
-    screen = window.show("safety_plan")
+    screen = window.show("safety_plan_matrix")  # the one frozen pane left (0.11.3)
     pane, split = screen.pane, screen.pane.split
     assert isinstance(split, ttk.PanedWindow) and str(split.cget("orient")) == "horizontal"
     assert split.panes() == (str(pane.left), str(pane.right)) and split.master is pane
@@ -1706,9 +1596,9 @@ def test_frozen_pane_split_is_draggable(window, monkeypatch):
     pane._on_map()  # a <Map> with nothing pending (the screen shown again) leaves the user's sash alone
     assert pane._sash_job is None
 
-    pane.mirror(screen._domain())  # every mirror places the sash again, once, after the idle
+    pane.mirror()  # every mirror places the sash again, once, after the idle
     assert pane._sash_job is not None
-    pane.mirror(screen._domain())
+    pane.mirror()
     window.update_idletasks()
     assert pane._sash_job is None and calls[-1] == (0, max(1, min(fitted, 280))) and len(calls) == 5
 
@@ -1876,11 +1766,10 @@ def _trees(widget) -> list:
 
 def test_no_table_on_any_screen_has_an_id_order_or_uid_column(window, seeded):
     """Owner, 2026-10-28: the leftmost ``order`` and ``id`` columns are vestigial; the uid is never shown."""
-    from asi_kletz.gui.entity_screen import FROZEN, HANDLES, IDENTITY
+    from asi_kletz.gui.entity_screen import HANDLES
     from asi_kletz.gui.matrix_screen import FIXED, FIXED_WIDTHS, SEARCHED
 
-    assert FROZEN == ("plan",) and HANDLES == ("id", "order")
-    assert IDENTITY == ("pdp_phase", "lifecycle_phase", "deliverable")
+    assert HANDLES == ("id", "order")
     assert FIXED == ("plan",) and FIXED_WIDTHS == (360,) and "order" in SEARCHED
     seen = 0
     for key in SCREENS:
@@ -1891,10 +1780,9 @@ def test_no_table_on_any_screen_has_an_id_order_or_uid_column(window, seeded):
             assert not any(c in NEVER_COLUMNS for c in columns), (key, columns)
             assert not any(c in NEVER_COLUMNS for c in tree["displaycolumns"]), (key, tree["displaycolumns"])
             assert "entity_id" in columns or not any("id" in c.split("_") for c in columns), (key, columns)
-    assert seen >= 9  # the dashboard's three, the two frozen pairs of the plan screens, the board's lanes, and more
+    assert seen >= 8  # the dashboard's three, the plan's one table, the matrix's pair, the board's lanes, and more
     plan = window.show("safety_plan")
-    assert plan.pane.frozen == ("plan",) and tuple(plan.pane.left["columns"]) == ("plan",)
-    assert len(plan.tree["displaycolumns"]) == 64 and "uid" not in plan.tree["columns"]
+    assert tuple(plan.tree["columns"])[0] == "plan" and "uid" not in plan.tree["columns"] and not hasattr(plan, "pane")
     matrix = window.show("safety_plan_matrix")
     assert tuple(matrix.pane.left["columns"]) == ("plan",) and matrix.tree.set("1", "plan").strip() == "Safety Plan"
     matrix.search_var.set("2")  # a typed number still finds the row by its order
@@ -1914,8 +1802,8 @@ def test_form_has_order_but_no_uid_and_the_details_title_names_the_row(window, s
     screen.select(2)
     assert screen.form_box.cget("text") == "Safety Plan Row details · row 2"
     assert window.status_text() == "Safety Plan Row 2 selected" and screen.widgets["order"].get() == "2"
-    window.update()  # drain the selection events, as the loop does before a user can click the left tree
-    screen.pane.left.selection_set("3")
+    window.update()  # drain the selection events, as the loop does before a user can click a row
+    screen.tree.selection_set("3")
     window.update()
     assert screen.form_box.cget("text") == "Safety Plan Row details · row 3" and screen.selected_id == 3
     # saving keeps the title on the saved row; the uid is untouched (the form never sends it)
@@ -1949,8 +1837,8 @@ def test_holidays_screen_lists_the_loaded_rows_without_a_frozen_column(window, s
     assert window.factory.title("holidays") == "Holidays" and SCREENS.index("holidays") == SCREENS.index("tracker") + 1
     screen = window.show("holidays")
     assert screen.columns == ["date", "name", "status", "note"] and not screen.stacked
-    assert screen.pane.frozen == () and tuple(screen.tree["displaycolumns"]) == ("date", "name", "status", "note")
-    assert screen.tree.get_children() == () and screen.columns_box is None  # no flag groups, no Columns box
+    assert tuple(screen.tree["columns"]) == ("date", "name", "status", "note") and not hasattr(screen, "pane")
+    assert screen.tree.get_children() == () and not hasattr(screen, "columns_box")  # one table, no Columns box
     assert seeded.execute("holiday", action="load", file=str(SEED_HOLIDAYS), actor="agent").ok
     deadline = time.time() + 2
     while len(screen.tree.get_children()) != 52 and time.time() < deadline:
@@ -1980,7 +1868,8 @@ def test_points_entry_shows_the_default_and_names_it_when_the_value_differs(wind
     for name in ("default_points", "sprint", "sprint_start", "sprint_end", "deadline"):
         widget = screen.widgets[name]
         assert isinstance(widget, ReadOnlyWidget) and str(widget.entry.cget("state")) == "readonly"
-    assert screen.columns[2:8] == ["deliverable", "points", "default_points", "sprint", "sprint_start", "sprint_end"]
+    assert screen.columns[:5] == ["points", "default_points", "sprint", "sprint_start", "sprint_end"]
+    assert screen.tree["columns"][0] == "plan"  # the stacked column first, the four beside it
     screen.select(2)
     # no default yet: the floor (2) greyed as the placeholder; nothing is sent
     assert points.showing_placeholder and points.entry.get() == "2" and points.get() is None

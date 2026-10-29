@@ -12,6 +12,26 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.11.3] - 2026-10-28
+
+The owner, 2026-10-28: "the Safety Plan must not have the right pane because it is redundant with the
+Safety Plan Matrix; remove the redundant right pane from the Safety Plan screen; make it like it never
+happened." Schema version unchanged (6).
+
+### Changed
+- **The Safety Plan screen is one `ttk.Treeview`** (`gui/entity_screen.py`): no `FrozenPane`, no sash,
+  no `Columns` selector (`ALL_COLUMNS`, `column_groups`, `columns_box`, `set_columns`, `_shown`,
+  `FROZEN`, `IDENTITY` are gone). `columns` is every visible non-flag field minus the handles and,
+  on a stacked entity, minus the three stacked fields; the stacked `plan` column comes first on the
+  tree. A flag has no column on this screen: the Safety Plan Matrix is where the flags are read and
+  toggled; the form's flag groups still edit them. The vertical and horizontal bars, the heading
+  hint, the sort (and `plan` back to plan order), the stripe and the group tags are as before.
+  `FrozenPane` stays in `gui/screens.py` for the Matrix.
+
+### Tests
+- The frozen-pane tests now run on the Matrix; the Safety Plan tests expect the twelve columns, no
+  `pane`, no `columns_box`.
+
 ## [0.11.2] - 2026-10-28
 
 The owner, 2026-10-28: "add the beginning of sprint and end of sprint to the right of the sprint

@@ -14,7 +14,6 @@ from .screens import (
     PLAN,
     PLAN_HEADER,
     STACKED,
-    FrozenPane,
     Screen,
     ScrollableFrame,
     bind_horizontal_scroll,
@@ -30,15 +29,10 @@ if TYPE_CHECKING:
     from .main_window import MainWindow
 
 TRUNCATE = 70  # a cell shows this much of a long text; the column fits the clipped text, not the value
-ALL_COLUMNS = "All"
-# Owner, 2026-10-28 (docs/hidden-identity-plan.md): no table shows ``id`` or ``order``. The id stays the handle
-# of every command, the tree iids, the status bar and the details title; ``order`` stays a field of the form
-# and the default sort. Neither is a column since 0.9.0; the hidden ``uid`` never was.
-HANDLES = ("id", "order")
-# the stacked column of the Safety Plan stays put while the rest scrolls (0.7.2, 0.8.4): the PDP phase, the
-# lifecycle phase and the deliverable as one column, ``plan``, on an entity that has all three
-FROZEN = (PLAN,)
-IDENTITY = STACKED  # the frozen set of an entity that lacks the stack: whichever of the three it has
+HANDLES = ("id", "order")  # the handles have no column anywhere (0.9.0): the status bar and the details title name them
+# 0.11.3, the owner: the Safety Plan screen is one table, no frozen split and no flag columns; the flags are the
+# Safety Plan Matrix's business. The table shows the plan stacked (PDP phase > lifecycle phase > deliverable) in
+# one column and every other non-flag visible field beside it; the form below still edits everything.
 
 
 def cell_text(spec: FieldSpec | None, value: Any) -> str:
@@ -63,18 +57,15 @@ class EntityScreen(Screen):
 
     # -- layout ---------------------------------------------------------
     def build(self) -> None:
-        # every visible column of the source sheet, in source order; the handles (id, order) and a hidden
-        # field (the uid) have no column anywhere
-        self.columns = [f.name for f in self.schema.visible_fields if f.name not in HANDLES]
-        # the plan is stacked (PDP phase > lifecycle phase > deliverable in one frozen column) when the
-        # entity has the three fields; the three data columns stay on the tree, hidden, so ``set`` still answers
+        # the plan is stacked (PDP phase > lifecycle phase > deliverable in one column) when the entity has the
+        # three fields; the columns beside it are every visible non-flag field, the handles and the stacked
+        # three excepted. A flag has no column: the Safety Plan Matrix shows the flags (0.11.3).
         self.stacked = all(self.schema.has(name) for name in STACKED)
-        # the `Columns` selector: `All`, then one entry per flag group, titled like the form's group boxes
-        self.column_groups: dict[str, str] = {
-            group.capitalize(): group
-            for group, specs in self.schema.groups().items()
-            if group and any(s.is_flag for s in specs)
-        }
+        self.columns = [
+            f.name for f in self.schema.visible_fields
+            if f.name not in HANDLES and not f.is_flag and not (self.stacked and f.name in STACKED)
+        ]
+        tree_columns = [PLAN, *self.columns] if self.stacked else list(self.columns)
 
         toolbar = ttk.Frame(self)
         toolbar.pack(fill="x", pady=(0, 6))
@@ -82,16 +73,6 @@ class EntityScreen(Screen):
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._populate())
         ttk.Entry(toolbar, textvariable=self.search_var, width=30).pack(side="left", padx=(4, 12))
-        self.columns_var = tk.StringVar(value=ALL_COLUMNS)
-        self.columns_box: ttk.Combobox | None = None
-        if self.column_groups:
-            ttk.Label(toolbar, text="Columns").pack(side="left")
-            self.columns_box = ttk.Combobox(
-                toolbar, textvariable=self.columns_var, state="readonly",
-                values=[ALL_COLUMNS, *self.column_groups], width=12,
-            )
-            self.columns_box.pack(side="left", padx=(4, 12))
-            self.columns_box.bind("<<ComboboxSelected>>", lambda e: self.set_columns(self.columns_var.get()))
         for text, command in (
             ("New", self.new), ("Save", self.save), ("Delete", self.delete),
             ("Duplicate", self.duplicate), ("Refresh", self.refresh),
@@ -103,14 +84,16 @@ class EntityScreen(Screen):
         paned = ttk.PanedWindow(self, orient="vertical")
         paned.pack(fill="both", expand=True)
 
-        # two trees in lock-step: the frozen identity columns on the left, the rest scrolling on the right;
-        # ``self.tree`` is the right one and still owns every column, so the whole screen works on it
-        tree_columns = [*self.columns, PLAN] if self.stacked else self.columns
-        frozen = FROZEN if self.stacked else [c for c in IDENTITY if c in self.columns]
-        self.pane = FrozenPane(paned, tree_columns, frozen)
-        self.pane.on_sort = self.sort_by
-        self.tree = self.pane.right
-        self.ybar, self.xbar = self.pane.ybar, self.pane.xbar
+        table = ttk.Frame(paned)
+        self.tree = ttk.Treeview(table, columns=tree_columns, show="headings", selectmode="browse")
+        self.ybar = ttk.Scrollbar(table, orient="vertical", command=self.tree.yview)
+        self.xbar = ttk.Scrollbar(table, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=self.ybar.set, xscrollcommand=self.xbar.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        self.ybar.grid(row=0, column=1, sticky="ns")
+        self.xbar.grid(row=1, column=0, sticky="ew")
+        table.rowconfigure(0, weight=1)
+        table.columnconfigure(0, weight=1)
         if self.stacked:
             self.tree.heading(PLAN, text=PLAN_HEADER, command=lambda: self.sort_by(PLAN))
             self.tree.column(PLAN, width=360, minwidth=40, stretch=False, anchor="w")
@@ -126,15 +109,12 @@ class EntityScreen(Screen):
                 width = 100
             else:
                 width = 180
-            stretch = spec.type is FieldType.MULTILINE
-            anchor = "center" if spec.is_flag else "w"
-            self.tree.column(name, width=width, minwidth=40, stretch=stretch, anchor=anchor)
-        self.pane.set_display(self._shown(ALL_COLUMNS))  # the stacked fields are hidden from the start
-        self.tree.bind("<<TreeviewSelect>>", self._on_select, add="+")  # after the pane's own selection sync
+            self.tree.column(name, width=width, minwidth=40, stretch=spec.type is FieldType.MULTILINE, anchor="w")
+        self.tree.bind("<<TreeviewSelect>>", self._on_select)
         bind_horizontal_scroll(self.tree)
         self._heading_hint: str | None = None
         self.tree.bind("<Motion>", self._on_heading_motion)
-        paned.add(self.pane, weight=3)
+        paned.add(table, weight=3)
 
         # the details frame names the selected row (``Safety Plan Row details · row 2``): the handle a command
         # needs is on screen without a column
@@ -230,10 +210,10 @@ class EntityScreen(Screen):
         for iid, level, text, row in stack(rows):
             if row is None:
                 tag = PDP_TAG if level == 0 else PHASE_TAG
-                self.tree.insert("", "end", iid=iid, values=[*blanks, text], tags=(tag,))
+                self.tree.insert("", "end", iid=iid, values=[text, *blanks], tags=(tag,))
             else:
                 plan = INDENT * 2 + cell_text(spec, row.get("deliverable"))
-                self.tree.insert("", "end", iid=iid, values=[*self._values(row), plan])
+                self.tree.insert("", "end", iid=iid, values=[plan, *self._values(row)])
 
     def _populate(self) -> None:
         self.tree.delete(*self.tree.get_children())
@@ -249,7 +229,6 @@ class EntityScreen(Screen):
         self.count_var.set(f"{len(shown)} of {len(self.rows)} rows")
         if self.selected_id is not None and self.tree.exists(str(self.selected_id)):
             self.tree.selection_set(str(self.selected_id))
-        self.pane.mirror(self._domain())
 
     def _domain(self) -> dict[str, Any]:
         """The rest of each enum column's domain: every value of its lookup (the list ``EnumWidget`` offers)."""
@@ -288,29 +267,6 @@ class EntityScreen(Screen):
             self._heading_hint = text
             if text:
                 self.window.set_status(f"Column: {text}")
-
-    def set_columns(self, choice: str) -> None:
-        """Show every column (`All`) or the non-flag columns plus one flag group, through ``displaycolumns``.
-
-        The tree is never rebuilt: headings, widths, the sort and the selection survive, and a hidden
-        column still answers ``tree.set``. The choice lives on this screen instance only.
-        """
-        self.pane.set_display(self._shown(choice))  # the frozen columns are on the left whatever the choice
-        self.columns_var.set(choice)
-        self.fit()
-
-    def _shown(self, choice: str) -> list[str]:
-        """The data columns the right tree displays for ``choice``; the stacked fields never, they are the
-        ``plan`` column on the left."""
-        if choice == ALL_COLUMNS:
-            shown = self.columns
-        else:
-            group = self.column_groups[choice]
-            shown = [
-                c for c in self.columns
-                if not self.schema.field(c).is_flag or self.schema.field(c).group == group
-            ]
-        return [c for c in shown if c not in STACKED] if self.stacked else list(shown)
 
     def select(self, row_id: int) -> None:
         if self.tree.exists(str(row_id)):

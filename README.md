@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.11.2**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.11.3**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,16 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.11.3
+
+The **Safety Plan screen is one table again**: the owner's call of 2026-10-28, since the scrolling
+block of 53 flag columns was redundant with the Safety Plan Matrix. The table shows the plan stacked
+in one column (PDP phase > lifecycle phase > deliverable) and, beside it, every other non-flag field:
+points, default points, sprint, sprint start, sprint end, location, reference, author, gate reviewer,
+deadline, status; one vertical bar, one horizontal bar, no sash, no Columns box. The form below still
+edits every field, flags included, and the Matrix keeps its frozen split for the flags. Nothing of the
+data or the files changed.
 
 ## What is in 0.11.2
 
