@@ -190,7 +190,8 @@ class StandardsService:
     def export(
         self, row_id: int, out_dir: str | Path | None = None, standard: str | None = None, actor: str = "python"
     ) -> dict[str, Any]:
-        """Build each standard of the row (or the one named) with asi_gutenberg, in the source's own page orientations, the parameters
+        """Build each standard of the row (or the one named) with asi_gutenberg, in the source's own page
+        orientations, the parameters
         filled from the ``parameter`` table, the plan and Jira, the rest left and reported; audited once."""
         from asi_gutenberg import build, from_markdown
 
