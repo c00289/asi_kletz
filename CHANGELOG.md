@@ -12,6 +12,77 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.14.0] - 2026-10-29
+
+The owner, 2026-10-29: "in the safety plan window when you select a safety plan deliverable the bottom pane
+gets populated with data about that deliverable; now in that screen the first item is a button that asks you
+for a local folder to save a new version or view of the model in the form of that safety plan deliverable;
+then following that please have all the parameters for the doc and then after that all content as is today;
+obviously the export button makes it so that parameters reach Gutenberg and it makes us a file." And on the
+values: "the expected duration/deadline should be a string `x points` where x is the chosen number of points
+for the deliverable, not the default value, never the default value, then a line break and then the date we
+expect the sprint to conclude; the status parameter is the status of Jira, forget about the status names
+called out in the spreadsheet; this company ties deliverables to Jira tickets." Schema version 7 → 8.
+
+### Added
+- **`jira_key` on `safety_plan_row`** (`schema/definitions.py`): TEXT, after `status`, not a source column,
+  visible and editable: the Jira ticket that tracks the deliverable; the table and the form show it (70
+  fields, 69 visible, 64 editable, 63 source).
+- **The `parameter` entity** (`name` required, `standard` empty for every standard, `value`, `note`; sheet
+  `Parameters`; a name unique per standard, `StandardsService.parameter_guard`), sixth in `ALL_ENTITIES`, with
+  the CRUD verbs, the dump, the workbook sheet and a **Parameters** screen after Holidays.
+- **`standards_dir`** in `kletz.toml` (default `../asi_standards` beside the file; `$ASI_KLETZ_STANDARDS`;
+  `Brain(standards_dir=)`; read when asked; in `status`, in `kletz.example.toml`, in the README).
+- **`services/standards_service.py`**: `list` (every subfolder holding a Markdown source of its own name; the
+  title from the front matter; the parameters through `asi_gutenberg.parameters`, split into document-level
+  and row-level by `row_\d+_(points|sprint_end|status)`), `for_row` (a set `ref_<slug>` flag names a folder
+  starting with the QMS id in slug form: `ref_qf_17` → `qf-17-...`, never `qf-170`), `document_values` (the
+  `parameter` rows whose standard is empty or this one, the standard's own winning), `row_values`
+  (`row_N_points` from `points` only, `row_N_sprint_end`, `row_N_status` from the Jira statuses),
+  `jira_statuses` (one `JiraService.statuses` call; no session or a failed read is one warning naming the
+  keys skipped; rows without a key are named once), `value_set` and `export` (`asi_gutenberg.from_markdown`
+  then `build` with `theme={"orientation": "landscape"}`, `strict_params=False`, `mark_params=True`, `name`
+  the folder; the files, the pages, the filled count, the unfilled names as data and as warnings; one audit
+  entry `export`; the event `plan.exported`).
+- **`JiraService.statuses(keys)`**: one `hopper.get(key)` per distinct key through one non-interactive Hopper.
+- **Verbs**: `standards list` / `standards for --row <id>` (`commands/standards.py`); `plan export --row <id>
+  [--out <dir>] [--standard <folder>]` and `plan parameters --row <id>` (`commands/plan.py`).
+- **The standards pane** (`gui/entity_screen.py`, the stacked entity only): at the top of the details form,
+  **Export document…** (enabled when the selected row has a standard; `filedialog.askdirectory` when the
+  window is interactive, else the configuration's `out`; then `plan export`; the status bar names the files
+  and the unfilled count) beside the row's standard or the "No standard for this deliverable" line; a
+  **Document parameters** box with one entry per document-level parameter, prefilled from the `parameter`
+  table, and **Save parameters** (`create` / `update parameter` through `window.run`); a line with the row's
+  own values as the export fills them; then the form as before. Selecting another row refreshes it.
+
+### Deviations from the brief, and what it got wrong once it met the code
+- **A parameter saved from the pane is global** (`standard` empty) unless a row for that name already exists
+  (global or the row's standard), which is then updated: the owner supplies the twenty-one values once and
+  the roles are the same parameters in every standard; a per-standard value is still a `create parameter
+  --set standard=<folder>` away and wins.
+- **The pane shows the last fetched Jira status, not a stored one**: nothing from Jira is stored (the family
+  rule); the status the last export of the session fetched is shown "as of the last export", and before any
+  export the line says the status is fetched on export.
+- **`plan parameters` reads Jira too** (one Hopper read per distinct key): the value set it prints is the one
+  the export would fill, which the brief asked for, and that includes the status.
+- **An absent folder** lists no standard and refuses the export naming the folder; the brief did not say.
+- `standards_dir` was given an environment override (`$ASI_KLETZ_STANDARDS`) like the other paths, so the
+  test suite never reads the real sibling repo.
+- `uv lock` took asi_gutenberg 0.2.1 → 0.5.0, the sibling's current version, which the parameters need
+  (`from_markdown`, `parameters`, `build(params=...)`).
+
+### Tests
+- 311 → 320: the folder scan and the match by QMS flag (`qf_17` names `qf-17-...`, never
+  `qf-170` or `qp-17`); the parameter entity's uniqueness and names; the value set and the export on a tmp
+  standard (`{{ vehicle_type }}`, `{{ fusa_engineer }}`, row 1 and row 2) with a stub Hopper: the
+  document-level values from the table with the standard's own winning, row 1's points, sprint end and Jira
+  status, row 2's status and points unfilled (a default of 3 never written), the `==value==` marks in the
+  Markdown, the triplet, the audit entry and the event, one read per distinct key, a named and an unknown
+  standard, a row without a standard; offline: one warning naming the keys, the status left unfilled; the
+  default `out`; the GUI pane: disabled for a row without a standard, the standard and the two entries for
+  row 1, Save parameters creating and updating rows, Export in non-interactive mode writing into `out` with
+  the status line, the form below unchanged, New emptying the pane.
+
 ## [0.13.1] - 2026-10-29
 
 The owner, 2026-10-29: "change the colour of the little widget that you pull up and down or side to

@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.13.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.14.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,23 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.14.0
+
+**Standards and export** (the owner's ask of 2026-10-29; schema version 8): a Safety Plan deliverable is
+exported into the controlled QMS document it belongs to, a parametrised *standard* from the sibling repo
+`asi_standards` (`standards_dir` in `kletz.toml`, default `../asi_standards`), with its blanks filled: the
+document-level parameters a person supplies once (`vehicle_type`, the roles) through the new **Parameters**
+screen or `create parameter`, and the row-level ones Kletz supplies for every deliverable: `row_N_points`,
+the chosen points and never the default; `row_N_sprint_end`, the date the owning sprint concludes;
+`row_N_status`, the live status of the Jira ticket in the new **Jira key** field ("this company ties
+deliverables to Jira tickets"). `standards list` and `standards for --row <id>` say what is there and
+what a row has (by its QMS reference flags); `plan parameters --row <id>` prints the value set; `plan
+export --row <id> --out <dir>` builds the Markdown / PDF / Word triplet with asi_gutenberg, landscape,
+every filled value highlighted, every blank still a blank and named in the warnings. In the window the
+Safety Plan's details pane starts with **Export document…** (a folder, then the export), the row's
+standard, a **Document parameters** box with **Save parameters**, and the row's own values as the export
+fills them; then the form as before. See [Standards and export](#standards-and-export).
 
 ## What is in 0.13.1
 
@@ -363,6 +380,51 @@ ASI Kletz is a sister of asi_gutenberg, asi_escher, asi_hopper and asi_dewey (se
 [ASI_FUSA_TOOLS.md](../asi_fusa_tools/ASI_FUSA_TOOLS.md)). It uses the two generators and the Jira door as libraries and
 shares no code, data, database, workbook, configuration, or environment variable with its sister
 tool.
+
+## Standards and export
+
+A *standard* is a controlled QMS document brought into asi_gutenberg and parametrised: one folder of the
+standards directory holding a Markdown source of the same name (`qf-17-safety-plan/qf-17-safety-plan.md`
+in `asi_standards`, a private sibling repo, read by Kletz and never written), whose blanks are `{{ name }}`
+parameters. The folder is `standards_dir` in `kletz.toml` (default `../asi_standards`, resolved against the
+file; `$ASI_KLETZ_STANDARDS` overrides it; `status` reports it). Two kinds of parameter:
+
+- **Document-level**, a person supplies them once: `vehicle_type` and one name per role, named by the slug
+  of the plan's author and reviewer flag headers (`fusa_engineer`, `tech_lead_functional_safety`, ...). They
+  live in the `parameter` entity (name, standard, value, note; the Parameters screen, `create parameter
+  --set name=vehicle_type --set value="Wheel Loader"`): a row whose `standard` is empty holds for every
+  standard, a row naming a folder wins for that one. A name is unique per standard.
+- **Row-level**, Kletz supplies them for every deliverable, N being the row's `order`: `row_N_points`, the
+  chosen points (`points`), never the default; `row_N_sprint_end`, the date the owning sprint concludes;
+  `row_N_status`, the live status of the deliverable's Jira ticket (`jira_key`), read once per distinct key
+  through asi_hopper, non-interactively; a row without a key, or no session, leaves the blank with one
+  warning naming what was skipped.
+
+A plan row *has* a standard when one of its QMS reference flags names the folder: `ref_qf_17` set names a
+folder starting `qf-17`.
+
+```powershell
+asi-kletz standards                                      # list: folder, title, document parameters, row parameters
+asi-kletz standards for --row 1                          # the standards row 1 has
+asi-kletz plan parameters --row 1                        # the value set an export would fill, nothing built
+asi-kletz plan export --row 1 --out out                  # out/qf-17-safety-plan.{md,pdf,docx}, landscape
+asi-kletz plan export --row 1 --out out --standard qf-17-safety-plan
+```
+
+The export builds every standard the row has (or the one named) with `asi_gutenberg.build` (landscape, the
+parameters filled, a blank left as `{{ name }}` and reported as `unfilled parameter: name`, every filled
+value highlighted in mint in the PDF and the Word file and written `==value==` in the Markdown); the
+result lists the files, the pages, the filled count and the unfilled names, also as warnings; one audit entry
+`export`; the event `plan.exported`. The default output folder is the configuration's `out`.
+
+In the window, the Safety Plan's details pane starts with the standards pane (owner, 2026-10-29): **Export
+document…** (enabled when the selected row has a standard; it asks for a folder, then runs `plan export`;
+the status bar names the files written and how many parameters are still unfilled) beside the row's
+standard or `No standard for this deliverable: its QMS references name none in <standards_dir>`; a
+**Document parameters** box with one entry per document-level parameter, prefilled from the `parameter`
+table, and **Save parameters**, which creates or updates the rows through the same verbs an agent uses; a
+line with the row's own values as the export will fill them (the points chosen or the note that the default
+is never exported, the sprint end, the Jira key and its last fetched status); then the form as before.
 
 ## Diagrams and documents
 
@@ -824,7 +886,9 @@ The export writes a workbook with one sheet per entity (`Safety Plan`, `Sprints`
 `Weekly Status`, `Holidays`). Point `workbook` at a file of its own, never at a workbook that holds
 other sheets you want to keep. `tracker_title`, `tracker_byline`, `tracker_scope`,
 `tracker_jira_scope` (text) and `sprint_days` (an integer, business days) are the Weekly Activity
-Tracker's settings (see Weekly Activity Tracker); all are optional. `default_points` (an integer,
+Tracker's settings (see Weekly Activity Tracker); all are optional. `standards_dir` (a path, default
+`../asi_standards` beside the file) is the folder of parametrised standards (see Standards and
+export). `default_points` (an integer,
 default 2) is the floor a Safety Plan row weighs when it has neither its own points nor the estimation
 panel's default. `sprint_capacity` is no setting
 since 0.10.0: capacity is the rule (8, fixed), and the key, when present, is ignored with a warning
