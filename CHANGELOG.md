@@ -12,6 +12,41 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.21.0] - 2026-10-29
+
+The owner, 2026-10-29, on the exported QF-17 Safety Plan: "Could we turn the name of the safety deliverable
+into a clickable URL and highlight it blue instead of green so it pops?" And asi_gutenberg 0.8.0's abridged
+headers, wired into the export.
+
+### Added
+- **The deliverable's link** (asi_gutenberg 0.9.0, asi_standards the same day): the QF-17 source writes every
+  plan row's Safety Deliverables cell as `[<name>]({{ row_N_url }})`, and the fill writes it into the Word
+  original as a real hyperlink to the row's first work product URL, Word's Hyperlink style (blue, underlined)
+  over the theme's pale blue shading `#CFE2F3`, never the green mark; a row whose URL is unfilled keeps the plain
+  name. Kletz supplies the URL as in 0.20.0; `row_N_url` is documented as the link (`StandardsService`).
+- **The Excel deliverable cell** (`io/exporters.py`, `DELIVERABLE`): the Safety Deliverables cell of a row with
+  a URL is a hyperlink to the first one, the Hyperlink style, its text the name as before, beside the Work
+  product column; a row without a URL keeps a plain cell; the import reads the names back.
+- **Abridged headers** (`StandardsService`, `ABRIDGED_HEADERS`): a standard's folder may hold
+  `abridged-headers.json` (verbatim column heading -> short form); `Standard.abridged_headers` names it and
+  `standards list` prints it; `export` passes it to `fill_docx(..., abridged_headers=mapping, pdf=True)`, so the
+  Word pass that prints the PDF shows the verbatim header on the plan table's first page and the short forms on
+  every later one. Each export carries `abridged` (the tables split, by first heading) and `pages` (Word's count
+  when it printed, else the rendering's) and `abridged_headers` (the file). Without Word the issue
+  `abridged headers need Word` is a warning ending "the Word file keeps the verbatim header on every page",
+  beside the PDF's.
+- Tests (`tests/test_standards_template.py`): `test_export_links_the_deliverable_and_passes_the_abridged_headers`
+  (the synthetic original gaining a link to the first URL in the Hyperlink style and the blue shading, no green,
+  the row without a URL plain, the mapping handed to the Word session, which is replaced, `abridged` and `pages`
+  carried, the file named by `standards list`), `test_without_word_the_abridged_headers_are_a_warning`,
+  `test_word_prints_the_linked_deliverable_with_the_mapping` (skipped without WINWORD); `tests/test_work_products.py`:
+  `test_the_excel_deliverable_cell_links_to_the_first_url`. 397 tests, 393 before.
+
+### Changed
+- `uv.lock`: asi-gutenberg 0.9.0 (was 0.7.2 in the lock), asi-hopper 0.1.8 (the sibling moved on; nothing here
+  uses what changed).
+- README: *What is in 0.21.0*; Standards and export (`row_N_url` as the deliverable's link, Abridged headers).
+
 ## [0.20.0] - 2026-10-29
 
 The owner, 2026-10-29: "use the outlook method please and also please add the ability to add url parameters to
@@ -1749,6 +1784,8 @@ variables, configuration file, database, and workbook.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
 [Unreleased]: https://example.invalid/asi-kletz/compare/v0.19.0...HEAD
+[0.21.0]: https://example.invalid/asi-kletz/compare/v0.20.0...v0.21.0
+[0.20.0]: https://example.invalid/asi-kletz/compare/v0.19.0...v0.20.0
 [0.19.0]: https://example.invalid/asi-kletz/compare/v0.18.1...v0.19.0
 [0.18.1]: https://example.invalid/asi-kletz/compare/v0.18.0...v0.18.1
 [0.18.0]: https://example.invalid/asi-kletz/compare/v0.17.0...v0.18.0

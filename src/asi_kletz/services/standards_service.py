@@ -43,6 +43,8 @@ PARAMETER = "parameter"
 ROW_PARAM = re.compile(r"^row_(\d+)_(points|sprint_end|jira_key|status|url|urls)$")
 PARAM_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 UNFILLED = "unfilled parameter: "
+ABRIDGED_HEADERS = "abridged-headers.json"  # beside the source: verbatim column heading -> short form (0.21.0)
+ABRIDGE_NEEDS_WORD = "abridged headers"  # how asi_gutenberg's issue starts when Word could not run the pass
 NO_STANDARD = "No standard for this deliverable: its QMS references name none in {root}"
 NO_EMAIL_YET = "a legacy value with no email yet"
 LEGACY, PEOPLE, EMPTY = "legacy", "people", "empty"  # the three states of a role (``role_summary``)
@@ -55,6 +57,7 @@ class Standard:
     title: str
     parameters: list[str] = field(default_factory=list)
     template: Path | None = None  # the Word original under source/, when the folder holds exactly one (0.16.0)
+    abridged_headers: Path | None = None  # abridged-headers.json beside the source, when there is one (0.21.0)
 
     @property
     def document_parameters(self) -> list[str]:
@@ -76,6 +79,7 @@ class Standard:
         return {
             "folder": self.folder, "path": str(self.path), "title": self.title,
             "template": str(self.template) if self.template else None,
+            "abridged_headers": str(self.abridged_headers) if self.abridged_headers else None,
             "parameters": len(self.parameters), "document_parameters": self.document_parameters,
             "role_parameters": self.role_parameters, "row_parameters": len(self.row_parameters),
         }
@@ -124,7 +128,9 @@ class StandardsService:
         doc = from_markdown(source.read_text(encoding="utf-8"))
         originals = sorted((source.parent / "source").glob("*.docx")) if (source.parent / "source").is_dir() else []
         template = originals[0] if len(originals) == 1 else None
-        return Standard(folder, source, str(doc.title or folder), parameters(doc), template)
+        abridged = source.parent / ABRIDGED_HEADERS
+        return Standard(folder, source, str(doc.title or folder), parameters(doc), template,
+                        abridged if abridged.is_file() else None)
 
     def for_row(self, row: dict[str, Any]) -> list[Standard]:
         """The standards a plan row has: those whose folder a set QMS reference flag of the row names."""
@@ -366,7 +372,17 @@ class StandardsService:
         Word file is that original filled in place, every filled value shaded the theme's green (0.17.0, the
         owner: "bring back the color formatting for parameters"), every table's first row repeating per
         page, and the PDF is Word's own print of it; without an original, or when Word cannot print, the PDF and Word
-        file are Gutenberg's renderings of the source, as before, and a warning says so for the PDF."""
+        file are Gutenberg's renderings of the source, as before, and a warning says so for the PDF.
+
+        0.21.0: when the folder also holds ``abridged-headers.json`` (verbatim column heading -> short form) it
+        goes to the fill as ``abridged_headers`` (asi_gutenberg 0.8.0: the plan table's header verbatim on its
+        first page, abridged on every later one, a Word pass with the print); the export carries ``abridged``
+        (the tables split, by first heading) and ``pages`` (Word's count when it ran, else the rendering's);
+        without Word the Word file keeps the verbatim repeating header and a warning says so. The deliverable
+        names the source links (``[Safety Plan]({{ row_N_url }})``) come out as blue hyperlinks to the row's
+        first work product URL (asi_gutenberg 0.9.0)."""
+        import json
+
         from asi_gutenberg import build, fill_docx, from_markdown
 
         plan = self.value_set(row_id, standard)
@@ -386,22 +402,33 @@ class StandardsService:
                 warnings.append(f"{std['folder']}: unfilled parameter {name}")
             files = {fmt: paths[fmt] for fmt in ("md", "pdf", "docx") if fmt in paths}
             exact = {"docx": False, "pdf": False}
+            pages, abridged = paths.get("pages"), []
             if std.get("template"):
+                mapping = None
+                if std.get("abridged_headers"):
+                    mapping = json.loads(Path(std["abridged_headers"]).read_text(encoding="utf-8"))
                 filled = fill_docx(
                     std["template"], source, std["values"], str(target / f"{std['folder']}.docx"),
-                    strict=False, mark=True, pdf=True,
+                    strict=False, mark=True, pdf=True, abridged_headers=mapping,
                 )
                 files["docx"] = filled.docx
                 exact["docx"] = True
                 if filled.pdf:
                     files["pdf"] = filled.pdf
                     exact["pdf"] = True
+                if filled.pages:
+                    pages = filled.pages
+                abridged = list(filled.abridged)
                 for issue in filled.issues:
-                    warnings.append(f"{std['folder']}: {issue}; the PDF is Gutenberg's rendering, not the template")
+                    if issue.startswith(ABRIDGE_NEEDS_WORD):
+                        how = "the Word file keeps the verbatim header on every page"
+                    else:
+                        how = "the PDF is Gutenberg's rendering, not the template"
+                    warnings.append(f"{std['folder']}: {issue}; {how}")
             built.append({
                 "standard": std["folder"], "title": std["title"], "files": files, "primary": files.get("pdf"),
-                "pages": paths.get("pages"), "filled": std["filled"], "unfilled": unfilled,
-                "template": std.get("template"), "exact": exact,
+                "pages": pages, "abridged": abridged, "filled": std["filled"], "unfilled": unfilled,
+                "template": std.get("template"), "abridged_headers": std.get("abridged_headers"), "exact": exact,
                 "issues": [i for i in issues if not i.startswith(UNFILLED)],
             })
         data = {

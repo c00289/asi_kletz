@@ -279,3 +279,26 @@ def test_a_schema_9_database_gains_the_urls_column_and_keeps_every_row(tmp_path,
         assert [{**r, "urls": None} for r in rows_before] == rows and rows[0]["urls"] is None
         assert after.storage.audit_tail(1)[0]["action"] != "update"  # the migration edits no row
         assert after.execute("update", entity=PLAN, id=1, data={"urls": [MS]}).data["urls"] == [MS]
+
+
+def test_the_excel_deliverable_cell_links_to_the_first_url(seeded, tmp_path):
+    """0.21.0, the owner: "turn the name of the safety deliverable into a clickable URL". The Safety
+    Deliverables cell of a row with a URL is a hyperlink to the first one, in the Hyperlink style, its text
+    the name as before; a row without a URL keeps a plain cell; the import reads the names back."""
+    assert seeded.execute("update", entity=PLAN, id=1, data={"urls": [MS, A]}).ok
+    assert seeded.execute("update", entity=PLAN, id=2, data={"urls": [B]}).ok
+    exported = seeded.execute("export", format="excel", out=str(tmp_path / "view.xlsx"))
+    assert exported.ok, exported.errors
+    ws = load_workbook(exported.data["path"])["Safety Plan"]
+    headers = [c.value for c in ws[1]]
+    name_col = headers.index("Safety Deliverables") + 1
+    first, second, third = (ws.cell(row=r, column=name_col) for r in (2, 3, 4))
+    assert first.value == "Safety Plan" and first.hyperlink.target == MS and first.style == "Hyperlink"
+    assert second.hyperlink.target == B and second.style == "Hyperlink" and second.value
+    assert third.value and third.hyperlink is None and third.style != "Hyperlink"
+    assert first.alignment.wrap_text  # still the multiline cell it was
+    with Brain(tmp_path / "re.db") as other:
+        imported = other.execute("import", format="excel", path=exported.data["path"], mode="replace")
+        assert imported.ok, imported.errors
+        rows = other.execute("list", entity=PLAN).data
+        assert rows[0]["deliverable"] == "Safety Plan" and [r["urls"] for r in rows] == [[MS, A], [B], None]

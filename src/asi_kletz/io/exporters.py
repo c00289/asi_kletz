@@ -8,6 +8,10 @@ be... on multiple urls just go to first". The Safety Plan sheet gets a derived *
 field; a clickable hyperlink to the row's first URL, the cell text the URL's host, the Hyperlink style) before
 the **Work product URLs** column (the ``urls`` field, one URL per line, read back by the import). A row with
 no Jira ticket prints ``no ticket attached`` in its Jira key cell, which the import reads as no key.
+
+0.21.0, the owner: "turn the name of the safety deliverable into a clickable URL". The Safety Deliverables cell
+of a row that has a URL is itself a hyperlink to the first one (the Hyperlink style), beside the Work product
+column; the import reads its text as before.
 """
 
 from __future__ import annotations
@@ -28,6 +32,8 @@ from ..version import SCHEMA_VERSION, __version__
 
 if TYPE_CHECKING:
     from ..brain import Brain
+
+DELIVERABLE = "deliverable"  # the Safety Plan row's name field: its cell links to the first URL (0.21.0)
 
 
 def _timestamp() -> str:
@@ -179,6 +185,10 @@ class ExcelExporter(Exporter):
                         cell.value = value if isinstance(value, str) else json_text(value)
                     else:
                         cell.value = value
+                        link = first_url(row.get("urls")) if spec.name == DELIVERABLE else None
+                        if link:  # 0.21.0: the deliverable's name links to the first URL, the Hyperlink style
+                            cell.hyperlink = link
+                            cell.style = "Hyperlink"
                         if spec.type is FieldType.MULTILINE:
                             cell.alignment = Alignment(wrap_text=True, vertical="top")
                     widths[col - 1] = max(widths[col - 1], min(len(str(value)), 60))

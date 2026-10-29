@@ -150,3 +150,140 @@ def test_the_pdf_is_words_print(seeded, standards, tmp_path, monkeypatch):
     assert result.ok, result.errors
     [built] = result.data["exports"]
     assert built["exact"] == {"docx": True, "pdf": True} and Path(built["primary"]).name == "qf-17-test.pdf"
+
+
+# -- 0.21.0: the deliverable's link and the abridged headers ----------------------------------------------
+MS = "https://www.microsoft.com/"
+BLUE = "CFE2F3"  # asi_gutenberg 0.9.0 THEME["link_bg"], the pale blue under a link
+ABRIDGED = {"Deliverable": "Del.", "Expected Duration/Deadline": "Duration", "Status": "Status"}
+
+
+def _linked_standard(standards: Path) -> Path:
+    """The test standard with its deliverable names written as links to the row's url (asi_gutenberg 0.9.0,
+    the owner: "turn the name of the safety deliverable into a clickable URL") and the abridged headings
+    beside the source; the original under source/."""
+    import json
+
+    source = standards / "qf-17-test" / "qf-17-test.md"
+    text = source.read_text(encoding="utf-8")
+    text = text.replace("| Safety Plan |", "| [Safety Plan]({{ row_1_url }}) |")
+    text = text.replace("| HARA |", "| [HARA]({{ row_2_url }}) |")
+    source.write_text(text, encoding="utf-8")
+    mapping = standards / "qf-17-test" / "abridged-headers.json"
+    mapping.write_text(json.dumps(ABRIDGED), encoding="utf-8")
+    _original(standards / "qf-17-test" / "source" / "QF-17 test.docx")
+    return mapping
+
+
+def _links_of(cell) -> list[tuple[str, str, str | None, str | None]]:
+    """Every hyperlink of a Word cell: (target, text, character style, shading fill)."""
+    from docx.oxml.ns import qn
+
+    out = []
+    for h in cell._tc.iter(qn("w:hyperlink")):
+        rpr = h.find(qn("w:r") + "/" + qn("w:rPr"))
+        style = rpr.find(qn("w:rStyle")) if rpr is not None else None
+        shd = rpr.find(qn("w:shd")) if rpr is not None else None
+        text = "".join(t.text or "" for t in h.iter(qn("w:t")))
+        out.append((cell.part.rels[h.get(qn("r:id"))].target_ref, text,
+                    style.get(qn("w:val")) if style is not None else None,
+                    shd.get(qn("w:fill")) if shd is not None else None))
+    return out
+
+
+def test_export_links_the_deliverable_and_passes_the_abridged_headers(seeded, standards, tmp_path, monkeypatch):
+    """0.21.0: the deliverable cell of a row with a URL is a blue hyperlink to its first URL; a row without
+    one keeps the plain name; ``abridged-headers.json`` beside the source goes to the fill as the mapping
+    and the export carries what Word did (``abridged``, ``pages``), here with the Word session replaced."""
+    from importlib import import_module
+
+    import docx
+    from asi_gutenberg.fill_docx import WordSession
+    from docx.oxml.ns import qn
+
+    fill_module = import_module("asi_gutenberg.fill_docx")  # the package exports the function of that name
+
+    mapping = _linked_standard(standards)
+    for data in PARAMETERS:
+        assert seeded.execute("create", entity="parameter", data=data).ok
+    assert seeded.execute("update", entity=PLAN, id=1, data={"urls": [MS, "https://dms.example.com/doc/17"]}).ok
+    _stub(seeded, monkeypatch, {})
+    sessions: list[dict] = []
+
+    def fake_session(docx_path, pdf_path, plan=None, timeout=180, read_only_recommended=False):
+        sessions.append({"docx": docx_path, "pdf": pdf_path, "plan": plan})
+        Path(pdf_path).write_bytes(b"%PDF-1.4 fake\n" + b"0" * 2000)
+        return WordSession(printed=True, abridged=["Deliverable"], pages=3)
+
+    monkeypatch.setattr(fill_module, "word_session", fake_session)
+    listed = seeded.execute("standards", action="list")
+    assert listed.ok and listed.data["standards"][0]["abridged_headers"] == str(mapping)
+
+    out = tmp_path / "out"
+    result = seeded.execute("plan", action="export", row=1, out=str(out))
+    assert result.ok, result.errors
+    [built] = result.data["exports"]
+    assert built["abridged"] == ["Deliverable"] and built["pages"] == 3 and built["abridged_headers"] == str(mapping)
+    assert built["exact"] == {"docx": True, "pdf": True} and Path(built["primary"]) == out / "qf-17-test.pdf"
+    [session] = sessions
+    assert session["plan"] == [{"index": 1, "first": "Deliverable", "short": ["Del.", "Duration", "Status"]}]
+    assert any("unfilled parameter row_2_url" in w for w in result.warnings)
+    word = docx.Document(built["files"]["docx"])
+    table = word.tables[0]
+    assert table.cell(1, 0).text == "Safety Plan"
+    assert _links_of(table.cell(1, 0)) == [(MS, "Safety Plan", "Hyperlink", BLUE)]  # the first URL, blue
+    assert not any(s.get(qn("w:fill")) == GREEN for s in table.cell(1, 0)._tc.iter(qn("w:shd")))  # not green
+    assert table.cell(2, 0).text == "HARA" and _links_of(table.cell(2, 0)) == []  # no URL: the plain name
+    assert not any(True for _ in table.cell(2, 0)._tc.iter(qn("w:shd")))
+    assert "Hyperlink" in [s.name for s in word.styles]
+    md = Path(built["files"]["md"]).read_text(encoding="utf-8")
+    assert f"[Safety Plan]({MS})" in md and "[HARA]({{ row_2_url }})" in md  # the url never marked
+
+
+def test_without_word_the_abridged_headers_are_a_warning(seeded, standards, tmp_path, monkeypatch):
+    """Without Word the fill cannot split the table: the export warns once for the pass, the Word file keeps
+    the verbatim header repeating, ``abridged`` is empty and ``pages`` is the rendering's."""
+    import subprocess
+
+    _linked_standard(standards)
+    for data in PARAMETERS:
+        assert seeded.execute("create", entity="parameter", data=data).ok
+    assert seeded.execute("update", entity=PLAN, id=1, data={"urls": [MS]}).ok
+    _stub(seeded, monkeypatch, {})
+
+    def no_word(*args, **kwargs):
+        raise OSError("no Word here")
+
+    monkeypatch.setattr(subprocess, "run", no_word)
+    result = seeded.execute("plan", action="export", row=1, out=str(tmp_path / "out"))
+    assert result.ok, result.errors
+    [built] = result.data["exports"]
+    assert built["exact"] == {"docx": True, "pdf": False} and built["abridged"] == []
+    assert isinstance(built["pages"], int) and built["pages"] >= 1
+    assert any("abridged headers need Word" in w and "keeps the verbatim header on every page" in w
+               for w in result.warnings)
+    assert any("pdf through Word failed: no Word here; the PDF is Gutenberg's rendering" in w for w in result.warnings)
+    import docx
+    from docx.oxml.ns import qn
+
+    word = docx.Document(built["files"]["docx"])
+    assert len(word.tables) == 1 and word.tables[0].rows[0]._tr.find(".//" + qn("w:tblHeader")) is not None
+    assert _links_of(word.tables[0].cell(1, 0)) == [(MS, "Safety Plan", "Hyperlink", BLUE)]
+
+
+@pytest.mark.skipif(not WINWORD.is_file(), reason="Word is not installed here")
+def test_word_prints_the_linked_deliverable_with_the_mapping(seeded, standards, tmp_path, monkeypatch):
+    """Word itself: the mapping is checked against the table, which ends on its first page, so nothing is
+    split; the PDF is printed with the link in it and the page count is Word's."""
+    _linked_standard(standards)
+    for data in PARAMETERS:
+        assert seeded.execute("create", entity="parameter", data=data).ok
+    assert seeded.execute("update", entity=PLAN, id=1, data={"urls": [MS]}).ok
+    _stub(seeded, monkeypatch, {})
+    result = seeded.execute("plan", action="export", row=1, out=str(tmp_path / "out"))
+    assert result.ok, result.errors
+    [built] = result.data["exports"]
+    assert built["exact"] == {"docx": True, "pdf": True}, result.warnings
+    assert built["abridged"] == [] and built["pages"] == 1, (built, result.warnings)
+    assert Path(built["primary"]).stat().st_size > 1000
+    assert not any("abridged" in w or "pdf through Word" in w for w in result.warnings)

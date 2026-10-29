@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.20.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.21.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,29 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.21.0
+
+**The deliverable's name is its link, and the plan table's headers abridged after page one.** The owner,
+2026-10-29, on the exported QF-17: "Could we turn the name of the safety deliverable into a clickable URL and
+highlight it blue instead of green so it pops?"
+
+*The link.* In the exported Word original and the PDF Word prints from it, the Safety Deliverables cell of every
+plan row is a live hyperlink to the row's first work product URL (`row_N_url`), in Word's Hyperlink character
+style (blue, underlined) over a pale blue shading, instead of the green mark; a row whose URL is unfilled keeps
+the plain name, no link and no mark. The source says it (asi_standards: `[Safety Plan]({{ row_N_url }})`) and
+asi_gutenberg 0.9.0 writes it; Kletz only supplies the URL, as it did in 0.20.0. The Excel export's Safety Plan
+sheet does the same: the Safety Deliverables cell of a row with a URL links to the first one (the Hyperlink
+style), beside the Work product column of 0.20.0; the import reads the names back as before.
+
+*Abridged headers.* A standard's folder may hold `abridged-headers.json`, a JSON object from each verbatim column
+heading of the plan table to its short form (`PDP Phases` to `PDP`, `Safety Lifecycle Phase` to `Lifecycle`, and
+so on, ten for the QF-17). When it is there, `plan export` passes it to the fill as asi_gutenberg 0.8.0's
+`abridged_headers`: the Word pass that prints the PDF shows the verbatim header on the table's first page and
+the short forms at the top of every later page. The export result carries `abridged` (the tables split, by first
+heading) and `pages` (Word's count when it printed, else the rendering's); `standards list` names the file. On a
+machine without Word the Word file keeps the verbatim header repeating and a warning says so, as the PDF's
+warning did. See [Standards and export](#standards-and-export).
 
 ## What is in 0.20.0
 
@@ -523,7 +546,19 @@ file; `$ASI_KLETZ_STANDARDS` overrides it; `status` reports it). Two kinds of pa
   status in the QF-17 Status column); `row_N_status`, the live status of that ticket, read once per distinct
   key through asi_hopper, non-interactively; a row without a key, or no session, leaves the blank with one
   warning naming what was skipped; since 0.20.0 `row_N_url`, the row's first work product URL (the link), and
-  `row_N_urls`, all of them joined by a line break; a row with no URL leaves both blanks.
+  `row_N_urls`, all of them joined by a line break; a row with no URL leaves both blanks. Since 0.21.0 the
+  QF-17 source names `row_N_url` as the target of the deliverable's own name, `[Safety Plan]({{ row_N_url }})`,
+  so the exported Word original and its PDF show the name as a blue hyperlink to that URL (asi_gutenberg 0.9.0:
+  Word's Hyperlink style over a pale blue shading, never the green mark); a row with no URL keeps the plain name.
+
+**Abridged headers** (0.21.0): when the standard's folder holds `abridged-headers.json` (a JSON object, verbatim
+column heading to short form; the QF-17's maps its ten plan headings to `PDP`, `Lifecycle`, `Deliverable`,
+`Release`, `Reference`, `Author`, `Verification`, `Gate reviewer`, `Duration`, `Status`), `plan export` passes it
+to the fill as asi_gutenberg 0.8.0's `abridged_headers`, and the Word pass that prints the PDF shows the verbatim
+header on the plan table's first page and the short forms at the top of every later one. Each export carries
+`abridged` (the tables split, by first heading: `["PDP Phases"]` for the QF-17) and `pages` (Word's page count
+when it printed, else the rendering's); `standards list` names the file as `abridged_headers`. Without Word the
+Word file keeps the verbatim header repeating on every page and a warning says so.
 
 **Work product URLs** (0.20.0; the owner: "each deliverable may have multiple url... on multiple urls just go
 to first; list of urls is sequential while lists of names are alphabetical"): a plan row's `urls` is an ordered
