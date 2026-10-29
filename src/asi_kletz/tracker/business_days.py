@@ -1,9 +1,10 @@
-"""Business-day arithmetic for the sprint planner: pure functions, no Tk, no storage.
+"""Business-day arithmetic for the weekly tracker: pure functions, no Tk, no storage.
 
-The owner's rule (2026-10-28, ``docs/sprint-planner-plan.md``): a sprint spans 10 business days; Monday
-to Friday count, weekends and holidays do not, so a sprint that contains a holiday ends one calendar day
-later per holiday. Holidays come in as dates (any collection; a ``{date: name}`` mapping works through its
-keys), whatever their status in the ``holiday`` table.
+The burndown counts the working days of a sprint (Monday to Friday, holidays off) and the planner names the
+holidays a sprint contains. Sprint dates themselves are not business-day arithmetic since 0.18.0: the owner's
+law of 2026-10-29 makes a sprint 14 calendar days, Tuesday to Monday, holidays never moving it (the rule of
+2026-10-28, 10 business days stretched by holidays, is superseded). Holidays come in as dates (any collection;
+a ``{date: name}`` mapping works through its keys), whatever their status in the ``holiday`` table.
 """
 
 from __future__ import annotations
@@ -30,8 +31,7 @@ def next_business_day(day: dt.date, holidays: Collection[dt.date] = ()) -> dt.da
 def add_business_days(start: dt.date, n: int, holidays: Collection[dt.date] = ()) -> dt.date:
     """The date ``n`` business days on from ``start``, counting business days only.
 
-    ``n = 0`` is ``start`` itself when it is a business day, else the first business day after it; so a
-    sprint that starts on a business day ends on ``add_business_days(start, 9)``, its tenth business day.
+    ``n = 0`` is ``start`` itself when it is a business day, else the first business day after it.
     """
     if n < 0:
         raise ValueError(f"n must be 0 or more, not {n}")

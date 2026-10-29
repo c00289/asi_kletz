@@ -200,22 +200,22 @@ def test_the_files_carry_points_and_the_import_recalculates_sprint_and_deadline(
     from tests.conftest import SEED_WEIGHTS
 
     assert seeded.execute("create", entity="sprint", data={
-        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-10", "status": "Active",
+        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-09", "status": "Active",
     }).ok
     assert seeded.execute("plan", action="weights", what="load", file=str(SEED_WEIGHTS)).ok
     assert seeded.execute("update", entity=PLAN, id=2, set=["points=4"]).ok
     rows = seeded.execute("list", entity=PLAN).data
     assert [(r["points"], r["default_points"], r["sprint"], r["deadline"]) for r in rows] == [
-        (None, 5, None, "Phase 1 exit"), (4, 3, 2, "2026-11-10"), (None, 2, 2, "2026-11-10"),
+        (None, 5, None, "Phase 1 exit"), (4, 3, 2, "2026-11-09"), (None, 2, 2, "2026-11-09"),
     ]
     dump = tmp_path / "plan.json"
     assert seeded.execute("dump", entity=PLAN, out=str(dump)).ok
     dumped = json.loads(dump.read_text(encoding="utf-8"))["rows"]
     assert all(k in dumped[0] for k in ("points", "default_points", "sprint", "deadline"))  # JSON carries everything
-    assert dumped[1]["sprint"] == 2 and dumped[1]["deadline"] == "2026-11-10"
+    assert dumped[1]["sprint"] == 2 and dumped[1]["deadline"] == "2026-11-09"
     workbook = seeded.execute("export", format="excel", out=str(tmp_path / "plan.xlsx")).data["path"]
     ws = load_workbook(workbook)["Safety Plan"]
-    assert [ws.cell(row=3, column=c).value for c in (5, 6, 7, 67)] == [4, 3, 2, "2026-11-10"]  # a TEXT field
+    assert [ws.cell(row=3, column=c).value for c in (5, 6, 7, 67)] == [4, 3, 2, "2026-11-09"]  # a TEXT field
     assert ws.cell(row=2, column=67).value == "Phase 1 exit"  # the Done row's history, in the deadline column
 
     with Brain(tmp_path / "fresh.db") as other:
@@ -226,7 +226,7 @@ def test_the_files_carry_points_and_the_import_recalculates_sprint_and_deadline(
         assert result.warnings == []
         rows = other.execute("list", entity=PLAN).data
         assert [(r["points"], r["default_points"], r["sprint"], r["deadline"]) for r in rows] == [
-            (None, 5, None, "Phase 1 exit"), (4, 3, 2, "2026-11-10"), (None, 2, 2, "2026-11-10"),
+            (None, 5, None, "Phase 1 exit"), (4, 3, 2, "2026-11-09"), (None, 2, 2, "2026-11-09"),
         ]
         # a dump whose rows carry another sprint and deadline: warned about once, the calculated values stay
         for row in dumped[1:]:
@@ -241,7 +241,7 @@ def test_the_files_carry_points_and_the_import_recalculates_sprint_and_deadline(
         ]
         rows = other.execute("list", entity=PLAN).data
         assert [(r["sprint"], r["deadline"]) for r in rows] == [
-            (None, "Phase 1 exit (revised)"), (2, "2026-11-10"), (2, "2026-11-10"),
+            (None, "Phase 1 exit (revised)"), (2, "2026-11-09"), (2, "2026-11-09"),
         ]
         same = other.execute("load", path=str(dump), mode="merge")  # the original dump agrees: no warning
         assert same.ok and same.warnings == []

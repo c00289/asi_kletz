@@ -549,7 +549,8 @@ def test_plan_roadmap_document(seeded):
     text = Path(result.data["paths"]["md"]).read_text(encoding="utf-8")
     assert result.data["title"] == "Safety Plan Roadmap"
     assert (Path(result.data["out_dir"]) / "figures" / "plan_roadmap.png").is_file()
-    for needle in ("A sprint spans 10 business days", "figures/plan_roadmap.png", "Phase 1: Concept Development",
+    for needle in ("a sprint is 14 calendar days, Tuesday to the Monday 13", "figures/plan_roadmap.png",
+                   "Phase 1: Concept Development",
                    "Phase 3: Functional Safety Concept", "Sprint 2 (2026-11-09)", "Test holiday", "5"):
         assert needle in text, needle
     assert "Not scheduled" not in text

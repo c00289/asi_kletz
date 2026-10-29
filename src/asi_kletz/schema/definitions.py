@@ -11,6 +11,8 @@ across files and databases, never a column on a screen.
 
 from __future__ import annotations
 
+import datetime as dt
+
 from .entity import EntitySchema, flag_fields
 from .fields import FieldSpec, FieldType, uid_field
 from .lookups import default_lookups
@@ -130,19 +132,34 @@ CAPACITY_RULE = (
     f"every sprint that is not Closed has a capacity of {SPRINT_CAPACITY} points (company policy, fixed: "
     "\"every single sprint except the one in the past is 8 points\"); a Closed sprint keeps its own as history"
 )
-# "A sprint spans 10 business days. Monday to Friday count; weekends and holidays do not." Business days, not
-# calendar days, since 0.10.0; the holidays are the `holiday` table. `sprint_days` in kletz.toml overrides it.
-SPRINT_DAYS = 10
-# The owner's sprint rule, 2026-10-28, verbatim (docs/sprint-planner-plan.md): the `sprint` verb's help, the
-# README and the roadmap document quote it from here.
+# The owner's law, 2026-10-29, verbatim: "what we know as sprint 3 is actually sprint 31, renumber appropriately,
+# and then ensure that sprints always go Tuesday to Tuesday; this supersedes anything I said before; I also
+# included a picture from systems engineering that is law for our sprints." The picture, a strip of seven
+# sprints: 31 10/27-11/9, 32 11/10-11/23, 33 11/24-12/7, 34 12/8-12/21, 35 12/22-1/4, 36 1/5-1/18, 37 1/19-2/1.
+# So a sprint is 14 calendar days, from a Tuesday to the Monday 13 days later, the next starting the next day;
+# holidays never move, stretch or shorten one (35 runs straight through Christmas and New Year); capacity stays
+# 8, fixed. This replaces the rule of 2026-10-28 (10 business days, holidays stretching the dates) everywhere.
+SPRINT_LENGTH = 14  # calendar days, Tuesday to Monday
+SPRINT_WEEKDAY = 1  # a sprint starts on a Tuesday (Monday is 0)
+CADENCE_NUMBER = 31  # the picture's first sprint ...
+CADENCE_START = dt.date(2026, 10, 27)  # ... starts here; every other sprint is 14 days times its distance away
+CADENCE_RULE = (
+    "a sprint starts on a Tuesday and ends on the Monday 13 days later (14 calendar days; holidays never move it), "
+    f"the next starting the next day, from Sprint {CADENCE_NUMBER} ({CADENCE_START.isoformat()} to "
+    f"{(CADENCE_START + dt.timedelta(days=SPRINT_LENGTH - 1)).isoformat()}); the owner's law of 2026-10-29"
+)
+# The owner's sprint rule, verbatim (docs/sprint-planner-plan.md, superseded 2026-10-29; README, Sprints): the
+# `sprint` verb's help, the README and the roadmap document quote it from here.
 SPRINT_RULE = (
-    "A sprint spans 10 business days. Monday to Friday count; weekends and holidays do not, so a sprint that "
-    "contains a holiday ends one calendar day later per holiday. Dates move as holidays become real; the cadence "
-    "does not. Capacity is 8 points per sprint, company policy (8 productive days of the 10). Holidays never "
-    "reduce points. Sprints are consecutive with no gaps, numbered across the programme (SPRINT n); the chain "
-    "continues from Sprint 2 (2026-10-27 to 2026-11-10). We do not know the work yet: future sprints are empty, "
-    "Planned, with no lifecycle phase, and will be adjusted as dates become real. "
-    "Every single sprint except the one in the past is 8 points; set this as a global value that is fixed."
+    "The owner, 2026-10-29: \"what we know as sprint 3 is actually sprint 31, renumber appropriately, and then "
+    "ensure that sprints always go Tuesday to Tuesday; this supersedes anything I said before; I also included a "
+    "picture from systems engineering that is law for our sprints.\" The picture: Sprint 31 10/27 to 11/9, "
+    "Sprint 32 11/10 to 11/23, Sprint 33 11/24 to 12/7, Sprint 34 12/8 to 12/21, Sprint 35 12/22 to 1/4, "
+    "Sprint 36 1/5 to 1/18, Sprint 37 1/19 to 2/1. So a sprint is 14 calendar days, Tuesday to the Monday 13 "
+    "days later, the next starting the next day; holidays never move, stretch or shorten a sprint; capacity is "
+    "8 points per sprint, company policy, fixed (holidays never reduce points); sprints are consecutive with no "
+    "gaps, numbered across the programme (SPRINT n) from Sprint 31 (2026-10-27 to 2026-11-09). The rule of "
+    "2026-10-28 (10 business days, holidays stretching the dates) is superseded."
 )
 
 default_lookups.register("sprint_status", SPRINT_STATUSES)

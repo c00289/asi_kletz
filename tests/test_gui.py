@@ -1641,7 +1641,7 @@ def _sprint(brain):
     """Sprint 1, active, with three items: 3 points to do, 3 in progress, 2 done (capacity is the rule, 8)."""
     assert brain.execute("create", entity="sprint", data={
         "number": 1, "label": "SPRINT 1", "lifecycle_phase": "3. Functional Safety Concept (FSC)",
-        "start": "2026-10-27", "end": "2026-11-10", "status": "Active", "goal": "Clear the backlog",
+        "start": "2026-10-27", "end": "2026-11-09", "status": "Active", "goal": "Clear the backlog",
     }).ok
     for order, (title, points, status, extra) in enumerate([
         ("Safety Plan dated", 3, "To Do", {"kind": "Deliverable", "plan_row": 1}),
@@ -1683,7 +1683,7 @@ def test_sprint_board_lanes_form_and_save(window, seeded):
     assert _lane(screen, "To Do") == ["Safety Plan dated"] and _lane(screen, "Done") == ["Intro meeting"]
     assert screen.points_var.get() == "8 / 8 points committed · 2 done · 6 to go · 0 unpointed"
     pace = screen.pace_var.get()
-    assert pace.startswith("2026-10-27 to 2026-11-10 · ") and "velocity no closed sprint" in pace
+    assert pace.startswith("2026-10-27 to 2026-11-09 · ") and "velocity no closed sprint" in pace
     assert int(screen.bar.cget("value")) == 8 and int(screen.bar.cget("maximum")) == 8
     assert "Clear the backlog" in screen.goal_var.get()
     # select the In Progress item: the form fills, the other lanes drop their selection
@@ -1889,7 +1889,7 @@ def test_points_entry_shows_the_default_and_names_it_when_the_value_differs(wind
     from tests.conftest import SEED_WEIGHTS
 
     assert seeded.execute("create", entity="sprint", data={
-        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-10", "status": "Active",
+        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-09", "status": "Active",
     }).ok
     screen = window.show("safety_plan")
     points = screen.widgets["points"]
@@ -1903,7 +1903,7 @@ def test_points_entry_shows_the_default_and_names_it_when_the_value_differs(wind
     # no default yet: the floor (2) greyed as the placeholder; nothing is sent
     assert points.showing_placeholder and points.entry.get() == "2" and points.get() is None
     assert str(points.entry.cget("foreground")) == PLACEHOLDER_COLOUR and points.caption_var.get() == ""
-    assert screen.widgets["sprint"].get() == "2" and screen.widgets["deadline"].get() == "2026-11-10"
+    assert screen.widgets["sprint"].get() == "2" and screen.widgets["deadline"].get() == "2026-11-09"
     assert "points" in screen.form_data() and not {"default_points", "sprint", "deadline"} & set(screen.form_data())
     # the panel's default arrives: the placeholder names it
     assert seeded.execute("plan", action="weights", what="load", file=str(SEED_WEIGHTS)).ok
@@ -1919,7 +1919,7 @@ def test_points_entry_shows_the_default_and_names_it_when_the_value_differs(wind
     points.set("7")
     screen.save()
     assert seeded.execute("get", entity=PLAN, id=2).data["points"] == 7
-    assert screen.widgets["deadline"].get() == "2026-11-10" and points.caption_var.get() == "default 3"
+    assert screen.widgets["deadline"].get() == "2026-11-09" and points.caption_var.get() == "default 3"
     # clearing returns to the default: the placeholder is back and the save stores None
     points.set("")
     assert points.showing_placeholder and points.entry.get() == "3" and points.get() is None

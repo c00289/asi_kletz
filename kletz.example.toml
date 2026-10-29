@@ -60,12 +60,12 @@ tracker_byline = "FuSa Engineer"
 tracker_scope = "platform functional safety for the Wheel Loader programme (project HWL)."
 tracker_jira_scope = "project HWL, open items I am assigned, reported or watching"
 
-# Sprint length in business days (a TOML integer; default 10). The owner's rule, 2026-10-28: a sprint
-# spans 10 business days; Monday to Friday count, weekends and holidays (the `holiday` table, seeded from
-# data/us-holidays-2026-2029.json) do not. Capacity is not a setting: every sprint that is not Closed is
-# 8 points, company policy, fixed ("every single sprint except the one in the past is 8 points"); a
-# `sprint_capacity` key here is ignored with a warning.
-sprint_days = 10
+# Sprints are not a setting. The owner's law, 2026-10-29: a sprint is 14 calendar days, Tuesday to the
+# Monday 13 days later, the next starting the next day; holidays (the `holiday` table, seeded from
+# data/us-holidays-2026-2029.json) are days off inside a sprint and never move it; Sprint 31 is
+# 2026-10-27 to 2026-11-09. Capacity is 8 points per sprint, company policy, fixed ("every single sprint
+# except the one in the past is 8 points"). A `sprint_days` key (the business-day length of 0.10.0 to
+# 0.17.0) or a `sprint_capacity` key here is ignored with a warning.
 
 # The floor in sprint points for a Safety Plan row that has neither its own points nor the estimation
 # panel's default (`plan weights load data/deliverable-points.json`). A TOML integer; default 2.

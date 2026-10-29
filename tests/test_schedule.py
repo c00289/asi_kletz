@@ -23,7 +23,7 @@ def _row(row_id, status="Pending", points=None, default=None, deliverable=None):
             "deliverable": deliverable or f"Deliverable {row_id}", "sprint": None, "deadline": None}
 
 
-SPRINTS = [_sprint(1, "Closed", "2026-10-27", 10), _sprint(2, "Active", "2026-11-10"), _sprint(3), _sprint(4),
+SPRINTS = [_sprint(1, "Closed", "2026-10-27", 10), _sprint(2, "Active", "2026-11-09"), _sprint(3), _sprint(4),
            _sprint(5)]
 
 
@@ -47,7 +47,7 @@ def test_weights_and_the_chain():
 def test_plan_order_fills_the_first_sprint_first():
     rows = [_row(1, points=3), _row(2, points=3), _row(3, points=2), _row(4, points=1)]
     result = schedule(rows, SPRINTS, [], 2)
-    assert result.assignments == {1: (2, "2026-11-10"), 2: (2, "2026-11-10"), 3: (2, "2026-11-10"),
+    assert result.assignments == {1: (2, "2026-11-09"), 2: (2, "2026-11-09"), 3: (2, "2026-11-09"),
                                   4: (3, "2027-01-03")}
     assert result.weights == {1: 3, 2: 3, 3: 2, 4: 1} and result.warnings == []
     assert result.sources == {1: "points", 2: "points", 3: "points", 4: "points"}
@@ -63,7 +63,7 @@ def test_a_deliverable_spans_sprints_and_ends_in_the_last_one():
 def test_a_committed_item_pins_the_start():
     items = [{"kind": "Deliverable", "plan_row": 2, "sprint": 4, "points": None, "status": "To Do"}]
     result = schedule([_row(1, points=2), _row(2, points=2), _row(3, points=2)], SPRINTS, items, 2)
-    assert result.assignments == {1: (2, "2026-11-10"), 2: (4, "2027-01-04"), 3: (2, "2026-11-10")}
+    assert result.assignments == {1: (2, "2026-11-09"), 2: (4, "2027-01-04"), 3: (2, "2026-11-09")}
     assert result.committed == {1: 0, 2: 0, 3: 0}  # an unpointed item pins and commits nothing
 
 
@@ -101,13 +101,13 @@ def test_done_keeps_its_own_and_the_excluded_get_nothing():
     assert 1 not in result.assignments and result.sources[1] == "done"
     assert result.assignments[2] == (None, None) and result.sources[2] == "excluded"
     assert result.assignments[3] == (None, None) and result.assignments[4] == (None, None)
-    assert result.assignments[5] == (2, "2026-11-10")  # the Done and the Blocked consumed nothing
+    assert result.assignments[5] == (2, "2026-11-09")  # the Done and the Blocked consumed nothing
 
 
 def test_committed_points_reduce_the_capacity():
     items = [{"sprint": 2, "points": 5, "status": "In Progress"}, {"sprint": 2, "points": 3, "status": "Carried"}]
     result = schedule([_row(1, points=3), _row(2, points=1)], SPRINTS, items, 2)
-    assert result.assignments == {1: (2, "2026-11-10"), 2: (3, "2027-01-03")}  # 3 free in Sprint 2
+    assert result.assignments == {1: (2, "2026-11-09"), 2: (3, "2027-01-03")}  # 3 free in Sprint 2
 
 
 def test_the_chain_running_out_is_a_warning_not_a_date():
@@ -132,9 +132,9 @@ def planned(seeded):
         "status": "Closed",
     }).ok
     assert seeded.execute("create", entity="sprint", data={
-        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-10", "status": "Active",
+        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-09", "status": "Active",
     }).ok
-    for number, (start, end) in ((3, ("2026-11-11", "2026-11-24")), (4, ("2026-11-25", "2026-12-08"))):
+    for number, (start, end) in ((3, ("2026-11-10", "2026-11-23")), (4, ("2026-11-24", "2026-12-07"))):
         assert seeded.execute("create", entity="sprint", data={
             "number": number, "label": f"SPRINT {number}", "start": start, "end": end, "status": "Planned",
         }).ok
@@ -169,10 +169,10 @@ def test_sprint_start_and_end_follow_the_sprint(planned):
 
 def test_every_write_recomputes_and_the_rows_carry_the_answer(planned):
     # the floor (2) for rows 2 and 3, row 1 Done keeps "Phase 1 exit": both fit Sprint 2
-    assert _plan(planned) == {1: (None, None, None, "Phase 1 exit"), 2: (None, None, 2, "2026-11-10"),
-                              3: (None, None, 2, "2026-11-10")}
+    assert _plan(planned) == {1: (None, None, None, "Phase 1 exit"), 2: (None, None, 2, "2026-11-09"),
+                              3: (None, None, 2, "2026-11-09")}
     assert planned.execute("update", entity=PLAN, id=2, set=["points=7"]).ok  # 7 + 2 > 8: row 3 moves
-    assert _plan(planned)[2] == (7, None, 2, "2026-11-10") and _plan(planned)[3] == (None, None, 3, "2026-11-24")
+    assert _plan(planned)[2] == (7, None, 2, "2026-11-09") and _plan(planned)[3] == (None, None, 3, "2026-11-23")
     tail = planned.storage.audit_tail(2)
     assert [t["action"] for t in tail] == ["schedule", "update"] and tail[0]["payload"]["count"] == 1
     assert planned.events.last(1)[0]["topic"] == "plan.scheduled"
@@ -181,11 +181,11 @@ def test_every_write_recomputes_and_the_rows_carry_the_answer(planned):
         "sprint": 3, "kind": "Deliverable", "plan_row": 2, "title": "Hazard analysis", "points": 4, "status": "To Do",
     }).ok
     # the item's 4 points are the committed part of the 7 (0.11.4): the 3 left fit Sprint 3 beside the item
-    assert _plan(planned)[2][2:] == (3, "2026-11-24") and _plan(planned)[3][2:] == (2, "2026-11-10")
+    assert _plan(planned)[2][2:] == (3, "2026-11-23") and _plan(planned)[3][2:] == (2, "2026-11-09")
     # closing Sprint 2 moves everything after it: Sprint 3 has one point left after row 2, row 3 spills into 4
-    closed = planned.execute("sprint", action="close", as_of="2026-11-10")
+    closed = planned.execute("sprint", action="close", as_of="2026-11-09")
     assert closed.ok, closed.errors
-    assert _plan(planned)[2][2:] == (3, "2026-11-24") and _plan(planned)[3][2:] == (4, "2026-12-08")
+    assert _plan(planned)[2][2:] == (3, "2026-11-23") and _plan(planned)[3][2:] == (4, "2026-12-07")
     # the planner's new sprints and a replan recompute too; a second recompute changes nothing
     assert planned.execute("sprint", action="plan", until="2027-01-31").ok
     before = len(planned.storage.audit_tail(50))
@@ -203,7 +203,7 @@ def test_every_write_recomputes_and_the_rows_carry_the_answer(planned):
     # the recompute only touches rows whose answer moved: a delete of the item frees Sprint 3
     item = planned.execute("list", entity=ITEM, filter=["plan_row=2"]).data[0]
     assert planned.execute("delete", entity=ITEM, id=item["id"]).ok
-    assert _plan(planned)[2][2:] == (3, "2026-11-24")  # 7 points: Sprint 2 is Closed now, Sprint 3 is the first
+    assert _plan(planned)[2][2:] == (3, "2026-11-23")  # 7 points: Sprint 2 is Closed now, Sprint 3 is the first
 
 
 def test_the_calculated_fields_and_the_default_are_refused_by_hand(planned):
@@ -220,7 +220,7 @@ def test_the_calculated_fields_and_the_default_are_refused_by_hand(planned):
     assert _plan(planned)[2][0] is None
     created = planned.execute("create", entity=PLAN, data={"deliverable": "new", "points": 3, "order": 4})
     assert created.ok and created.data["sprint"] is None  # the create's own Result predates the recompute
-    assert _plan(planned)[created.data["id"]] == (3, None, 2, "2026-11-10")
+    assert _plan(planned)[created.data["id"]] == (3, None, 2, "2026-11-09")
 
 
 def test_weights_load_sets_the_defaults_from_the_panels_record(planned):
@@ -233,13 +233,13 @@ def test_weights_load_sets_the_defaults_from_the_panels_record(planned):
     assert loaded.ok, loaded.errors
     assert (loaded.data["set"], loaded.data["unchanged"], len(loaded.data["unmatched"])) == (3, 0, 45)
     assert loaded.data["unmatched"][:2] == ["4", "5"] and loaded.data["rows"] == 48
-    assert _plan(planned) == {1: (None, 5, None, "Phase 1 exit"), 2: (None, 3, 2, "2026-11-10"),
-                              3: (None, 2, 2, "2026-11-10")}  # 3 + 2 fit Sprint 2; row 1 is Done
+    assert _plan(planned) == {1: (None, 5, None, "Phase 1 exit"), 2: (None, 3, 2, "2026-11-09"),
+                              3: (None, 2, 2, "2026-11-09")}  # 3 + 2 fit Sprint 2; row 1 is Done
     assert "weights" in [t["action"] for t in planned.storage.audit_tail(3)]
     again = planned.execute("plan", action="weights", what="load", file=str(SEED_WEIGHTS))
     assert again.ok and (again.data["set"], again.data["unchanged"]) == (0, 3)
     assert planned.execute("update", entity=PLAN, id=2, set=["points=7"]).ok
-    assert _plan(planned)[3][2:] == (3, "2026-11-24")  # 7 + 2 > 8: the default-weighted row moves out
+    assert _plan(planned)[3][2:] == (3, "2026-11-23")  # 7 + 2 > 8: the default-weighted row moves out
     table = planned.execute("plan", action="schedule").data["rows"]
     assert [(r["weight"], r["source"]) for r in table] == [(0, "done"), (7, "points"), (2, "default")]
     assert not planned.execute("plan", action="weights").ok

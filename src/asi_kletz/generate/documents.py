@@ -381,7 +381,7 @@ def sprint_report(brain: Brain, params: dict[str, str], ctx: BuildContext) -> An
     )
     if inside:
         doc.table(["Date", "Holiday"], [[d.isoformat(), holidays[d]] for d in inside], caption="Holidays, no work")
-        doc.p("A sprint spans 10 business days; each holiday inside it stretched the dates by one calendar day.")
+        doc.p("A sprint is 14 calendar days, Tuesday to Monday; a holiday inside it is a day off and never moves it.")
     else:
         doc.p("No holiday falls in this sprint.")
     return doc

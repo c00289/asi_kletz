@@ -333,16 +333,23 @@ def test_tracker_tables_are_the_registered_ones_and_the_plan_is_untouched(import
 
 
 def test_planned_sprints_add_one_bullet_and_no_block_to_the_history(imported):
-    """The chain planned three years ahead: the history names the next planned sprint and prints no block for it."""
+    """The chain planned ahead: the history names the next planned sprint and prints no block for it. The file's
+    Sprint 2 (10/27 to 11/10, the rule of 2026-10-28) is put on the law first: `sprint align` makes it Sprint 31,
+    10/27 to 11/09, and the planner continues from there; before that the planner's next start is a Wednesday."""
+    refused = imported.execute("sprint", action="plan", until="2027-01-31")
+    assert not refused.ok and "start 2026-11-11 is a Wednesday, not a Tuesday" in refused.errors[0]
+    aligned = imported.execute("sprint", action="align", number=31, start="2026-10-27")
+    assert aligned.ok and aligned.data["offset"] == 29 and aligned.data["redated"] == 1
     planned = imported.execute("sprint", action="plan", until="2027-01-31")
     assert planned.ok and planned.data["added"] == 6
     text = _read(imported.execute("tracker", action="build", what="history", as_of=AS_OF))
-    assert text.count("planned.") == 1 and "- Phase to be assigned: planned. Sprint 3: 11/11 - 11/24." in text
-    assert "Sprint 4" not in text and text.count(fmt.RULE) == 4  # two blocks: Sprint 1 closed, Sprint 2 active
-    assert text.index("Sprint 3: 11/11") < text.index("- Scope:")
+    assert text.count("planned.") == 1 and "- Phase to be assigned: planned. Sprint 32: 11/10 - 11/23." in text
+    assert "Sprint 33" not in text and text.count(fmt.RULE) == 4  # two blocks: Sprint 30 closed, Sprint 31 active
+    assert "SPRINT 31 (10/27 - 11/09)" in text and "Sprint 30: 10/12 - 10/27/2026. Closed 10/27." in text
+    assert text.index("Sprint 32: 11/10") < text.index("- Scope:")
     week = _read(imported.execute("tracker", action="build", what="week", as_of=AS_OF))
     assert week.count("planned.") == 1 and week.count(fmt.RULE) == 2
-    assert imported.execute("list", entity="sprint").data[-1]["number"] == 8  # the database keeps them all
+    assert imported.execute("list", entity="sprint").data[-1]["number"] == 37  # the database keeps them all
 
 
 # -- an item points at its plan row by uid too (0.13.0) ---------------------------------------------------------

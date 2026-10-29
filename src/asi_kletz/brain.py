@@ -18,7 +18,7 @@ from .locks import guard
 from .models import ModelFactory
 from .repositories import RepositoryFactory
 from .schema import LookupRegistry, SchemaRegistry, default_lookups, default_registry
-from .schema.definitions import CAPACITY_RULE, DEFAULT_POINTS, SPRINT_CAPACITY, SPRINT_DAYS
+from .schema.definitions import CADENCE_RULE, CAPACITY_RULE, DEFAULT_POINTS, SPRINT_CAPACITY, SPRINT_LENGTH
 from .services import (
     EntityService,
     HolidayService,
@@ -49,8 +49,11 @@ CONFIG_TEXT_KEYS = (  # document metadata, the live JQL and the tracker's header
     "doc_id", "project", "jira_live_jql", "tracker_title", "tracker_byline", "tracker_scope", "tracker_jira_scope",
 )
 CONFIG_BOOL_KEYS = ("jira_live_autofetch",)  # copied only when the TOML value is a real boolean; absent = false
-CONFIG_INT_KEYS = ("sprint_days", "default_points")  # copied only when the TOML value is an integer
-IGNORED_KEYS = ("sprint_capacity",)  # 0.10.0: capacity is the rule, fixed; the key is ignored with a warning
+CONFIG_INT_KEYS = ("default_points",)  # copied only when the TOML value is an integer
+IGNORED_KEYS = {  # a key that was a setting once and is a rule now: ignored with a warning naming the rule
+    "sprint_capacity": CAPACITY_RULE,  # 0.10.0: capacity is 8, fixed
+    "sprint_days": CADENCE_RULE,  # 0.18.0: a sprint is 14 days, Tuesday to Monday, the owner's law of 2026-10-29
+}
 REVISION_FIELDS = ("rev", "date", "author", "description")
 
 
@@ -66,9 +69,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     default is ``False`` (``services.jira_service.AUTOFETCH_DEFAULT``): the window never connects
     to Jira unless the file says ``true`` or the engineer presses Refresh. ``tracker_title``,
     ``tracker_byline``, ``tracker_scope`` and ``tracker_jira_scope`` are the header lines of the Weekly
-    Activity Tracker text; ``sprint_days`` (default 10, business days) is the length of a new sprint (a
-    TOML integer; anything else is ignored so the default applies). ``sprint_capacity`` is ignored since
-    0.10.0 (capacity is the rule, 8, fixed): when present, ``warnings`` carries one line naming the rule.
+    Activity Tracker text. ``sprint_capacity`` is ignored since 0.10.0 (capacity is the rule, 8, fixed) and
+    ``sprint_days`` since 0.18.0 (a sprint is 14 days, Tuesday to Monday, the owner's law of 2026-10-29): when
+    present, ``warnings`` carries one line per key naming the rule.
     ``default_points`` (default 2) is the floor a Safety Plan row weighs when it has neither points nor the
     panel's default. ``standards_dir`` is the folder of parametrised standards (default ``../asi_standards``
     beside the config file). Missing file: ``{}``.
@@ -98,9 +101,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         value = data.get(key)
         if isinstance(value, int) and not isinstance(value, bool) and value > 0:
             config[key] = value
-    for key in IGNORED_KEYS:
+    for key, rule in IGNORED_KEYS.items():
         if key in data:
-            config.setdefault("warnings", []).append(f"{key} = {data[key]!r} in kletz.toml is ignored: {CAPACITY_RULE}")
+            config.setdefault("warnings", []).append(f"{key} = {data[key]!r} in kletz.toml is ignored: {rule}")
     revisions = data.get("revision")
     if isinstance(revisions, list):
         config["revisions"] = [
@@ -209,9 +212,9 @@ class Brain:
         self.doc_id: str = self.config.get("doc_id", "")
         self.project: str = self.config.get("project", "")
         self.revisions: list[dict[str, str]] = [dict(r) for r in self.config.get("revisions", [])]
-        # the capacity is the rule (fixed, never from the config); the length in business days fills `sprint start`
+        # the capacity and the length are the rules (fixed, never from the config): 8 points, 14 days
         self.sprint_capacity: int = SPRINT_CAPACITY
-        self.sprint_days: int = int(self.config.get("sprint_days") or SPRINT_DAYS)
+        self.sprint_length: int = SPRINT_LENGTH
 
     @property
     def standards_dir(self) -> str:
@@ -275,7 +278,7 @@ class Brain:
             "project": self.project,
             "revisions": [dict(r) for r in self.revisions],
             "sprint_capacity": self.sprint_capacity,
-            "sprint_days": self.sprint_days,
+            "sprint_length_days": self.sprint_length,
             "default_points": self.default_points,
             "standards_dir": self.standards_dir,
             "config_warnings": list(self.config_warnings),
