@@ -12,6 +12,56 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.13.0] - 2026-10-28
+
+Open question 1 of `docs/hidden-identity-plan.md`: a sprint item pointed at its plan row by id alone, so a
+tracker dump loaded after a plan re-import that renumbered the rows pointed at the wrong deliverables. Schema
+version 6 → 7. Continuous integration joins the repo.
+
+### Added
+- **`sprint_item.plan_uid`** (`schema/definitions.py`): TEXT, hidden, beside `plan_row`: the plan row's uid.
+  The sprint service keeps the two in step (`SprintService.link_item`, the item's guard; `link_loaded`, its
+  load hook; `EntityService.on_load` is new, and a guard may now return warnings): given `plan_row`,
+  `plan_uid` follows; given `plan_uid`, `plan_row` is resolved from it; the uid wins when both are given and
+  disagree, with a warning; by hand an unknown uid or id is refused, on a load an unknown uid leaves
+  `plan_row` empty with a warning; clearing one clears both. The tracker import carries both from the matched
+  row. On open, after the uid stamp and the capacity rule, `SprintService.fill_plan_uids` gives every item
+  that has a `plan_row` and no `plan_uid` the row's uid, audited once (`link_plan_uids`, the count and the
+  ids), reported in `migration["plan_uids_filled"]`.
+- **The scheduler pins by uid** (`generate/plan_schedule.py`: `uid_map`, `plan_row_of`): an item's plan row
+  is found by its `plan_uid` when the rows know it, else by `plan_row`; the pure functions take an optional
+  uid map and the old call forms still work.
+- **Continuous integration** (`.github/workflows/ci.yml`): on push to `main`, on tags `v*` and on pull
+  requests; `windows-latest`; `actions/checkout@v4` of this repo into `asi_kletz/` and of `c00289/asi_escher`,
+  `c00289/asi_gutenberg` and `c00289/asi_hopper` into sibling folders (their default branches), because the
+  lock pins them as editable path sources; `astral-sh/setup-uv@v5` with the cache, `uv python install 3.13`,
+  `uv sync`, `uv run ruff check src tests`, `uv run pytest -q`, every run step in `asi_kletz/`.
+- `uv lock` run once: the lock said 0.7.4 for the project since the version bumps never touched it; it now
+  matches `pyproject.toml`, and took asi_hopper 0.1.5, the sibling's current version (the sign-in of 0.11.1
+  runs on it).
+
+### Changed
+- The board's form keeps showing `plan_row` as the handle; `plan_uid` has no widget and no column, like the
+  uid. The workbook's Sprint Items sheet carries it hidden (17 columns, `uid` last); the JSON carries it.
+
+### Deviations from the brief
+- None in substance. One reading: the brief said "given `plan_uid`, resolve `plan_row` from it" without
+  saying what an unknown uid does; by hand it is refused (a typo), on a load it empties `plan_row` with a
+  warning (a stale number would point at the wrong deliverable, which is the very thing the uid prevents).
+  And on a load the uid wins over a disagreeing id silently: a renumbered id in the file is the case the uid
+  exists for, not something to warn about per row.
+- **The `v0.12.0` tag annotation** carries the first line of the 0.11.4 CHANGELOG entry instead of 0.12.0's: the
+  release script that writes the line had stopped early and the tag was cut from a stale file. Tags are never
+  moved (the family rule); the GitHub release of v0.12.0 carries the right notes, and this entry is the record.
+
+### Tests
+- 308 → 311: the link on create and update (either way round, the uid winning with a warning,
+  clearing both, the refusals), the scheduler committing by uid; items written before the column linked on
+  open, audited once, nothing on the second open; the round trip: dump the items, replace-import the plan
+  under new ids, load the items, every item points at the right deliverable and the schedule follows; an
+  orphaned uid on load; the hidden-field list of `sprint_item`, the sheet's hidden column, the 0.8.4 fixture's
+  altered columns.
+
 ## [0.12.0] - 2026-10-28
 
 The last open items of `docs/weekly-tracker-plan.md` (the burndown and velocity diagrams and the sprint report

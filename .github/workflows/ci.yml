@@ -1,0 +1,60 @@
+# Continuous integration for asi_kletz: ruff and the full pytest suite on Windows (Tk is there, so the GUI
+# tests run). The lock pins the sibling tools as editable path sources (../asi_escher, ../asi_gutenberg,
+# ../asi_hopper), so the job checks this repo out into asi_kletz/ and each sibling into a sibling folder
+# under the workspace, and every run step works inside asi_kletz/.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - name: Check out asi_kletz
+        uses: actions/checkout@v4
+        with:
+          path: asi_kletz
+
+      - name: Check out asi_escher (sibling, editable path source)
+        uses: actions/checkout@v4
+        with:
+          repository: c00289/asi_escher
+          path: asi_escher
+
+      - name: Check out asi_gutenberg (sibling, editable path source)
+        uses: actions/checkout@v4
+        with:
+          repository: c00289/asi_gutenberg
+          path: asi_gutenberg
+
+      - name: Check out asi_hopper (sibling, editable path source; its recorded Jira fixtures feed the jira tests)
+        uses: actions/checkout@v4
+        with:
+          repository: c00289/asi_hopper
+          path: asi_hopper
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: asi_kletz/uv.lock
+
+      - name: Install Python 3.13
+        working-directory: asi_kletz
+        run: uv python install 3.13
+
+      - name: Sync the environment
+        working-directory: asi_kletz
+        run: uv sync
+
+      - name: Ruff
+        working-directory: asi_kletz
+        run: uv run ruff check src tests
+
+      - name: Pytest
+        working-directory: asi_kletz
+        run: uv run pytest -q

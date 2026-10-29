@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.12.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.13.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,20 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.13.0
+
+**A sprint item points at its plan row by uid too** (`docs/hidden-identity-plan.md`, open question 1; schema
+version 7). `sprint_item.plan_uid`, hidden, sits beside `plan_row`: given one, the sprint service sets the
+other (the uid wins when both are given and disagree, with a warning; an unknown uid or id is refused by
+hand); a JSON or workbook load of items keeps the file's `plan_uid` and re-resolves `plan_row` from it, so a
+tracker dump survives a plan re-import that renumbered the rows (an item whose uid no row carries any more
+is left without a row, with a warning, never with a stale number); the first time 0.13.0 opens a database it
+fills `plan_uid` from `plan_row` on every item that has the one and not the other, audited once; the
+scheduler pins and commits by uid; the tracker import carries both; the board's form keeps showing the row
+id as the handle. **Continuous integration**: `.github/workflows/ci.yml` runs ruff and the full suite on
+Windows (the GUI tests included) on every push to `main`, every `v*` tag and every pull request, with the
+sibling tools checked out beside the repo; `uv.lock` is in step with `pyproject.toml` again.
 
 ## What is in 0.12.0
 
@@ -533,6 +547,11 @@ indent and printed with it), the Jira section as the text will print it (read-on
 edited on the board; a closed sprint's week shows its frozen text), New week (today's week, in the
 active sprint), Build week, Build history, Open and Open folder. Every button is a verb.
 
+A sprint item of kind Deliverable points at its plan row twice: `plan_row`, the id (the handle on the
+board and in every command), and `plan_uid`, the row's hidden uid (since 0.13.0), kept in step by the tool;
+a dump or a workbook of items carries both, and a load re-resolves the id from the uid, so the tracker
+survives a plan re-import that renumbered the rows.
+
 Jira stays read only. A week's Jira section is built from the sprint's Jira items; `tracker build
 --jira` runs one `jira live` for their keys and rewrites each item's title, type and status line
 first, and that is the only time a Jira fact is written: it is the engineer's report line, not a
@@ -956,6 +975,11 @@ tests/                pytest suite (schema, core, transfer, CLI, generate, theme
 ```powershell
 .venv\Scripts\python -m pytest
 ```
+
+Continuous integration (`.github/workflows/ci.yml`, since 0.13.0) runs `uv run ruff check src tests` and
+`uv run pytest -q` on `windows-latest` (Tk is there, so the GUI tests run) on every push to `main`,
+every `v*` tag and every pull request; the job checks this repo out into `asi_kletz/` and the three
+sibling tools into sibling folders, because the lock pins them as editable path sources.
 
 Tests never read the developer's `kletz.toml` or environment, so no test can touch a real
 workbook. One test seeds a database from the workbook named in the repo's `kletz.toml` and

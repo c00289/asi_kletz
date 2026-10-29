@@ -177,6 +177,7 @@ implementation produced by a factory.
 | 0.10.0 | The sprint planner: the `holiday` entity and `holiday load` (schema version 4, `data/us-holidays-2026-2029.json`), `tracker/business_days.py`, `sprint plan` / `--replan`, the owner's rule (10 business days, 8 points fixed and enforced, consecutive sprints), the TIMELINE naming the next planned sprint only, the Holidays screen; see [sprint-planner-plan.md](sprint-planner-plan.md) | done 2026-10-28 |
 | 0.11.0 | Points on the Safety Plan (schema version 5): `points`, the estimation panel's `default_points` (`plan weights load data/deliverable-points.json`, the record in `docs/deliverable-points.md`), the calculated `sprint` and `deadline` (`generate/plan_schedule.py`, recomputed after every change that can move them, refused by hand), the `plan` verb, the Points entry with the default as its placeholder; see [plan-points-plan.md](plan-points-plan.md) | done 2026-10-28 |
 | 0.12.0 | The tracker plan's last items and the roadmap: `sprint_burndown`, `velocity` and `plan_roadmap` charts (matplotlib figures in the diagram catalog, `generate/charts.py`), the `sprint_report` and `plan_roadmap` documents, built from the scheduler's output | done 2026-10-28 |
+| 0.13.0 | Sprint items point at plan rows by uid too (`sprint_item.plan_uid`, hidden, schema version 7; filled on open; the uid wins; a file's uid re-resolves the id; the scheduler pins by uid; see [hidden-identity-plan.md](hidden-identity-plan.md) open question 1), continuous integration (`.github/workflows/ci.yml`), the lock in step with the version | done 2026-10-28 |
 | later | Approval mode, form puppeting, import diff preview, date picker | planned |
 
 ---
@@ -187,6 +188,7 @@ implementation produced by a factory.
 - 2026-10-28 0.10.0: the section 8 rows for the hidden identity (0.9.0) and the sprint planner (0.10.0).
 - 2026-10-28 0.11.0: the section 8 row for the points and the calculated sprint and deadline.
 - 2026-10-28 0.12.0: the section 8 row for the charts, the sprint report and the roadmap.
+- 2026-10-28 0.13.0: the section 8 row for plan_uid and continuous integration.
 - 2026-10-28 0.8.0: the section 8 row for the Weekly Activity Tracker and sprints (phases 1 to 3); section 4's "one table" is history as of this version, the registered list is the design.
 - 2026-10-28 0.7.3: status line and the section 8 row for the three patch releases (fitted columns, frozen identity columns, the draggable split, the sweep).
 - 2026-10-27 0.7: section 3 (the automation server lives in the GUI front end), section 7 (the server, the session file, forwarding, the `session` verb delivered) and section 8 row for the automation server (0.7.0); approval mode and form puppeting are the next row.
