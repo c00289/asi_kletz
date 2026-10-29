@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk
+from pathlib import Path
+from tkinter import filedialog, ttk
 from typing import TYPE_CHECKING, Any
 
 from ..schema import EntitySchema, FieldSpec, FieldType
@@ -30,6 +31,14 @@ if TYPE_CHECKING:
 
 TRUNCATE = 70  # a cell shows this much of a long text; the column fits the clipped text, not the value
 HANDLES = ("id", "order")  # the handles have no column anywhere (0.9.0): the status bar and the details title name them
+# 0.14.0, the owner: "the first item is a button that asks you for a local folder to save a new version or view of
+# the model in the form of that safety plan deliverable; then following that please have all the parameters for
+# the doc and then after that all content as is today". The standards pane sits at the top of the Safety Plan's
+# details form: the Export document… button and the row's standards, the Document parameters box, the row's own
+# values as the export fills them, then the form as before.
+EXPORT_BUTTON = "Export document…"
+SAVE_PARAMETERS = "Save parameters"
+SELECT_A_ROW = "Select a deliverable to see its standards"
 # 0.11.3, the owner: the Safety Plan screen is one table, no frozen split and no flag columns; the flags are the
 # Safety Plan Matrix's business. The table shows the plan stacked (PDP phase > lifecycle phase > deliverable) in
 # one column and every other non-flag visible field beside it; the form below still edits everything.
@@ -53,6 +62,11 @@ class EntityScreen(Screen):
         self.sort_key: str | None = None
         self.sort_desc = False
         self.widgets: dict[str, FieldWidget] = {}
+        self.standards: list[dict[str, Any]] = []  # the selected row's standards (0.14.0), from `standards for`
+        self.standards_dir = ""
+        self.param_vars: dict[str, tk.StringVar] = {}  # the document-level parameters of those standards
+        self.param_entries: dict[str, ttk.Entry] = {}
+        self.jira_statuses: dict[str, str | None] = {}  # the statuses the last export of this session fetched
         super().__init__(master, window)
 
     # -- layout ---------------------------------------------------------
@@ -132,6 +146,9 @@ class EntityScreen(Screen):
         factory = WidgetFactory(self.brain.lookups)
         parent.columnconfigure(1, weight=1)
         row = 0
+        if self.stacked:  # the Safety Plan: the standards pane first (0.14.0), then the form as before
+            self._build_standards_pane(parent)
+            row = 1
         for spec in self.schema.visible_fields:  # a hidden field has no widget
             if spec.group:
                 continue
@@ -167,6 +184,159 @@ class EntityScreen(Screen):
                     grid_row += 1
                 self.widgets[spec.name] = widget
             row += 1
+
+    # -- the standards pane (0.14.0) ---------------------------------------------------------------
+    def _build_standards_pane(self, parent: ttk.Frame) -> None:
+        pane = ttk.Frame(parent)
+        pane.grid(row=0, column=0, columnspan=2, sticky="ew", padx=4, pady=(2, 8))
+        top = ttk.Frame(pane)
+        top.pack(fill="x")
+        self.export_button = ttk.Button(top, text=EXPORT_BUTTON, command=self.export_document, state="disabled")
+        self.export_button.pack(side="left")
+        self.standard_var = tk.StringVar(value=SELECT_A_ROW)
+        ttk.Label(top, textvariable=self.standard_var, style="Muted.TLabel", wraplength=700).pack(
+            side="left", padx=(8, 0), fill="x", expand=True
+        )
+        self.params_box = ttk.LabelFrame(pane, text="Document parameters")
+        self.params_box.pack(fill="x", pady=(6, 0))
+        self.params_box.columnconfigure(1, weight=1)
+        self.save_params_button = ttk.Button(self.params_box, text=SAVE_PARAMETERS, command=self.save_parameters)
+        self.params_note = ttk.Label(self.params_box, text="", style="Muted.TLabel")
+        self.row_values_var = tk.StringVar()
+        ttk.Label(pane, textvariable=self.row_values_var, style="Muted.TLabel", wraplength=700).pack(
+            anchor="w", pady=(4, 0)
+        )
+        self._refresh_standards(None)
+
+    def _refresh_standards(self, row: dict[str, Any] | None) -> None:
+        """What the pane says for ``row``: its standards, their document parameters prefilled from the
+        ``parameter`` table, the row's own values as the export fills them. ``None`` empties it."""
+        if not self.stacked:
+            return
+        self.standards = []
+        if row is not None:
+            result = self.window.run_quiet("standards", action="for", row=row["id"])
+            if result.ok:
+                self.standards = list(result.data.get("standards") or [])
+                self.standards_dir = str(result.data.get("standards_dir") or "")
+        if row is None:
+            self.standard_var.set(SELECT_A_ROW)
+        elif self.standards:
+            self.standard_var.set("Standard: " + ", ".join(f"{s['title']} ({s['folder']})" for s in self.standards))
+        else:
+            self.standard_var.set(
+                f"No standard for this deliverable: its QMS references name none in {self.standards_dir}"
+            )
+        self.export_button.configure(state="normal" if self.standards else "disabled")
+        self._rebuild_parameter_entries()
+        self.row_values_var.set(self._row_values_text(row))
+
+    def _rebuild_parameter_entries(self) -> None:
+        for child in self.params_box.winfo_children():
+            if child not in (self.save_params_button, self.params_note):
+                child.destroy()
+        self.save_params_button.grid_forget()
+        self.params_note.grid_forget()
+        self.param_vars, self.param_entries = {}, {}
+        names: list[str] = []
+        for standard in self.standards:
+            names.extend(n for n in standard.get("document_parameters", ()) if n not in names)
+        stored = self._stored_parameters()
+        for index, name in enumerate(names):
+            ttk.Label(self.params_box, text=name).grid(row=index, column=0, sticky="w", padx=4, pady=1)
+            var = tk.StringVar(value=stored.get(name, ""))
+            entry = ttk.Entry(self.params_box, textvariable=var, width=40)
+            entry.grid(row=index, column=1, sticky="ew", padx=(0, 4), pady=1)
+            self.param_vars[name], self.param_entries[name] = var, entry
+        if names:
+            self.save_params_button.grid(row=len(names), column=0, columnspan=2, sticky="w", padx=4, pady=(4, 2))
+        else:
+            text = "No document parameters: the selected deliverable has no standard" if self.standards == [] else ""
+            self.params_note.configure(text=text)
+            self.params_note.grid(row=0, column=0, columnspan=2, sticky="w", padx=4, pady=2)
+
+    def _stored_parameters(self) -> dict[str, str]:
+        """``{name: value}`` from the ``parameter`` table: the global value, a selected standard's own winning."""
+        result = self.window.run_quiet("list", entity="parameter", order_by="standard,name,id")
+        folders = {s["folder"] for s in self.standards}
+        values: dict[str, str] = {}
+        for row in result.data or []:
+            standard = row.get("standard") or ""
+            if standard in ("", *folders) and row.get("value") not in (None, ""):
+                values[row["name"]] = str(row["value"])  # "" sorts first, so a standard's own row overwrites it
+        return values
+
+    def _row_values_text(self, row: dict[str, Any] | None) -> str:
+        if row is None:
+            return ""
+        order = row.get("order")
+        head = f"This row (row_{order}_*): " if order is not None else "This row: "
+        if row.get("points"):
+            points = f"{row['points']} points"
+        else:
+            default = row.get("default_points") or self.brain.default_points
+            points = f"no points chosen (the default {default} is never exported)"
+        sprint_end = f"sprint end {row['sprint_end']}" if row.get("sprint_end") else "no sprint end (unscheduled)"
+        key = (row.get("jira_key") or "").strip().upper()
+        if not key:
+            jira = "no Jira key: the status stays unfilled"
+        elif self.jira_statuses.get(key):
+            jira = f"Jira {key}: {self.jira_statuses[key]} (as of the last export)"
+        else:
+            jira = f"Jira {key}: status fetched on export"
+        return head + " · ".join((points, sprint_end, jira))
+
+    def save_parameters(self) -> None:
+        """Upsert the pane's values as ``parameter`` rows through the verbs, so an agent can do the same."""
+        if self.selected_id is None or not self.param_vars:
+            self.window.set_status("Select a deliverable with a standard to save its parameters")
+            return
+        existing = self.window.run_quiet("list", entity="parameter")
+        folders = {s["folder"] for s in self.standards}
+        by_name: dict[str, dict[str, Any]] = {}
+        for row in sorted(existing.data or [], key=lambda r: (r.get("standard") or "") != ""):  # global first
+            if (row.get("standard") or "") in ("", *folders):
+                by_name.setdefault(row["name"], row)
+        saved = 0
+        for name, var in self.param_vars.items():
+            value = var.get().strip()
+            current = by_name.get(name)
+            if current is None:
+                if not value:
+                    continue
+                result = self.window.run("create", entity="parameter", data={"name": name, "value": value})
+            elif (current.get("value") or "") != value:
+                result = self.window.run("update", entity="parameter", id=current["id"], data={"value": value})
+            else:
+                continue
+            if not result.ok:
+                return
+            saved += 1
+        self.window.set_status(f"Saved {saved} parameter(s)" if saved else "Parameters unchanged")
+
+    def export_document(self) -> None:
+        """The owner's first item: a folder, then ``plan export`` for the selected row into it."""
+        if self.selected_id is None or not self.standards:
+            self.window.set_status("Select a deliverable with a standard to export")
+            return
+        if self.window.interactive:
+            folder = filedialog.askdirectory(
+                parent=self.window, initialdir=self.brain.out_dir, title="Folder for the exported document",
+            )
+            if not folder:
+                self.window.set_status("Export cancelled")
+                return
+        else:
+            folder = self.brain.out_dir
+        result = self.window.run("plan", action="export", row=self.selected_id, out=folder)
+        if not result.ok:
+            return
+        self.jira_statuses.update(result.data.get("statuses") or {})
+        files = [Path(p).name for e in result.data["exports"] for p in e["files"].values()]
+        unfilled = sum(len(e["unfilled"]) for e in result.data["exports"])
+        self.window.set_status(f"Exported {', '.join(files)} to {folder}; {unfilled} parameter(s) still unfilled")
+        row = self.by_id.get(self.selected_id)
+        self.row_values_var.set(self._row_values_text(row))
 
     # -- data -----------------------------------------------------------
     def refresh(self) -> None:
@@ -288,6 +458,7 @@ class EntityScreen(Screen):
         self._hand_defaults(row)
         for name, widget in self.widgets.items():
             widget.set(row.get(name))
+        self._refresh_standards(row)
         self.window.set_status(f"{self.schema.label} {row_id} selected")
 
     def _hand_defaults(self, row: dict[str, Any] | None) -> None:
@@ -310,6 +481,7 @@ class EntityScreen(Screen):
         self.form_box.configure(text=self.details_title(None))
         self.tree.selection_remove(*self.tree.selection())
         self._hand_defaults(None)
+        self._refresh_standards(None)
         for widget in self.widgets.values():
             widget.clear()
         if self.widgets:

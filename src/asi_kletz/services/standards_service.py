@@ -216,7 +216,10 @@ class StandardsService:
                 "pages": paths.get("pages"), "filled": std["filled"], "unfilled": unfilled,
                 "issues": [i for i in issues if not i.startswith(UNFILLED)],
             })
-        data = {"row": row_id, "order": plan["order"], "out_dir": str(target), "exports": built, "warnings": warnings}
+        data = {
+            "row": row_id, "order": plan["order"], "out_dir": str(target), "exports": built,
+            "statuses": plan["statuses"], "warnings": warnings,
+        }
         with self.brain.storage.transaction():
             self.brain.storage.audit(actor, "export", pq.PLAN_ENTITY, row_id, {
                 "standards": [b["standard"] for b in built], "filled": [b["filled"] for b in built],

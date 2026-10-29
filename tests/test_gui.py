@@ -1918,3 +1918,72 @@ def test_scrollbar_thumb_is_the_primary(window):
     assert style.lookup("TScrollbar", "background") == p.primary_dim
     assert style.lookup("TScrollbar", "troughcolor") == p.bg  # the trough is the background, the thumb stands on it
     assert dict(style.map("TScrollbar", "background")) == {"active": p.primary}
+
+
+# -- the standards pane at the top of the Safety Plan's details (0.14.0) ---------------------------------------
+
+
+def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from asi_kletz.gui.entity_screen import EXPORT_BUTTON, SELECT_A_ROW
+    from tests.test_standards import SOURCE, StubHopper
+
+    root = tmp_path / "standards"
+    (root / "qf-17-test").mkdir(parents=True)
+    (root / "qf-17-test" / "qf-17-test.md").write_text(SOURCE, encoding="utf-8")
+    monkeypatch.setenv("ASI_KLETZ_STANDARDS", str(root))
+    assert seeded.execute("create", entity="sprint", data={
+        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-09", "status": "Active",
+    }).ok
+    assert seeded.execute("update", entity=PLAN, id=1, set=["status=Ongoing", "jira_key=HWL-2554", "points=5"]).ok
+    stub = StubHopper({"HWL-2554": "In Progress"})
+    monkeypatch.setattr(seeded.jira, "open_hopper", lambda: stub)
+
+    screen = window.show("safety_plan")
+    assert screen.export_button.cget("text") == EXPORT_BUTTON and screen.standard_var.get() == SELECT_A_ROW
+    assert str(screen.export_button.cget("state")) == "disabled" and screen.param_entries == {}
+    screen.select(3)  # no QMS flag names a standard
+    assert str(screen.export_button.cget("state")) == "disabled"
+    assert screen.standard_var.get() == f"No standard for this deliverable: its QMS references name none in {root}"
+    assert screen.param_entries == {} and "no points chosen" in screen.row_values_var.get()
+    screen.select(1)  # ref_qf_17 is set: the standard, its two document parameters, the row's own values
+    assert str(screen.export_button.cget("state")) == "normal"
+    assert screen.standard_var.get() == "Standard: {{ vehicle_type }} Safety Plan (test) (qf-17-test)"
+    assert list(screen.param_entries) == ["fusa_engineer", "vehicle_type"]
+    assert screen.row_values_var.get() == (
+        "This row (row_1_*): 5 points · sprint end 2026-11-09 · Jira HWL-2554: status fetched on export"
+    )
+    # Save parameters creates parameter rows through the verbs; a second save with the same values changes nothing
+    screen.param_vars["vehicle_type"].set("Wheel Loader")
+    screen.param_vars["fusa_engineer"].set("the FuSa engineer")
+    screen.save_parameters()
+    assert window.status_text() == "Saved 2 parameter(s)"
+    rows = {r["name"]: r for r in seeded.execute("list", entity="parameter").data}
+    assert rows["vehicle_type"]["value"] == "Wheel Loader" and rows["vehicle_type"]["standard"] in ("", None)
+    screen.save_parameters()
+    assert window.status_text() == "Parameters unchanged"
+    screen.param_vars["vehicle_type"].set("Dozer")
+    screen.save_parameters()
+    assert seeded.execute("get", entity="parameter", id=rows["vehicle_type"]["id"]).data["value"] == "Dozer"
+    screen.select(2)
+    screen.select(1)  # reselecting prefills the entries from the table
+    assert screen.param_vars["vehicle_type"].get() == "Dozer"
+    # Export, non-interactive: into the config's out folder; the status line names the files and the unfilled
+    assert not window.interactive
+    screen.export_document()
+    status = window.status_text()
+    assert status.startswith("Exported qf-17-test.md, qf-17-test.pdf, qf-17-test.docx to ")
+    assert status.endswith("; 2 parameter(s) still unfilled") and seeded.out_dir in status
+    assert (Path(seeded.out_dir) / "qf-17-test.pdf").is_file()
+    text = (Path(seeded.out_dir) / "qf-17-test.md").read_text(encoding="utf-8")
+    assert "==Dozer==" in text and "==5== points" in text and "==In Progress==" in text
+    assert "Jira HWL-2554: In Progress (as of the last export)" in screen.row_values_var.get()
+    assert stub.calls == ["HWL-2554"] and seeded.storage.audit_tail(1)[0]["action"] == "export"
+    # the form below is as it was: the same widgets, the same data sent on Save
+    assert "deliverable" in screen.widgets and "jira_key" in screen.widgets and "jira_key" in screen.form_data()
+    assert screen.widgets["jira_key"].get() == "HWL-2554" and screen.widgets["points"].get() == "5"
+    screen.new()
+    assert screen.standard_var.get() == SELECT_A_ROW and str(screen.export_button.cget("state")) == "disabled"
+    screen.export_document()
+    assert window.status_text() == "Select a deliverable with a standard to export"
