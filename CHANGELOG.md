@@ -12,6 +12,68 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.19.0] - 2026-10-29
+
+The owner, 2026-10-29: "each safety deliverable can have multiple authors, so for any safety case field,
+instead of the parameter being a string it is now an array of human names sorted alphabetically; make all
+updates necessary; also must include email alongside name." Schema version 8 → 9: the `people` column on
+`parameter`, added on open; no row is edited and no email invented.
+
+### Added
+- **`FieldType.JSON`** (`schema/fields.py`): a structured value stored as JSON text; a list or a dict handed in
+  is stored as JSON, a string is kept as typed so an entity's own text form reaches its guard; read back as the
+  Python value (`SqlRepository._decode`, `json_value`), so the JSON API answers with an array; the workbook
+  writes the JSON text (`json_text`) and the import reads it back.
+- **`people` on `parameter`** (`schema/definitions.py`, between `value` and `note`; sheet header `People`;
+  `picker="people"`): a role's people. **`ROLE_SLUGS`**: the 22 slugs of the author and reviewer flag headers.
+- **`schema/people.py`**: `Person` (name, email; `text` is `Name <email>`, `rendered` is `Name (email)`),
+  `is_role`, `parse_people` (the API's array, its JSON text, the `Name <email>; ...` text or one person per
+  line; every problem reported at once, each message naming the role and the line: no name, no email, an email
+  that is not one, an email in the name, an email listed twice, text that is not a JSON array), `sort_people`
+  (by name, case-insensitive, the full name as typed; the email breaks a tie), `people_json` (the canonical
+  storage text), `people_of`, `people_text` (`; `), `people_lines` (one per line), `render_people`
+  (`Name (email), ...`).
+- **The people rule** (`StandardsService.parameter_guard`, `_people_rule`): a role parameter's people are
+  parsed, validated and stored sorted; saving people clears the `value` (a differing value sent with them is
+  ignored with a warning); a value on a role that holds people is refused; people on a parameter that is not a
+  role are refused; a value on a role with no people is kept with the warning *a legacy value with no email
+  yet*. **`parameter_loaded`** (`EntityService.on_load`): a dump's or a workbook's people parsed the same way;
+  a bad value is dropped with the messages as warnings, the row still loads.
+- **The rendering** (`StandardsService.parameter_text`, `document_rows`, `document_values`): a role's people
+  render inline, alphabetical, `Name (email)` joined by `, `, one mark in the Markdown and one green run in the
+  filled Word original; a legacy value renders verbatim; a role with no one leaves the blank unfilled.
+- **The role report** (`StandardsService.role_summary`, `role_warnings`; `Standard.role_parameters`,
+  `role_parameters` in `to_dict`): per role its state (`people`, `legacy`, `empty`), the count and the names;
+  `legacy_roles` and `empty_roles`; one warning line each. In `plan parameters --row <id>` (per standard, with
+  the values) and in `standards for --row <id>`.
+- **The window** (`gui/widgets.py:PeopleWidget`, `gui/entity_screen.py`): in the Document parameters box each
+  role is a small text box, one person per line as `Name <email>`, with a caption (the count, `no email yet:
+  complete each line as Name <email>`, `no one yet`); a legacy name is prefilled so it can be completed; Save
+  parameters writes the lines through `create` / `update parameter` (`people`), the guard's error naming the
+  role and the line in the status bar; a box left as it was built is not saved. On the Parameters screen the
+  `people` field is a `PeopleWidget`; the name decides which editor is live (a role's name: the People box,
+  the Value entry read-only; any other: the Value entry, the People box greyed); the table column shows
+  `Ann Lee <ann@...>; Ben Ray <ben@...>` and sorts by that text (`cell_text`, `sort_value`). Nothing runs off
+  the Tk thread; no new Treeview iids.
+- Tests: `tests/test_people.py` (the pure functions, the verbs in the three forms, every refusal, the legacy
+  fallback and the report, the CLI, the export in the Markdown and through a synthetic Word original, the dump
+  and workbook round trips, the schema 8 database that gains the column); the pane and Parameters screen tests
+  in `tests/test_gui.py`.
+
+### Changed
+- `plan parameters` and `standards for --row` warn once per standard about the roles still legacy and once
+  about the roles with no one (so the live database, 17 placeholders, gives two lines, not seventeen).
+- `standards list` lists `role_parameters` beside `document_parameters`.
+- README: *What is in 0.19.0*; Standards and export (the two kinds of document parameter, the CLI lines, the
+  Document parameters box and the Parameters screen).
+
+### Deviations from the brief
+- The storage is (a) a new `people` column, not a JSON array in `value`: the `value` keeps meaning "a plain
+  string" for `vehicle_type` and for a role's legacy name, the API field is honest about its type, and a row
+  is legacy exactly when it has a value and no people, so nothing has to guess whether a string is JSON.
+- The Parameters screen keeps both widgets on the form and greys the one the name does not use, instead of
+  swapping one widget for the other: the legacy name stays visible beside the box that replaces it.
+
 ## [0.18.1] - 2026-10-29
 
 The owner, 2026-10-29: "kletz just crashed for the first time", then again while saving a pasted
@@ -1605,7 +1667,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://example.invalid/asi-kletz/compare/v0.18.1...HEAD
+[Unreleased]: https://example.invalid/asi-kletz/compare/v0.19.0...HEAD
+[0.19.0]: https://example.invalid/asi-kletz/compare/v0.18.1...v0.19.0
 [0.18.1]: https://example.invalid/asi-kletz/compare/v0.18.0...v0.18.1
 [0.18.0]: https://example.invalid/asi-kletz/compare/v0.17.0...v0.18.0
 [0.17.0]: https://example.invalid/asi-kletz/compare/v0.16.1...v0.17.0

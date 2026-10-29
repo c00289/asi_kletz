@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.18.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.19.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,31 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.19.0
+
+**The people in a role.** The owner, 2026-10-29: "each safety deliverable can have multiple authors, so for any
+safety case field, instead of the parameter being a string it is now an array of human names sorted
+alphabetically; make all updates necessary; also must include email alongside name." A *person* is a name and
+an email; a **role parameter** (every document parameter whose name is a role slug, `fusa_engineer`,
+`tech_lead_functional_safety`, ... the 22 of `ROLE_SLUGS`) holds a list of them in the new `people` column of
+the `parameter` entity (schema version 8 → 9; the column is added on open, nothing else changes), kept sorted
+by name (case-insensitive, the full name as typed), each with a non-empty name and an email that looks like one,
+no email twice; the JSON API gives and takes `people: [{"name", "email"}, ...]`, the CLI also takes
+`--set "people=Ann Lee <ann.lee@asirobots.com>; Ben Ray <ben.ray@asirobots.com>"`. `vehicle_type` and any
+other plain parameter stay a `value`. A role written before 0.19.0 (a name, or a placeholder, with no email)
+keeps loading and exporting verbatim, reported as *a legacy value with no email yet*, and is replaced the
+moment people are saved for it; the migration invents no email. The export renders a role inline,
+alphabetical, as `Name (email)` joined by `, `, so the Word cell reads `FuSa Engineer: Ann Lee
+(ann.lee@asirobots.com), Ben Ray (ben.ray@asirobots.com)`, one green mark; a role with no one leaves its
+blank unfilled. `plan parameters --row <id>` and `standards for --row <id>` say, per role, how many people
+and which roles are still legacy or empty. In the window the **Document parameters** box gives each role a
+small box, one person per line as `Name <email>`, with a caption (the count, *no email yet*, or *no one yet*),
+and **Save parameters** writes the lines through the same verbs; the **Parameters** screen edits the same
+(its People box is live for a role row, its Value entry for any other; the table column reads `Ann Lee
+<ann@...>; Ben Ray <ben@...>`); a bad line is named in the status bar with the role and the line. The
+workbook's Parameters sheet and the JSON dump carry the people (JSON) round trip. See
+[Standards and export](#standards-and-export).
 
 ## What is in 0.18.1
 
@@ -435,11 +460,24 @@ in `asi_standards`, a private sibling repo, read by Kletz and never written), wh
 parameters. The folder is `standards_dir` in `kletz.toml` (default `../asi_standards`, resolved against the
 file; `$ASI_KLETZ_STANDARDS` overrides it; `status` reports it). Two kinds of parameter:
 
-- **Document-level**, a person supplies them once: `vehicle_type` and one name per role, named by the slug
-  of the plan's author and reviewer flag headers (`fusa_engineer`, `tech_lead_functional_safety`, ...). They
-  live in the `parameter` entity (name, standard, value, note; the Parameters screen, `create parameter
-  --set name=vehicle_type --set value="Wheel Loader"`): a row whose `standard` is empty holds for every
-  standard, a row naming a folder wins for that one. A name is unique per standard.
+- **Document-level**, a person supplies them once, in the `parameter` entity (name, standard, value,
+  people, note; the Parameters screen, or `create parameter`): a row whose `standard` is empty holds for every
+  standard, a row naming a folder wins for that one; a name is unique per standard. Two kinds of them:
+  - a **plain parameter** holds a `value`: `vehicle_type` (`create parameter --set name=vehicle_type --set
+    value="Wheel Loader"`);
+  - a **role parameter** (0.19.0; its name is the slug of one of the plan's author and reviewer flag headers:
+    `fusa_engineer`, `tech_lead_functional_safety`, ... the 22 of `ROLE_SLUGS`) holds `people`: a list of
+    persons, each a name and an email, sorted by name (case-insensitive, the full name as typed), validated
+    (a name, an email that looks like one, `local@domain.tld`, no email twice; an error names the role and the
+    line). On the API an array, `people: [{"name": "Ann Lee", "email": "ann.lee@asirobots.com"}, ...]`, given
+    and taken as such; on the CLI also the text `--set "people=Ann Lee <ann.lee@asirobots.com>; Ben Ray
+    <ben.ray@asirobots.com>"` (people separated by `;` or a line break, the email in angle brackets). Saving
+    people clears the row's `value`; a value on a role that holds people is refused; people on a plain
+    parameter are refused. A role whose `value` is a name with no email (written before 0.19.0) is a *legacy
+    value with no email yet*: it loads and exports verbatim, is flagged, and is replaced the moment people are
+    saved for the role; the schema 8 → 9 migration adds the column and invents no email. The export renders a
+    role inline, alphabetical, as `Name (email)` joined by `, ` (one mark); a role with no one leaves its
+    blank unfilled.
 - **Row-level**, Kletz supplies them for every deliverable, N being the row's `order`: `row_N_points`, the
   weight the schedule used for the row (the owner's revision of 2026-10-29, asi_kletz 0.15.0: the chosen
   `points` when set, else the row's `default_points`, exactly as the scheduler's `weight_of` resolves it,
@@ -457,7 +495,12 @@ folder starting `qf-17`.
 ```powershell
 asi-kletz standards                                      # list: folder, title, document parameters, row parameters
 asi-kletz standards for --row 1                          # the standards row 1 has
-asi-kletz plan parameters --row 1                        # the value set an export would fill, nothing built
+asi-kletz plan parameters --row 1                        # the value set an export would fill, nothing built;
+                                                         # per role: the people, the roles still legacy or empty
+asi-kletz create parameter --set name=vehicle_type --set "value=Wheel Loader"
+asi-kletz create parameter --set name=fusa_engineer --set "people=Ann Lee <ann.lee@asirobots.com>; Ben Ray <ben.ray@asirobots.com>"
+asi-kletz update parameter 6 --data "{\"people\": [{\"name\": \"Roy Mendoza\", \"email\": \"roy.mendoza@asirobots.com\"}]}"
+asi-kletz list parameter                                 # people as an array per role; value for the plain ones
 asi-kletz plan export --row 1 --out out                  # out/qf-17-safety-plan.{md,pdf,docx}
 asi-kletz plan export --row 1 --out out --standard qf-17-safety-plan
 ```
@@ -484,10 +527,21 @@ In the window, the Safety Plan's details pane starts with the standards pane (ow
 document…** (enabled when the selected row has a standard; it asks for a folder, then runs `plan export`;
 the status bar names the files written and how many parameters are still unfilled) beside the row's
 standard or `No standard for this deliverable: its QMS references name none in <standards_dir>`; a
-**Document parameters** box with one entry per document-level parameter, prefilled from the `parameter`
-table, and **Save parameters**, which creates or updates the rows through the same verbs an agent uses; a
-line with the row's own values as the export will fill them (the points chosen or the note that the default
-is never exported, the sprint end, the Jira key and its last fetched status); then the form as before.
+**Document parameters** box with one entry per plain parameter and, since 0.19.0, one small box per role,
+one person per line as `Name <email>`, prefilled from the `parameter` table (a legacy name with no email is
+prefilled so it can be completed) with a caption beside it (`2 people`, `no email yet: complete each line as
+Name <email>`, or `no one yet`), and **Save parameters**, which creates or updates the rows through the same
+verbs an agent uses (a role's lines as `people`; the verb sorts them; a bad line is refused and named in the
+status bar, `Error: fusa_engineer, line 2 ('Ben Ray'): no email; write Name <email>`; a box left as it was
+is not saved); a line with the row's own values as the export will fill them (the points chosen or the note
+that the default is never exported, the sprint end, the Jira key and its last fetched status); then the form
+as before.
+
+The **Parameters** screen edits the same rows: its table shows `name`, `standard`, `value`, `people` (a role's
+people as `Ann Lee <ann@...>; Ben Ray <ben@...>`) and `note`; in the form the name decides which editor is
+live: a role's name greys the Value entry (it shows the legacy name, if any, read-only) and opens the People
+box, one person per line; any other name opens the Value entry and greys the People box. Save sends the lines
+as `people`, and the same guard answers.
 
 ## Diagrams and documents
 
