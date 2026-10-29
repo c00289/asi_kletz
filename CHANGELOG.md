@@ -12,6 +12,87 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.20.0] - 2026-10-29
+
+The owner, 2026-10-29: "use the outlook method please and also please add the ability to add url parameters to
+each deliverable... each deliverable may have multiple url... make sure that the excel export includes links to
+the work products wherever they may be... on multiple urls just go to first; list of urls is sequential while
+lists of names are alphabetical... include links to work products in the tool too... use microsoft homepage as
+placeholder url for all". And, the same day: a row with no Jira ticket must say *no ticket attached* in the
+workbook instead of leaving the cell empty. Schema version 9 → 10: the `urls` column on `safety_plan_row`, added
+on open; no row is edited.
+
+### Added
+- **`services/outlook_service.py`**, the Outlook method: `lookup(text)` asks the Outlook desktop on this machine
+  through its COM automation (PowerShell, `New-Object -ComObject Outlook.Application`, the subprocess pattern of
+  asi_gutenberg's `pdf_with_word`, with a timeout and nothing left running: an Outlook the call started is told to
+  quit) for the exact hit (`Session.CreateRecipient(text).Resolve()`) and the Global Address List entries whose
+  name contains the text (`AddressEntries`, up to 30), each with its `Name` and SMTP address
+  (`GetExchangeUser().PrimarySmtpAddress`, else `PR_SMTP_ADDRESS`), and answers `{text, count, matches: [{name,
+  email, text}]}`. The COM call is one function, `run_outlook`, that the tests monkeypatch; a machine without
+  Outlook, a refused call or a timeout is one `OutlookUnavailable` line (`Outlook is not available on this machine
+  ...`). `outlook_present()` says whether Outlook desktop is installed, for the one real test.
+- **`people lookup <text> [--limit n]`** (`commands/people.py`): the same for an agent, a JSON Result with the
+  matches; nothing stored, nothing without the call.
+- **Look up in the window** (`gui/people_lookup.py:PeopleLookup`; `gui/widgets.py:PeopleWidget`, `append_line`;
+  `gui/entity_screen.py:lookup_people`, `lookup_for_role`): a **Look up** button beside each role's box in the
+  Document parameters pane and beside the People box of the Parameters screen (greyed for a parameter that is not
+  a role) opens one small window: a name entry, Search, the matches in a list, Insert. The search is a
+  `BackgroundFetch` of `people lookup` polled with `after` (the Jira screens' pattern), never on the Tk thread;
+  Insert appends the chosen `Name <email>` to the editor that asked (the guard sorts on save); a refusal is one
+  line in the status bar and the window, the editor untouched; a second press brings the same window back.
+- **`urls` on `safety_plan_row`** (`schema/definitions.py`, after `jira_key`; `FieldType.JSON`; sheet header `Work
+  product URLs`; `picker="urls"`): an ordered list of absolute http(s) URLs, the first the link. **`schema/urls.py`**:
+  `parse_urls` (the API's array, its JSON text, the `https://a; https://b` text or one per line; every problem at
+  once, naming the line: not an absolute http(s) URL, an empty entry, a URL twice, text that is not a JSON array;
+  the order kept, never sorted), `urls_json`, `urls_of`, `first_url`, `urls_text` (`; `), `urls_lines` (one per
+  line), `url_host`, `is_url`. `WORK_PRODUCT_HEADER`, `WORK_PRODUCT_URLS_HEADER`, `NO_TICKET`.
+- **The urls rule** (`services/work_product_service.py:WorkProductService`; `Brain._plan_guard` runs the schedule's
+  guard then this one): on every create and update `urls` is parsed, validated and stored as JSON in the order
+  given; a Jira key reading `no ticket attached` is no key. `loaded` (`on_load` of the plan service) does the same
+  for a dump's or a workbook's row, dropping a bad list with the messages as warnings so the row still loads.
+- **`plan urls --placeholder <url> [--check]`** (`WorkProductService.fill_placeholder`): every row with no URL gets
+  `[url]`, one transaction, one audit entry (`urls_placeholder`, with the ids), the event `plan.urls_placeholder`;
+  a row that has any URL is left alone, so a second run changes nothing; `--check` names the rows and writes
+  nothing; a placeholder that is not an absolute http(s) URL is refused.
+- **The Excel export** (`io/exporters.py:sheet_columns`): the Safety Plan sheet gets, right after Jira key, a
+  **Work product** column (the export's own, no field: a clickable hyperlink to the row's first URL, the cell
+  text the URL's host, the Hyperlink style; empty for a row without one) and the **Work product URLs** column
+  (the field, one URL per line); a row with no Jira ticket prints `no ticket attached` in its Jira key cell. The
+  import (`io/importers.py`, `DERIVED_HEADERS`) skips the derived column without a warning and reads the list
+  back in order and the no-ticket text as no key. The dump carries the array.
+- **The standards** (`StandardsService.row_values`, `ROW_PARAM`): `row_N_url` (the first URL) and `row_N_urls`
+  (all, joined by a line break) per plan row that has any; `plan parameters` and `plan export` fill them where a
+  source names them (the asi_standards README's parameter table lists them; the QF-17 source is unchanged).
+- **The form** (`gui/widgets.py:UrlsWidget`): the Work product URLs box, one URL per line, the links beside it as
+  clickable text (`Link.TLabel`, the palette's primary) with the first marked `(the link)`, an **Open** button
+  that launches the first in the browser (`webbrowser.open`), a click (left or right) on any line launching that
+  one; the table column reads `https://a; https://b` and sorts by that text.
+- Tests: `tests/test_work_products.py` (the pure functions and every refusal, the verbs in the three forms, the
+  CLI, the no-ticket text, the standards' row parameters, the Excel columns, the hyperlink and the no-ticket cell
+  with the import, the dump round trip, the placeholder verb and its dry run, the schema 9 database that gains the
+  column); `tests/test_outlook.py` (the script, the parsing, the service and the verb with the COM call
+  monkeypatched, every refusal as one line, the CLI, and one real lookup of the owner's name that runs only where
+  Outlook desktop is installed and prints nothing); `tests/test_gui_links_and_lookup.py` (the URLs editor, its
+  links and Open with `webbrowser.open` monkeypatched, the order kept on save, a bad line in the status bar; Look
+  up on the pane and on the Parameters screen with the COM function monkeypatched: the search off the Tk thread,
+  the pick inserted, a refusal as one line with the editor still usable, no search without a press).
+
+### Changed
+- The Safety Plan sheet has 72 columns (the two Work product columns before the hidden uid); the sheet-columns
+  test tolerates the derived column in a regenerated workbook.
+- `plan` help names `urls`; the standards service's docstring and `Standard.row_parameters` name the two new row
+  parameters; the window's theme recipes define `Link.TLabel`.
+- README: *What is in 0.20.0*; Standards and export (the row parameters, Work product URLs, the CLI lines, the
+  Excel columns and the no-ticket text, Look up in the pane and on the Parameters screen); Quick start.
+
+### Deviations from the brief
+- The export's Jira status is not a column of the Safety Plan sheet (it is fetched at `plan export` time for a
+  standard, never stored), so *no ticket attached* appears in the Jira key cell only; the sheet has no status
+  cell to carry it.
+- The pane's links live in the form's Work product URLs box (the selected deliverable's details), the one place
+  the row is edited, rather than in the standards pane above it, so the links and the editor are the same lines.
+
 ## [0.19.0] - 2026-10-29
 
 The owner, 2026-10-29: "each safety deliverable can have multiple authors, so for any safety case field,

@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.19.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.20.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,41 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.20.0
+
+**The Outlook method, and a link on every work product.** The owner, 2026-10-29: "use the outlook method please
+and also please add the ability to add url parameters to each deliverable... each deliverable may have multiple
+url... make sure that the excel export includes links to the work products wherever they may be... on multiple
+urls just go to first; list of urls is sequential while lists of names are alphabetical... include links to work
+products in the tool too... use microsoft homepage as placeholder url for all."
+
+*Look up.* Beside each role's people editor (the Document parameters box of the Safety Plan pane, the People
+box of the Parameters screen) a **Look up** button opens a small window: type part of a name, press Search, and
+the tool asks the Outlook desktop on this machine through its COM automation (PowerShell, `New-Object -ComObject
+Outlook.Application`: the exact hit through `CreateRecipient(name).Resolve()`, then the Global Address List's
+entries whose name contains the text, each with its SMTP address), lists the matches (name, email) and inserts
+the chosen `Name <email>` line into the editor; the guard sorts on save. The search runs on a worker thread,
+never on the Tk thread; nothing is stored but the line picked; nothing runs without a press; a machine without
+Outlook, or a refused COM call, gives one clear line in the status bar and the editor stays usable. The same on
+the command line: `people lookup <text>`, a JSON Result with the matches. The COM call is one function
+(`services/outlook_service.py:run_outlook`) that the tests replace; nothing in the suite launches Outlook, except
+one test, skipped where Outlook is not installed, that looks up the owner's own name and asserts a non-empty answer.
+
+*Work product URLs.* A Safety Plan row has `urls` (schema version 9 → 10; the column is added on open, nothing
+else changes): an **ordered** list of absolute http(s) URLs, the first *the link* ("on multiple urls just go to
+first"), kept exactly as typed, unlike people, which sort. In the form one URL per line, with the links beside the
+box as clickable text (the first marked as the link) and an **Open** button that launches the first in the browser
+(a click on any other line launches that one); on the API an array, `urls: ["https://a", "https://b"]`; on the CLI
+also `--set "urls=https://a; https://b"`; each line an absolute http or https URL, none twice, an error naming the
+line. The Excel export's Safety Plan sheet gets a **Work product** column (a clickable hyperlink to the first URL,
+the cell text its host) and a **Work product URLs** column (all of them, one per line); a row with no Jira ticket
+prints *no ticket attached* in its Jira key cell instead of leaving it empty; the import reads the list back in
+order, skips the derived column silently and reads that text as no key. The dump carries the array. The standards
+get two row parameters, `row_N_url` (the first) and `row_N_urls` (all, joined by a line break), so a template can
+print them (asi_standards README). `plan urls --placeholder <url>` puts that URL on every row that has none
+(audited once, idempotent; `--check` names the rows and writes nothing); the owner's placeholder is
+`https://www.microsoft.com/`. See [Standards and export](#standards-and-export).
 
 ## What is in 0.19.0
 
@@ -487,7 +522,22 @@ file; `$ASI_KLETZ_STANDARDS` overrides it; `status` reports it). Two kinds of pa
   typed; 0.17.0, the owner: "the prefix before the colon of the assigned Jira ticket name", stacked over the
   status in the QF-17 Status column); `row_N_status`, the live status of that ticket, read once per distinct
   key through asi_hopper, non-interactively; a row without a key, or no session, leaves the blank with one
-  warning naming what was skipped.
+  warning naming what was skipped; since 0.20.0 `row_N_url`, the row's first work product URL (the link), and
+  `row_N_urls`, all of them joined by a line break; a row with no URL leaves both blanks.
+
+**Work product URLs** (0.20.0; the owner: "each deliverable may have multiple url... on multiple urls just go
+to first; list of urls is sequential while lists of names are alphabetical"): a plan row's `urls` is an ordered
+list of absolute http(s) URLs, the first the link, kept in the order given, never sorted. On the API an array
+(`"urls": ["https://a", "https://b"]`, given and taken as such); on the CLI also the text `--set "urls=https://a;
+https://b"` (URLs separated by `;` or a line break); each must be an absolute http or https URL and none may
+appear twice, every problem named with its line (`urls, line 2 ('nope'): not an absolute http(s) URL`); an empty
+value clears the list. The Excel export's Safety Plan sheet carries them in two columns right after Jira key:
+**Work product**, a clickable hyperlink to the first URL whose cell text is the URL's host (the export's own
+column, no field; the import skips it silently), and **Work product URLs**, the whole list one per line, read
+back in order by the import. A row with no Jira ticket prints `no ticket attached` in its Jira key cell instead
+of an empty one, and the import (and the verbs) read that text as no key. The dump carries the array.
+`plan urls --placeholder <url>` fills `urls` of every row that has none with that one URL, audited once
+(`urls_placeholder`, with the ids), idempotent; `--check` names the rows it would fill and writes nothing.
 
 A plan row *has* a standard when one of its QMS reference flags names the folder: `ref_qf_17` set names a
 folder starting `qf-17`.
@@ -503,6 +553,11 @@ asi-kletz update parameter 6 --data "{\"people\": [{\"name\": \"Roy Mendoza\", \
 asi-kletz list parameter                                 # people as an array per role; value for the plain ones
 asi-kletz plan export --row 1 --out out                  # out/qf-17-safety-plan.{md,pdf,docx}
 asi-kletz plan export --row 1 --out out --standard qf-17-safety-plan
+asi-kletz update safety_plan_row 1 --set "urls=https://dms.example.com/doc/17; https://jama.example.com/items/2554"
+asi-kletz update safety_plan_row 1 --data "{\"urls\": [\"https://dms.example.com/doc/17\"]}"
+asi-kletz plan urls --placeholder https://www.microsoft.com/ --check   # the rows that would get it; nothing written
+asi-kletz plan urls --placeholder https://www.microsoft.com/           # every row with no URL gets it, once
+asi-kletz people lookup "Roy"                           # the Outlook address book: name and email per match
 ```
 
 The export builds every standard the row has (or the one named) with `asi_gutenberg.build` (the source's own page orientations, the
@@ -530,18 +585,25 @@ standard or `No standard for this deliverable: its QMS references name none in <
 **Document parameters** box with one entry per plain parameter and, since 0.19.0, one small box per role,
 one person per line as `Name <email>`, prefilled from the `parameter` table (a legacy name with no email is
 prefilled so it can be completed) with a caption beside it (`2 people`, `no email yet: complete each line as
-Name <email>`, or `no one yet`), and **Save parameters**, which creates or updates the rows through the same
-verbs an agent uses (a role's lines as `people`; the verb sorts them; a bad line is refused and named in the
-status bar, `Error: fusa_engineer, line 2 ('Ben Ray'): no email; write Name <email>`; a box left as it was
-is not saved); a line with the row's own values as the export will fill them (the points chosen or the note
-that the default is never exported, the sprint end, the Jira key and its last fetched status); then the form
-as before.
+Name <email>`, or `no one yet`), a **Look up** button per role (0.20.0, "use the outlook method": a small
+window where part of a name, searched in the Outlook address book on this machine through Outlook's COM
+automation on a worker thread, lists the matches, name and email each; Insert puts the chosen `Name <email>` on a
+line of the role's box; nothing is stored but that line, nothing runs without a press, and a machine without
+Outlook says so in one status-bar line and leaves the box usable), and **Save parameters**, which creates or
+updates the rows through the same verbs an agent uses (a role's lines as `people`; the verb sorts them; a bad
+line is refused and named in the status bar, `Error: fusa_engineer, line 2 ('Ben Ray'): no email; write Name
+<email>`; a box left as it was is not saved); a line with the row's own values as the export will fill them (the
+points chosen or the note that the default is never exported, the sprint end, the Jira key and its last fetched
+status); then the form as before, where the **Work product URLs** box (0.20.0) takes one URL per line, shows
+the links beside it as clickable text with the first marked as the link, and its **Open** button launches the
+first in the browser (a click on any other line launches that one).
 
 The **Parameters** screen edits the same rows: its table shows `name`, `standard`, `value`, `people` (a role's
 people as `Ann Lee <ann@...>; Ben Ray <ben@...>`) and `note`; in the form the name decides which editor is
 live: a role's name greys the Value entry (it shows the legacy name, if any, read-only) and opens the People
-box, one person per line; any other name opens the Value entry and greys the People box. Save sends the lines
-as `people`, and the same guard answers.
+box, one person per line, with its own **Look up** button (0.20.0, the same Outlook search); any other name
+opens the Value entry and greys the People box and the button. Save sends the lines as `people`, and the same
+guard answers.
 
 ## Diagrams and documents
 
@@ -1053,6 +1115,9 @@ asi-kletz status
 asi-kletz list safety_plan_row --filter status=Blocked
 asi-kletz create safety_plan_row --set deliverable="Safety Case" --set lifecycle_phase="8. Functional Safety Assessment"
 asi-kletz update safety_plan_row 3 --data '{"status": "Done", "reviewer_pat": true}'
+asi-kletz update safety_plan_row 3 --set "urls=https://dms.example.com/doc/17; https://jama.example.com/items/2554"
+asi-kletz plan urls --placeholder https://www.microsoft.com/   # every work product without a URL gets this one
+asi-kletz people lookup "Roy"                                   # the Outlook address book, name and email per match
 asi-kletz export excel --out "kletz.xlsx"
 asi-kletz dump --out kletz.json
 asi-kletz document safety_plan --out out
