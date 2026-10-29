@@ -38,3 +38,5 @@ __all__ = [
     "register_diagram",
     "register_document",
 ]
+
+from . import charts  # noqa: E402, F401  (the charts register after the graphs, so the catalog lists them last)

@@ -15,8 +15,9 @@ from asi_kletz.generate import BuildContext, DiagramFactory, DocumentFactory
 from asi_kletz.generate import plan_queries as q
 from tests.conftest import PLAN, REPO_ROOT, TABLES
 
-DIAGRAMS = ["lifecycle_overview", "phase_flow", "status_board", "pdp_map"]
-DOCUMENTS = ["safety_plan", "status_report", "phase_checklist"]
+DIAGRAMS = ["lifecycle_overview", "phase_flow", "status_board", "pdp_map", "sprint_burndown", "velocity",
+            "plan_roadmap"]
+DOCUMENTS = ["safety_plan", "status_report", "phase_checklist", "sprint_report", "plan_roadmap"]
 FENCE = {"png", "svg", "dot", "mmd"}
 
 
@@ -404,3 +405,160 @@ def test_database_has_exactly_the_registered_tables_after_generating(seeded):
     tables = seeded.storage.fetchall("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
     names = {t["name"] for t in tables} - {"schema_migrations", "audit_log"}
     assert names == TABLES
+
+
+# -- charts and the sprint documents (0.12.0) ----------------------------------------------------------------
+ITEM = "sprint_item"
+
+
+def _sprinted(brain):
+    """Sprint 1 closed (8 points done), Sprint 2 active with four items, Sprint 3 planned; a Monday holiday inside 2."""
+    assert brain.execute("create", entity="sprint", data={
+        "number": 1, "label": "SPRINT 1", "start": "2026-10-12", "end": "2026-10-27", "capacity": 10,
+        "status": "Closed", "closed_on": "2026-10-27",
+    }).ok
+    assert brain.execute("create", entity=ITEM, data={
+        "sprint": 1, "kind": "Other", "title": "Phase 2 wrap-up", "points": 8, "status": "Done",
+        "done_on": "2026-10-20",
+    }).ok
+    assert brain.execute("create", entity="sprint", data={
+        "number": 2, "label": "SPRINT 2", "lifecycle_phase": "3. Functional Safety Concept (FSC)",
+        "start": "2026-10-27", "end": "2026-11-09", "status": "Active", "goal": "Clear the Phase 2 backlog",
+    }).ok
+    for order, data in enumerate([
+        {"kind": "Deliverable", "plan_row": 2, "title": "HARA", "points": 3, "status": "Done", "done_on": "2026-10-29"},
+        {"kind": "Deliverable", "plan_row": 3, "title": "FSC", "points": 3, "status": "To Do"},
+        {"kind": "Meeting", "title": "Intro meeting", "points": 2, "status": "Done"},
+        {"kind": "Other", "title": "Old item", "points": 5, "status": "Carried"},
+    ], 1):
+        assert brain.execute("create", entity=ITEM, data={"sprint": 2, "order": order, **data}).ok
+    assert brain.execute("create", entity="sprint", data={
+        "number": 3, "label": "SPRINT 3", "start": "2026-11-10", "end": "2026-11-23", "status": "Planned",
+    }).ok
+    assert brain.execute("create", entity="holiday", data={"date": "2026-11-02", "name": "Test holiday"}).ok
+    return brain
+
+
+def test_sprint_burndown_chart_from_the_items(seeded, tmp_path):
+    _sprinted(seeded)
+    chart = DiagramFactory.build("sprint_burndown", seeded, {}, BuildContext(seeded))  # the active sprint
+    assert chart.kind == "chart"
+    data = chart.data
+    assert (data["sprint"], data["capacity"], data["committed"], data["items"]) == (2, 8, 8, 3)  # the Carried 5 is out
+    assert len(data["business_days"]) == 9 and data["business_days"][0] == "2026-10-27"  # the holiday took a day
+    assert data["remaining"][0] == 6 and data["remaining"][2] == 3 and data["remaining"][-1] == 3  # day one, 10/29
+    assert data["ideal"][0] == 8 and data["ideal"][-1] == 0 and len(data["ideal"]) == 9
+    assert data["holidays"] == [("2026-11-02", "Test holiday")] and data["undated_done"] == 1
+    assert "2026-11-02" in data["gaps"] and "2026-10-31" in data["gaps"] and "2026-10-28" not in data["gaps"]
+    result = seeded.execute("diagram", name="sprint_burndown", formats="png,svg")
+    assert result.ok, result.errors
+    assert set(result.data["paths"]) == {"png", "svg"} and all(Path(p).is_file() for p in result.data["paths"].values())
+    assert result.data["primary"].endswith("sprint_burndown_2.png") and result.data["nodes"] == 0
+    assert any("without done_on" in w for w in result.warnings)
+    first = seeded.execute("diagram", name="sprint_burndown", param=["sprint=1"], formats="png")
+    assert first.ok and first.data["primary"].endswith("sprint_burndown_1.png")
+    assert first.data["params"] == {"sprint": "1"}
+    assert not seeded.execute("diagram", name="sprint_burndown", param=["sprint=9"]).ok
+    assert not seeded.execute("diagram", name="sprint_burndown", param=["sprint=two"]).ok
+    graph_only = seeded.execute("diagram", name="sprint_burndown", formats="dot")
+    assert not graph_only.ok and "writes png, svg only" in graph_only.errors[0]
+    mixed = seeded.execute("diagram", name="sprint_burndown", formats="png,dot,mmd")
+    assert mixed.ok and list(mixed.data["paths"]) == ["png"]
+    assert any("dot, mmd not written" in w for w in mixed.warnings)
+    assert not seeded.execute("diagram", name="sprint_burndown", param=["phase=1"]).ok  # not its parameter
+
+
+def test_velocity_chart_bars_and_mean(seeded):
+    empty = seeded.execute("diagram", name="velocity", formats="png")
+    assert empty.ok and any("no Closed sprint" in w for w in empty.warnings) and empty.data["nodes"] == 0
+    assert DiagramFactory.build("velocity", seeded, {}, BuildContext(seeded)).data["sprints"] == []
+    _sprinted(seeded)
+    data = DiagramFactory.build("velocity", seeded, {}, BuildContext(seeded)).data
+    assert data["sprints"] == [1] and data["done"] == [8] and data["mean"] == [8.0] and data["capacity"] == [10]
+    assert seeded.execute("sprint", action="close", as_of="2026-11-09").ok  # 3 + 2 done; the rest carried into 3
+    data = DiagramFactory.build("velocity", seeded, {}, BuildContext(seeded)).data
+    assert data["sprints"] == [1, 2] and data["done"] == [8, 5] and data["mean"] == [8.0, 6.5]
+    assert data["labels"] == ["SPRINT 1", "SPRINT 2"] and data["capacity"] == [10, 8]
+    result = seeded.execute("diagram", name="velocity", formats="png,svg")
+    assert result.ok and result.warnings == [] and Path(result.data["primary"]).name == "velocity.png"
+
+
+def test_plan_roadmap_chart_from_the_scheduler(seeded):
+    from tests.conftest import SEED_WEIGHTS
+
+    _sprinted(seeded)
+    assert seeded.execute("plan", action="weights", what="load", file=str(SEED_WEIGHTS)).ok
+    chart = DiagramFactory.build("plan_roadmap", seeded, {}, BuildContext(seeded))
+    data = chart.data
+    assert [c["number"] for c in data["columns"]] == [2]  # both open rows finish where their items are
+    assert data["columns"][0]["holidays"] == ["Test holiday"]
+    rows = {r["id"]: r for r in data["rows"]}
+    assert rows[1]["status"] == "Done" and rows[1]["occupied"] == [] and rows[1]["sprint"] is None
+    assert (rows[2]["weight"], rows[2]["committed"], rows[2]["sprint"], rows[2]["occupied"]) == (3, 3, 2, [2])
+    assert (rows[3]["weight"], rows[3]["committed"], rows[3]["sprint"], rows[3]["occupied"]) == (2, 3, 2, [2])
+    assert (rows[2]["start"], rows[2]["end"], rows[2]["deadline"]) == ("2026-10-27", "2026-11-09", "2026-11-09")
+    assert data["total_points"] == 5 and data["completion"] == {"sprint": 2, "date": "2026-11-09"}
+    assert data["unscheduled"] == [] and data["warnings"] == []
+    # 12 points on row 3: 9 left after its item, Sprint 2 is full, Sprint 3 holds 8, the chain ends
+    assert seeded.execute("update", entity=PLAN, id=3, set=["points=12"]).ok
+    data = DiagramFactory.build("plan_roadmap", seeded, {}, BuildContext(seeded)).data
+    assert [c["number"] for c in data["columns"]] == [2] and data["unscheduled"] == [3]
+    assert data["rows"][2]["sprint"] is None and data["rows"][2]["occupied"] == [2, 3]
+    assert data["total_points"] == 15 and "run sprint plan" in data["warnings"][0]
+    result = seeded.execute("diagram", name="plan_roadmap", formats="png")
+    assert result.ok and Path(result.data["primary"]).name == "plan_roadmap.png"
+    assert any("run sprint plan" in w for w in result.warnings)
+    assert seeded.execute("sprint", action="plan", until="2026-12-31").ok  # the chain reaches it now
+    data = DiagramFactory.build("plan_roadmap", seeded, {}, BuildContext(seeded)).data
+    assert data["unscheduled"] == [] and data["rows"][2]["sprint"] == 4 and data["rows"][2]["occupied"] == [2, 3, 4]
+    assert [c["number"] for c in data["columns"]] == [2, 3, 4]
+
+
+def test_sprint_report_document(seeded, tmp_path):
+    _sprinted(seeded)
+    result = seeded.execute("document", name="sprint_report")
+    assert result.ok, result.errors
+    data = result.data
+    assert data["params"] == {"sprint": "2"} and data["title"] == "Sprint Report: SPRINT 2"
+    assert set(data["paths"]) == {"md", "pdf", "docx"} and all(Path(p).is_file() for p in data["paths"].values())
+    out = Path(data["out_dir"])
+    assert (out / "figures" / "sprint_burndown_2.png").is_file() and (out / "figures" / "velocity.png").is_file()
+    text = Path(data["paths"]["md"]).read_text(encoding="utf-8")
+    for needle in ("Clear the Phase 2 backlog", "figures/sprint_burndown_2.png", "figures/velocity.png",
+                   "Carried out of SPRINT 2", "Old item", "Test holiday", "Intro meeting", "8 points"):
+        assert needle in text, needle
+    tables = dict(_tables(text))
+    board = next(rows for caption, rows in tables.items() if "board" in caption)
+    assert [r[0] for r in board[1:]] == ["To Do", "Done", "Done", "Carried"]  # status order, then order
+    assert any("without done_on" in w for w in result.warnings)
+    first = seeded.execute("document", name="sprint_report", param=["sprint=1"])
+    assert first.ok and first.data["params"] == {"sprint": "1"} and "No item was carried" in Path(
+        first.data["paths"]["md"]).read_text(encoding="utf-8")
+    assert not seeded.execute("document", name="sprint_report", param=["sprint=9"]).ok
+    assert seeded.execute("delete", entity="sprint", id=2).ok and seeded.execute("delete", entity="sprint", id=3).ok
+    assert not seeded.execute("document", name="sprint_report").ok  # no active sprint and none named
+
+
+def test_plan_roadmap_document(seeded):
+    from tests.conftest import SEED_WEIGHTS
+
+    _sprinted(seeded)
+    assert seeded.execute("plan", action="weights", what="load", file=str(SEED_WEIGHTS)).ok
+    result = seeded.execute("document", name="plan_roadmap")
+    assert result.ok, result.errors
+    text = Path(result.data["paths"]["md"]).read_text(encoding="utf-8")
+    assert result.data["title"] == "Safety Plan Roadmap"
+    assert (Path(result.data["out_dir"]) / "figures" / "plan_roadmap.png").is_file()
+    for needle in ("A sprint spans 10 business days", "figures/plan_roadmap.png", "Phase 1: Concept Development",
+                   "Phase 3: Functional Safety Concept", "Sprint 2 (2026-11-09)", "Test holiday", "5"):
+        assert needle in text, needle
+    assert "Not scheduled" not in text
+    tables = dict(_tables(text))
+    phase_three = next(rows for caption, rows in tables.items() if "Phase 3" in caption)
+    assert phase_three[0] == ["Deliverable", "Points", "Sprint", "Start", "End", "Status"]
+    assert phase_three[1][1:] == ["2", "2", "2026-10-27", "2026-11-09", "Pending"]
+    assert seeded.execute("update", entity=PLAN, id=3, set=["points=12"]).ok
+    result = seeded.execute("document", name="plan_roadmap")
+    text = Path(result.data["paths"]["md"]).read_text(encoding="utf-8")
+    assert "Not scheduled" in text and "Functional Safety Concept" in text.split("Not scheduled")[1]
+    assert any("run sprint plan" in w for w in result.warnings)

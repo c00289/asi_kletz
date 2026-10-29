@@ -9,20 +9,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..schema.definitions import SPRINT_CAPACITY, SPRINT_DAYS
+from ..schema.definitions import SPRINT_CAPACITY, SPRINT_DAYS, SPRINT_RULE
 from .base import Argument, Command, Context, Result
 from .factory import register_command
 
-# The owner's sprint rule, 2026-10-28, verbatim (docs/sprint-planner-plan.md):
-RULE = (
-    "A sprint spans 10 business days. Monday to Friday count; weekends and holidays do not, so a sprint that "
-    "contains a holiday ends one calendar day later per holiday. Dates move as holidays become real; the cadence "
-    "does not. Capacity is 8 points per sprint, company policy (8 productive days of the 10). Holidays never "
-    "reduce points. Sprints are consecutive with no gaps, numbered across the programme (SPRINT n); the chain "
-    "continues from Sprint 2 (2026-10-27 to 2026-11-10). We do not know the work yet: future sprints are empty, "
-    "Planned, with no lifecycle phase, and will be adjusted as dates become real. "
-    "Every single sprint except the one in the past is 8 points; set this as a global value that is fixed."
-)
+RULE = SPRINT_RULE  # the owner's sprint rule, 2026-10-28, verbatim; it lives in schema/definitions.py
 
 
 @register_command

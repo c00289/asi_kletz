@@ -13,6 +13,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ..errors import CommandError
 from .base import BuildContext, DiagramFactory, Spec, check_params
 
 if TYPE_CHECKING:
@@ -80,7 +81,18 @@ def render_diagram(
     diagram = builder(brain, clean, ctx)
     target = Path(out_dir) if out_dir is not None else Path(ctx.out_dir)
     stem = output_stem(spec, clean)
-    summary = build_diagram(diagram, target, name=stem, formats=formats, dpi=dpi)
+    if getattr(diagram, "kind", None) == "chart":  # a matplotlib chart (0.12.0): png and svg only
+        from .charts import CHART_FORMATS
+
+        dropped = [fmt for fmt in formats if fmt not in CHART_FORMATS]
+        kept = tuple(fmt for fmt in formats if fmt in CHART_FORMATS)
+        if not kept:
+            raise CommandError(f"{key} is a chart and writes {', '.join(CHART_FORMATS)} only, not {', '.join(dropped)}")
+        if dropped:
+            ctx.warn(f"{key} is a chart: {', '.join(dropped)} not written, {', '.join(kept)} only")
+        summary = diagram.render(target, stem, formats=kept, dpi=dpi)
+    else:
+        summary = build_diagram(diagram, target, name=stem, formats=formats, dpi=dpi)
     paths = {fmt: summary[fmt] for fmt in formats if fmt in summary}
     for issue in summary["issues"]:
         ctx.warn(f"{key}: {issue['message']}")
@@ -107,4 +119,9 @@ def add_diagram(
     diagram = builder(ctx.brain, clean, ctx)
     stem = output_stem(spec, clean)
     ctx.figures.append({"name": key, "params": clean, "stem": stem, "path": f"{FIGURES_DIR}/{stem}.png"})
+    if getattr(diagram, "kind", None) == "chart":
+        # a chart is rendered now into <out>/figures/ and goes in as a figure block: asi_gutenberg resolves
+        # the relative path against the output folder when it builds, as it does for its own diagram PNGs
+        diagram.render(Path(ctx.out_dir) / FIGURES_DIR, stem, formats=("png",))
+        return doc.figure(f"{FIGURES_DIR}/{stem}.png", caption)
     return doc.diagram(diagram, caption, name=stem)

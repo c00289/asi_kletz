@@ -30,6 +30,7 @@ class Schedule:
     sources: dict[int, str] = field(default_factory=dict)  # row id -> where its weight came from
     weights: dict[int, int] = field(default_factory=dict)  # row id -> the weight used
     committed: dict[int, int] = field(default_factory=dict)  # row id -> points already committed as its own items
+    occupancy: dict[int, set[int]] = field(default_factory=dict)  # row id -> the sprints it takes points from
     warnings: list[str] = field(default_factory=list)
 
 
@@ -130,8 +131,11 @@ def schedule(
         weight, source = weight_of(row, floor)
         out.weights[row_id], out.sources[row_id] = weight, source
         out.committed[row_id] = committed.get(row_id, 0)
+        out.occupancy[row_id] = {
+            int(i["sprint"]) for i in own_items(items) if int(i["plan_row"]) == row_id and i.get("sprint") is not None
+        }
         remaining = max(0, weight - out.committed[row_id])
-        if remaining == 0 and row_id in held:  # fully committed: it finishes where its last item is
+        if remaining == 0 and held.get(row_id) in by_number:  # fully committed: it finishes where its last item is
             sprint = by_number[held[row_id]]
             out.assignments[row_id] = (int(sprint["number"]), sprint.get("end") or None)
             out.spans[row_id] = (sprint.get("start") or None, sprint.get("end") or None)
@@ -143,6 +147,8 @@ def schedule(
             take = min(free[pointer], remaining)
             free[pointer] -= take
             remaining -= take
+            if take:
+                out.occupancy[row_id].add(int(line[pointer]["number"]))
             if remaining == 0:
                 finished = pointer
             else:

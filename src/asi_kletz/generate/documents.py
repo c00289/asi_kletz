@@ -12,8 +12,12 @@ from __future__ import annotations
 import datetime as dt
 from typing import TYPE_CHECKING, Any
 
+from ..schema.definitions import SPRINT_RULE
+from ..tracker.business_days import holidays_within
 from . import plan_queries as q
+from . import sprint_queries as sq
 from .base import BuildContext, Spec, register_document
+from .charts import SPRINT_PARAM, roadmap_data, sprint_for
 from .figures import add_diagram
 
 if TYPE_CHECKING:
@@ -285,4 +289,191 @@ def phase_checklist(brain: Brain, params: dict[str, str], ctx: BuildContext) -> 
 
     doc.h1("Totals")
     doc.fields([*((s, counts[s]) for s in q.statuses(brain)), ("Total", counts["total"])], caption="Totals by status")
+    return doc
+
+
+# -- sprint report (0.12.0) -------------------------------------------------------------------------------
+ITEM_STATUS_ORDER = ("To Do", "In Progress", "Done", "Carried")
+
+
+@register_document(Spec(
+    "sprint_report", "Sprint Report",
+    "One sprint for the people who want a PDF rather than the text file: the sprint's facts and goal, the "
+    "board table (To Do, In Progress, Done, Carried, with points), the burndown and velocity charts, the "
+    "carried items and the holidays inside the sprint. The sprint rule: ten business days, eight points.",
+    params=(SPRINT_PARAM,),
+))
+def sprint_report(brain: Brain, params: dict[str, str], ctx: BuildContext) -> Any:
+    from asi_gutenberg import Document
+
+    sprint = sprint_for(brain, params)
+    number = int(sprint["number"])
+    params["sprint"] = str(number)
+    label = sprint.get("label") or f"SPRINT {number}"
+    board = sq.board(brain, sprint)
+    doc = Document(f"Sprint Report: {label}", "report", **_common(brain, ctx))
+
+    doc.h1("The sprint")
+    velocity = "no closed sprint" if board["velocity"] is None else f"{board['velocity']:g} points per sprint"
+    doc.fields([
+        ("Sprint", f"{number} · {label}"), ("Lifecycle phase", _cell(sprint.get("lifecycle_phase")) or "none yet"),
+        ("Dates", f"{sprint.get('start') or '?'} to {sprint.get('end') or '?'}"),
+        ("Status", _cell(sprint.get("status"))), ("Capacity", f"{board['capacity']} points"),
+        ("Committed", f"{board['committed']} points"), ("Done", f"{board['done']} points"),
+        ("To go", f"{board['to_go']} points"), ("Unpointed items", str(board["unpointed"])),
+        ("Days left", "overdue" if board["overdue"] else str(board["days_left"])), ("Velocity", velocity),
+    ], caption="The sprint on " + board["as_of"])
+    doc.h1("Goal")
+    doc.p(_cell(sprint.get("goal")) or "No goal recorded.")
+
+    doc.h1("Board")
+    items = board["items"]
+    ordered = sorted(items, key=lambda i: (
+        ITEM_STATUS_ORDER.index(i.get("status")) if i.get("status") in ITEM_STATUS_ORDER else len(ITEM_STATUS_ORDER),
+        i.get("order") or 0, i["id"],
+    ))
+    if ordered:
+        doc.table(
+            ["Status", "Item", "Kind", "Points", "Plan row", "Target"],
+            [[_cell(i.get("status")), _cell(i.get("title")), _cell(i.get("kind")),
+              "" if i.get("points") is None else str(i["points"]), _cell(i.get("plan_row")), _cell(i.get("target"))]
+             for i in ordered],
+            caption=f"The board of {label}",
+        )
+    else:
+        doc.p("The sprint has no items.")
+    summary = sq.summary_line(board)
+    if summary:
+        doc.p(summary)
+    for warning in board["warnings"]:
+        doc.p(f"Warning: {warning}.")
+
+    doc.h1("Burndown")
+    add_diagram(doc, ctx, "sprint_burndown", {"sprint": str(number)}, caption=f"Burndown of {label}")
+    doc.h1("Velocity")
+    add_diagram(doc, ctx, "velocity", caption="Points done per Closed sprint")
+
+    doc.h1("Carried items")
+    carried_out = [i for i in items if i.get("status") == "Carried"]
+    carried_in = [i for i in items if i.get("carried_from")]
+    if carried_out:
+        doc.table(
+            ["Item", "Points", "Kind"],
+            [[_cell(i.get("title")), "" if i.get("points") is None else str(i["points"]), _cell(i.get("kind"))]
+             for i in carried_out],
+            caption=f"Carried out of {label} into the next sprint",
+        )
+    else:
+        doc.p("No item was carried out of this sprint.")
+    if carried_in:
+        doc.table(
+            ["Item", "Points", "Carried from"],
+            [[_cell(i.get("title")), "" if i.get("points") is None else str(i["points"]), f"Sprint {i['carried_from']}"]
+             for i in carried_in],
+            caption=f"Carried into {label}",
+        )
+
+    doc.h1("Holidays in the sprint")
+    holidays = sq.holiday_dates(brain)
+    inside = (
+        holidays_within(sq.parse_date(sprint["start"]), sq.parse_date(sprint["end"]), holidays)
+        if sprint.get("start") and sprint.get("end") else []
+    )
+    if inside:
+        doc.table(["Date", "Holiday"], [[d.isoformat(), holidays[d]] for d in inside], caption="Holidays, no work")
+        doc.p("A sprint spans 10 business days; each holiday inside it stretched the dates by one calendar day.")
+    else:
+        doc.p("No holiday falls in this sprint.")
+    return doc
+
+
+# -- the roadmap (0.12.0) ------------------------------------------------------------------------------------
+@register_document(Spec(
+    "plan_roadmap", "Safety Plan Roadmap",
+    "For the tech lead and the team: the sprint rule, the total points and the completion sprint and date, "
+    "one table per lifecycle phase (deliverable, points, sprint, start, end, status), the roadmap chart, "
+    "the rows the sprint chain does not reach, and a holidays appendix. Built from the scheduler's output, "
+    "the single source of the plan's sprint and deadline.",
+))
+def plan_roadmap(brain: Brain, params: dict[str, str], ctx: BuildContext) -> Any:
+    from asi_gutenberg import Document
+
+    data = roadmap_data(brain)
+    rows = data["rows"]
+    doc = Document("Safety Plan Roadmap", "plan", **_common(brain, ctx))
+
+    doc.h1("Purpose")
+    doc.p(
+        f"This roadmap says in which sprint each safety deliverable of {_reference(brain)} is expected to be "
+        f"finished, and so by which date, generated from the ASI Kletz database on {_today()}. Every sprint and "
+        "date below is the scheduler's: the plan's points poured into the sprint chain, eight points a sprint, "
+        "committed items first."
+    )
+    doc.h1("The sprint rule")
+    doc.p(SPRINT_RULE)
+
+    doc.h1("Totals")
+    scheduled = [r for r in rows if r["sprint"] is not None and r["status"] != "Done"]
+    done = [r for r in rows if r["status"] == "Done"]
+    completion = data["completion"]
+    doc.fields([
+        ("Deliverables", str(len(rows))), ("Done", str(len(done))), ("Scheduled", str(len(scheduled))),
+        ("Beyond the chain", str(len(data["unscheduled"]))), ("Points to schedule", str(data["total_points"])),
+        ("Completion", f"Sprint {completion['sprint']} ({completion['date']})" if completion
+         else "not reached: no sprint chain to schedule into"),
+    ], caption="The plan in points and sprints")
+    if data["columns"]:
+        first, last = data["columns"][0], data["columns"][-1]
+        doc.p(
+            f"The roadmap runs from Sprint {first['number']} ({first['start']}) to Sprint {last['number']} "
+            f"({last['end']}), {len(data['columns'])} sprints."
+        )
+
+    doc.h1("Roadmap")
+    add_diagram(doc, ctx, "plan_roadmap", caption="Deliverables against the sprint chain; the darker mark is the "
+                                                  "sprint a deliverable finishes in")
+
+    by_phase: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_phase.setdefault(row["phase"] or "(no lifecycle phase)", []).append(row)
+    for phase in [*q.phases(brain), "(no lifecycle phase)"]:
+        phase_rows = by_phase.get(phase)
+        if not phase_rows:
+            continue
+        doc.h1(_phase_heading(phase))
+        doc.table(
+            ["Deliverable", "Points", "Sprint", "Start", "End", "Status"],
+            [[r["deliverable"], str(r["weight"]) if r["status"] != "Done" else "",
+              "" if r["sprint"] is None else str(r["sprint"]), _cell(r["start"]), _cell(r["end"]), r["status"]]
+             for r in phase_rows],
+            caption=f"Deliverables of {_phase_heading(phase)}",
+        )
+
+    if data["unscheduled"]:
+        doc.h1("Not scheduled")
+        doc.p("The sprint chain ends before these deliverables are finished; `sprint plan` extends it.")
+        doc.table(
+            ["Deliverable", "Points", "Status"],
+            [[r["deliverable"], str(r["weight"]), r["status"]] for r in rows if r["id"] in data["unscheduled"]],
+            caption="Deliverables the chain does not reach",
+        )
+        doc.bullets(data["warnings"])
+
+    doc.appendix("Holidays")
+    holidays = sq.holiday_dates(brain)
+    span = [c for c in data["columns"] if c["start"] and c["end"]]
+    inside = holidays_within(sq.parse_date(span[0]["start"]), sq.parse_date(span[-1]["end"]), holidays) if span else []
+    if inside:
+        by_sprint = {
+            d: next((c["number"] for c in span
+                     if sq.parse_date(c["start"]) <= d <= sq.parse_date(c["end"])), None)
+            for d in inside
+        }
+        doc.table(
+            ["Date", "Holiday", "Sprint"],
+            [[d.isoformat(), holidays[d], "" if by_sprint[d] is None else str(by_sprint[d])] for d in inside],
+            caption="Holidays within the roadmap: each stretches its sprint by one calendar day",
+        )
+    else:
+        doc.p("No holiday falls within the roadmap.")
     return doc
