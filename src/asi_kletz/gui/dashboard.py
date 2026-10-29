@@ -25,6 +25,10 @@ SPRINT_TILES = (
     ("unpointed", "UNPOINTED"), ("days_left", "DAYS LEFT"), ("velocity", "VELOCITY"),
 )
 NO_SPRINT = "No active sprint (click to open the Sprint Board)"
+# 0.23.0, Phase B of the Confluence integration plan: deliverables with a Confluence page among their URLs, with
+# the placeholder still among them, with no URL at all (``plan_queries.counts_by_link``)
+LINK_TILES = (("confluence", "CONFLUENCE PAGE"), ("placeholder", "PLACEHOLDER"), ("none", "NO URL"))
+LINK_TITLE = "Work product links (click to open the plan)"
 
 
 class DashboardScreen(Screen):
@@ -49,6 +53,7 @@ class DashboardScreen(Screen):
                 widget.bind("<Leave>", lambda e, t=tile: t.configure(style="Tile.TFrame"))
             self.tiles.columnconfigure(index, weight=1)
         self._build_sprint_tiles()
+        self._build_link_tiles()
 
         lower = ttk.PanedWindow(self, orient="horizontal")
         lower.pack(fill="both", expand=True)
@@ -73,6 +78,30 @@ class DashboardScreen(Screen):
                 widget.bind("<Enter>", lambda e, t=tile: t.configure(style="TileHover.TFrame"))
                 widget.bind("<Leave>", lambda e, t=tile: t.configure(style="Tile.TFrame"))
             self.sprint_tiles.columnconfigure(index, weight=1)
+
+    def _build_link_tiles(self) -> None:
+        """Where the work products point (0.23.0): a Confluence page, the placeholder, nowhere; a click opens
+        the plan."""
+        self.link_tiles = ttk.LabelFrame(self, text=LINK_TITLE)
+        self.link_tiles.pack(fill="x", pady=(0, 8))
+        self._link_vars: dict[str, tk.StringVar] = {}
+        for index, (key, caption) in enumerate(LINK_TILES):
+            var = tk.StringVar(value="0")
+            self._link_vars[key] = var
+            tile = ttk.Frame(self.link_tiles, padding=8, style="Tile.TFrame")
+            tile.grid(row=0, column=index, padx=4, pady=4, sticky="nsew")
+            ttk.Label(tile, textvariable=var, style="TileCount.TLabel").pack()
+            ttk.Label(tile, text=caption, style="TileName.TLabel").pack()
+            for widget in (tile, *tile.winfo_children()):
+                widget.bind("<Button-1>", lambda e: self.window.show("safety_plan"))
+                widget.bind("<Enter>", lambda e, t=tile: t.configure(style="TileHover.TFrame"))
+                widget.bind("<Leave>", lambda e, t=tile: t.configure(style="Tile.TFrame"))
+            self.link_tiles.columnconfigure(index, weight=1)
+
+    def _refresh_link_tiles(self, rows: list[dict[str, Any]]) -> None:
+        counts = q.counts_by_link(self.brain, rows)
+        for key, _caption in LINK_TILES:
+            self._link_vars[key].set(str(counts[key]))
 
     def _refresh_sprint_tiles(self) -> None:
         active = sq.active_sprint(self.brain)
@@ -129,6 +158,7 @@ class DashboardScreen(Screen):
         for status in self.statuses:
             self._tile_vars[status].set(str(counts.get(status, 0)))
         self._refresh_sprint_tiles()
+        self._refresh_link_tiles(rows)
         self._fill(self.phase_table, q.counts_by_phase(self.brain, rows), PHASE_COLUMNS)
         open_rows = q.open_rows(rows)
         self._fill(self.open_table, open_rows, OPEN_COLUMNS)

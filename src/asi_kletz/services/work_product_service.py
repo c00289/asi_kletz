@@ -124,6 +124,10 @@ class WorkProductService:
             raise CommandError(f"no plan row {', '.join(str(m) for m in missing)}")
         return [by_id[row_id] for row_id in dict.fromkeys(wanted)]
 
+    def rows(self, rows: list[Any] | None = None) -> list[dict[str, Any]]:
+        """``_rows`` for a sibling service (0.23.0: the Confluence evidence and check read the same selection)."""
+        return self._rows(rows)
+
     def audit(self, rows: list[Any] | None = None) -> list[dict[str, Any]]:
         """The findings on the rows (default all), writing nothing; each ``{id, uid, order, deliverable, kinds,
         urls, code, finding}``. The codes: ``placeholder`` (the placeholder is still a URL of the row),

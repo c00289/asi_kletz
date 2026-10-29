@@ -102,6 +102,32 @@ def counts_by_status(brain: Brain, rows: Iterable[dict[str, Any]] | None = None)
     return counts
 
 
+LINK_KINDS = ("confluence", "placeholder", "none")  # the dashboard's work product tile (0.23.0)
+
+
+def counts_by_link(
+    brain: Brain, rows: Iterable[dict[str, Any]] | None = None, hosts: dict[str, Any] | None = None
+) -> dict[str, int]:
+    """``{confluence, placeholder, none, total}``: deliverables with a Confluence page among their URLs, with the
+    placeholder still among them, with no URL at all (the kinds of ``schema/urls.py:url_kinds``; a row can count
+    under the first two at once). Nothing is fetched."""
+    from ..schema.urls import url_kinds
+
+    rows = all_rows(brain) if rows is None else list(rows)
+    hosts = getattr(brain, "url_hosts", {}) if hosts is None else hosts
+    counts = dict.fromkeys(LINK_KINDS, 0)
+    for row in rows:
+        kinds = url_kinds(row.get("urls"), hosts)
+        if not kinds:
+            counts["none"] += 1
+        if "confluence" in kinds:
+            counts["confluence"] += 1
+        if "placeholder" in kinds:
+            counts["placeholder"] += 1
+    counts["total"] = len(rows)
+    return counts
+
+
 def counts_by_phase(brain: Brain, rows: Iterable[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """One record per phase: ``lifecycle_phase``, ``deliverables``, ``done`` and a count per status."""
     rows = all_rows(brain) if rows is None else list(rows)

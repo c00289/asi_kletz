@@ -12,6 +12,72 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.23.0] - 2026-10-29
+
+Phase B of the Confluence integration plan (`asi_hopper/docs/confluence-integration-plan.md`, "Kletz: Confluence
+read only, through Hopper"; the plan numbered it 0.22.0, Phase A took that number). The owner, 2026-10-29: "when
+we add confluence read only into kletz we should be able to associate objects with jama urls; obviously the next
+candidate is replacing the google.com placeholder with a real url once known; but more importantly there may be
+a way to tie in individual stpa objects to confluence." And right after: "i said jama but meant confluence." No
+schema change (schema version stays 10): the plan row's `urls` list is the association, as 0.20.0 designed it.
+Nothing writes to Confluence; no page text enters Kletz.
+
+### Added
+- **`services/confluence_service.py`**, `ConfluenceService`, the shape of `JiraService` (a non-interactive
+  Hopper per call, asi_hopper imported inside the functions, `AuthRequired` surfacing as the login hint as it
+  is, every other Hopper error prefixed `Confluence read failed:`): `search` (one CQL, `title ~ "<text>" AND type
+  = page ORDER BY lastmodified DESC`, the text escaped, restricted to one space, never Rovo), `page` (the record,
+  the body only when asked; a page URL accepted, the id read off `pageId=` or `/pages/<id>` with asi_hopper's
+  `page_id_of`), `link` (the page fetched, its canonical URL appended to the row's `urls`, first with `first`,
+  through `EntityService.update`: the guard, the audit's `update`, `entity.updated`; a page already on the row
+  under any URL form refused), `evidence` (`hopper.evidence.snapshot_pages(PageSource(kind="pages", ids=...))`
+  into the evidence folder; the manifest plus `rows`; one audit entry `confluence_evidence` with the folder, the
+  page ids, the rows, the time and the versions; the event `plan.confluence_evidence`), `check` (every linked
+  page's title, version and `updated`; `last_evidence` from the latest audit entry naming the page, the manifest
+  read when its folder still exists; `moved` against it; a page that cannot be read keeps its line with `error`),
+  `last_evidence`, `has_session` (the stored token read locally through `Hopper.session_store()`, never a
+  connection, never an exception), `page_id`, `cql_literal`, `search_row`, `page_summary`.
+- **`confluence` verb** (`commands/confluence.py`): `search <text> [--space KEY] [--limit n]`, `page <id-or-url>
+  [--body]`, `link <row> <id-or-url> [--first]`, `evidence [--rows <id>...] [--comments] [--out DIR] [--name
+  NAME]`, `check [--rows <id>...]`; every answer a JSON `Result`; the reads publish nothing.
+- **`evidence_dir`** in `kletz.toml` (`Brain.evidence_dir`; a path resolved against the file, default `evidence/`
+  beside the database) and **`[confluence] space`** (`Brain.confluence_space`, `ConfluenceService.space`; default
+  `STPA`; a value that is not text is ignored with a warning `status` reports); `status` reports `evidence_dir`
+  and `confluence_space`; `kletz.example.toml` shows both; `.gitignore` covers `evidence/`.
+- **Find page** in the window (`gui/page_lookup.py:PageLookup`; `gui/widgets.py:UrlsWidget` with `find_page`,
+  `insert_url`, `FIND_PAGE`; `gui/entity_screen.py:lookup_page`): a button beside Open on the Work product URLs
+  box, greyed when `has_session()` says no; a title entry, a space drop-down (the configured default), Search,
+  the hits (title, space, last modified), Insert appends the page URL as a line of the editor; the search is a
+  `BackgroundFetch` of `confluence search` polled with `after`, never on the Tk thread; a refusal is one line in
+  the status bar and the window; one window at a time, closed with the screen; no page body shown.
+- **The dashboard's Work product links tiles** (`gui/dashboard.py`, `LINK_TILES`; `plan_queries.counts_by_link`):
+  deliverables with a Confluence page among their URLs, with the placeholder still among them, with no URL at
+  all; a click opens the plan.
+- `WorkProductService.rows`, the public name of the row selection `audit` uses, so the evidence and the check read
+  the same rows (`--rows`, ids or uids, an unknown one refused).
+- Tests (`tests/test_confluence.py`, `tests/test_gui_confluence.py`): the verb on a temporary copy of Hopper's
+  replay fixtures with index entries added for the CQL this verb sends (aliased to the recorded STPA space
+  search; nothing recorded into asi_hopper): `search` (the rows and their fields, the limit, the escaped literal
+  and the space a stub receives, pages only, the refusals), `page` by id and by both URL forms with and without
+  the body, `link` through the guard (appended, `--first`, by uid, the audit's `update`, the event, the refusal
+  of a page already on the row under either URL form, an unknown row, an unknown page, a URL naming no page,
+  missing arguments), `evidence` (the bundle Hopper's own `EvidenceService.verify` accepts, the rows, the one
+  audit entry and its payload, the event, no page text in the database, the default folder and name, the
+  refusals and the warning), `check` without and with earlier evidence (the newest bundle wins, a moved version,
+  a deleted folder, an unreadable page, a URL naming no page), `AuthRequired` as one line on every action and the
+  install hint, the session probe, the configuration (the space, the folder, a bad value), the tile counts, the
+  verb's signature and the three forms (Python, the wire format, the CLI end to end); the Find page window with
+  the fetch monkeypatched (the search off the Tk thread, Insert appending, Save storing, another space typed, the
+  same window on a second press, greyed without a session, a refusal as one line), the dashboard tiles and the
+  click. `tests/conftest.py` stubs `has_session` to *no session* for the whole suite and keeps the real one as
+  `REAL_HAS_SESSION` for its own test. 424 tests, 410 before.
+
+### Changed
+- README: *What is in 0.23.0*; a *Confluence (read only)* section beside JIRA Live Data (the verb table, the CLI
+  lines, the window, the tiles); Standards and export (the per-row way after the bulk replacement, the CLI lines);
+  the form's Find page; Requirements; Configuration (`evidence_dir`, `[confluence] space`); Quick start; Tests.
+- `uv.lock`: asi-kletz 0.23.0; asi-escher 0.2.1 (the sibling moved on; nothing here uses what changed).
+
 ## [0.22.0] - 2026-10-29
 
 Phase A of the Confluence integration plan (`asi_hopper/docs/confluence-integration-plan.md`, "Kletz: URLs that

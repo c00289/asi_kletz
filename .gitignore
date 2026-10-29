@@ -23,6 +23,8 @@ kletz.toml
 *.tmp
 # generated views (diagrams, documents) when the output folder is left at its default next to the database
 out/
+# Confluence page bundles (`confluence evidence`, 0.23.0): page text is ASI-internal and this repo is public
+evidence/
 
 # family lock files, should the lock directory ever be pointed inside the repo (it belongs in %LOCALAPPDATA%\asi\locks)
 *.lock

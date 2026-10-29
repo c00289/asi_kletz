@@ -340,6 +340,8 @@ class PeopleWidget(MultilineWidget):
 URLS_HINT = "one per line, http(s); the first is the link"
 THE_LINK = " (the link)"
 OPEN = "Open"
+FIND_PAGE = "Find page"
+NO_SESSION_HINT = "Find page needs an Atlassian session: run `asi-hopper auth login` once"
 
 
 def link_text(url: str, index: int = 1, hosts: dict[str, Any] | None = None) -> str:
@@ -357,7 +359,9 @@ class UrlsWidget(MultilineWidget):
     the links as clickable text, one per line, each prefixed with its kind (0.22.0: ``confluence``, ``jira``,
     ``sharepoint``, ``placeholder``, ``other`` or a kind of kletz.toml's ``[urls] hosts``, handed in as
     ``hosts``), the first marked as the link, with an **Open** button that launches the first in the browser; a
-    click (left or right) on any line launches that one."""
+    click (left or right) on any line launches that one. 0.23.0: a **Find page** button beside Open
+    (``options["find"]``, the screen's Confluence search; the picked page URL lands through ``insert_url``),
+    greyed when Hopper has no Atlassian session (``options["find_enabled"]``)."""
 
     def build(self) -> None:
         self.options.setdefault("height", 3)
@@ -370,6 +374,12 @@ class UrlsWidget(MultilineWidget):
         head.pack(anchor="w")
         self.open_button = ttk.Button(head, text=OPEN, width=6, command=self.open_first, state="disabled")
         self.open_button.pack(side="left")
+        self.find_button: ttk.Button | None = None
+        self.find_enabled = bool(self.options.get("find_enabled", True))
+        if self.options.get("find") is not None:
+            self.find_button = ttk.Button(head, text=FIND_PAGE, command=self.find_page)
+            self.find_button.pack(side="left", padx=(4, 0))
+            self.find_button.state(["!disabled"] if self.find_enabled else ["disabled"])
         ttk.Label(head, text=URLS_HINT, style="Muted.TLabel").pack(side="left", padx=(6, 0))
         self.links_box = ttk.Frame(self.side)
         self.links_box.pack(anchor="w", pady=(2, 0))
@@ -405,6 +415,19 @@ class UrlsWidget(MultilineWidget):
             return None
         self.open_url(urls[0])
         return urls[0]
+
+    def find_page(self) -> Any:
+        """Find page (0.23.0): the screen opens the Confluence search; the pick is appended as a line. Nothing
+        when Hopper has no session (the button is greyed; the hint says what to run)."""
+        find = self.options.get("find")
+        if find is None or not self.find_enabled:
+            return None
+        return find(self.insert_url)
+
+    def insert_url(self, url: str) -> list[str]:
+        """``url`` on a line of its own at the end of the box; the links follow."""
+        append_line(self.text, url)
+        return self.refresh_links()
 
     @staticmethod
     def open_url(url: str) -> None:

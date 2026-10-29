@@ -20,6 +20,7 @@ from .repositories import RepositoryFactory
 from .schema import LookupRegistry, SchemaRegistry, default_lookups, default_registry
 from .schema.definitions import CADENCE_RULE, CAPACITY_RULE, DEFAULT_POINTS, SPRINT_CAPACITY, SPRINT_LENGTH
 from .services import (
+    ConfluenceService,
     EntityService,
     HolidayService,
     JiraService,
@@ -45,7 +46,8 @@ ENV_CONFIG = "ASI_KLETZ_CONFIG"
 ENV_STANDARDS = "ASI_KLETZ_STANDARDS"
 CONFIG_NAME = "kletz.toml"
 DEFAULT_STANDARDS = "../asi_standards"  # the sibling repo of parametrised standards, beside this one
-CONFIG_KEYS = ("db", "workbook", "out", "standards_dir")  # file paths, resolved against the config file
+DEFAULT_EVIDENCE_NAME = "evidence"  # the Hopper page bundles `confluence evidence` writes (0.23.0), beside the database
+CONFIG_KEYS = ("db", "workbook", "out", "standards_dir", "evidence_dir")  # file paths, resolved against the config file
 CONFIG_TEXT_KEYS = (  # document metadata, the live JQL and the tracker's header lines, kept verbatim
     "doc_id", "project", "jira_live_jql", "tracker_title", "tracker_byline", "tracker_scope", "tracker_jira_scope",
 )
@@ -75,7 +77,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     present, ``warnings`` carries one line per key naming the rule.
     ``default_points`` (default 2) is the floor a Safety Plan row weighs when it has neither points nor the
     panel's default. ``standards_dir`` is the folder of parametrised standards (default ``../asi_standards``
-    beside the config file). Missing file: ``{}``.
+    beside the config file). ``evidence_dir`` (0.23.0) is where ``confluence evidence`` writes its Hopper page
+    bundles (default ``evidence/`` beside the database) and ``[confluence] space`` the space ``confluence
+    search`` and the Find page window look in by default (``STPA``). Missing file: ``{}``.
     """
     import tomllib
 
@@ -127,6 +131,17 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
                     f"[urls] hosts.{name} = {value!r} in kletz.toml is ignored: write a host or a list of hosts"
                 )
         config["url_hosts"] = hosts
+    # 0.23.0: ``[confluence] space = "STPA"``, the space `confluence search` and the Find page window look in
+    # when none is given; a value that is not text is ignored with a warning
+    confluence = data.get("confluence")
+    if isinstance(confluence, dict) and "space" in confluence:
+        space = confluence["space"]
+        if isinstance(space, str) and space.strip():
+            config["confluence_space"] = space.strip().upper()
+        else:
+            config.setdefault("warnings", []).append(
+                f"[confluence] space = {space!r} in kletz.toml is ignored: write a space key such as \"STPA\""
+            )
     return config
 
 
@@ -198,6 +213,7 @@ class Brain:
         self._standards_dir = str(standards_dir) if standards_dir is not None else None
         self.transfer = TransferService(self)
         self.jira = JiraService(self)  # read only; asi_hopper is imported when a jira verb runs, never here
+        self.confluence = ConfluenceService(self)  # read only too (0.23.0); the same lazy import rule
         self.tracker = TrackerService(self)  # the Weekly Activity Tracker text, in and out
         self.holidays = HolidayService(self)  # the holidays the planner skips, loaded from a JSON list
         self.dispatcher = Dispatcher(self)
@@ -232,6 +248,8 @@ class Brain:
         # 0.22.0: the owner's extra URL kinds (``[urls] hosts`` in kletz.toml), read by ``url_kind`` wherever a
         # URL is labelled: the export's Work product cell, the form's link lines, ``plan urls --audit``
         self.url_hosts: dict[str, list[str]] = {k: list(v) for k, v in self.config.get("url_hosts", {}).items()}
+        # 0.23.0: the space `confluence search` looks in when none is given (``[confluence] space``, else STPA)
+        self.confluence_space: str = str(self.config.get("confluence_space") or "")
         # the capacity and the length are the rules (fixed, never from the config): 8 points, 14 days
         self.sprint_capacity: int = SPRINT_CAPACITY
         self.sprint_length: int = SPRINT_LENGTH
@@ -249,6 +267,17 @@ class Brain:
             return str(self.config["standards_dir"])
         base = Path(self.config["path"]).parent if self.config.get("path") else Path.cwd()
         return str((base / DEFAULT_STANDARDS).resolve())
+
+    @property
+    def evidence_dir(self) -> str:
+        """Where ``confluence evidence`` writes its Hopper page bundles (0.23.0): ``evidence_dir`` in kletz.toml
+        (resolved against the file), else ``evidence/`` beside the database (the working directory for
+        ``:memory:``). Created by the first bundle, never here."""
+        if self.config.get("evidence_dir"):
+            return str(self.config["evidence_dir"])
+        if self.db_path == ":memory:":
+            return str(Path.cwd() / DEFAULT_EVIDENCE_NAME)
+        return str(Path(self.db_path).with_name(DEFAULT_EVIDENCE_NAME))
 
     # -- access ---------------------------------------------------------
     def service(self, entity: str) -> EntityService:
@@ -311,6 +340,8 @@ class Brain:
             "sprint_length_days": self.sprint_length,
             "default_points": self.default_points,
             "standards_dir": self.standards_dir,
+            "evidence_dir": self.evidence_dir,
+            "confluence_space": self.confluence.space,
             "config_warnings": list(self.config_warnings),
             "tracker": {"title": self.tracker.title, "byline": self.tracker.byline, "scope": self.tracker.scope},
             "config_path": self.config.get("path"),

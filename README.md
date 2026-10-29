@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.22.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.23.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -21,7 +21,41 @@ same database, through the same commands (see [Diagrams and documents](#diagrams
 Since 0.5.0 it also shows Jira, live and read only, without storing any of it (see
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
-the CLI, through its local automation server (see [Automation](#automation)).
+the CLI, through its local automation server (see [Automation](#automation)). Since 0.23.0 it also reads
+Confluence, read only, through the same door, so a deliverable can name its page, prove what the page said and
+tell when it moved (see [Confluence (read only)](#confluence-read-only)).
+
+## What is in 0.23.0
+
+**Confluence, read only, through Hopper.** Phase B of the Confluence integration plan
+(`asi_hopper/docs/confluence-integration-plan.md`; the plan numbered it 0.22.0, Phase A took that number). The
+owner, 2026-10-29: "when we add confluence read only into kletz we should be able to associate objects with
+[confluence] urls; obviously the next candidate is replacing the ... placeholder with a real url once known; but
+more importantly there may be a way to tie in individual stpa objects to confluence." The association is the
+plan row's `urls` list, as 0.20.0 designed it: no schema change (schema version stays 10), nothing written to
+Confluence, ever, and no page text stored in Kletz.
+
+*The verb.* `confluence search <text> [--space KEY] [--limit n]` finds the pages of one space whose title
+contains the text (one CQL, `title ~`, never Rovo; the space from `[confluence] space` in `kletz.toml`, default
+`STPA`); `confluence page <id-or-url> [--body]` reads one page's record (title, version, updated, url, parent),
+the Markdown body only with `--body`, a page URL accepted in place of the id; `confluence link <row>
+<id-or-url> [--first]` checks the page exists and appends its canonical URL to the row's work product URLs
+(first, as the link, with `--first`) through the ordinary update path, so the guard, the audit and the event
+apply, and refuses a page already on the row under any URL form; `confluence evidence [--rows ...] [--comments]
+[--out DIR] [--name NAME]` writes a Hopper page bundle of every Confluence page the chosen rows point at into the
+Kletz evidence folder (`evidence_dir`, default `evidence/` beside the database, git-ignored), one audit entry
+(`confluence_evidence`: the folder, the page ids, the rows, the time, the versions) and the event
+`plan.confluence_evidence`; `confluence check [--rows ...]` reports every linked page's title, version and
+whether it moved since the last bundle that holds it. A rejected Atlassian session is the one line the Jira
+verbs show (`run `asi-hopper auth login``). See [Confluence (read only)](#confluence-read-only).
+
+*The window.* A **Find page** button beside the Work product URLs box (greyed when Hopper has no session on
+this machine: the stored token is read locally, nothing connects) opens a small window in the Look up pattern:
+a title entry, a space drop-down, Search, the hits (title, space, last modified), Insert appends the page's URL
+to the editor; the search runs on a worker thread, never on the Tk thread; a refusal is one line in the status
+bar and the window. No page body is shown in Kletz: the link opens the browser, as Open does. The **Dashboard**
+gains one tile row, *Work product links*: deliverables with a Confluence page, with the placeholder, with no URL
+at all. See [Configuration](#configuration) and [Quick start](#quick-start).
 
 ## What is in 0.22.0
 
@@ -621,7 +655,9 @@ URL where the old one stands on every row that carries it (the same position), o
 entry (`urls_replace`: the two URLs, the ids changed, the ids refused), the event `plan.urls_replaced`; a row
 that already carries the new URL elsewhere is left alone and named in a warning; `--check` names the rows and
 writes nothing; both URLs must be absolute http(s) URLs and differ. A per-kind setter is not added: `update
-safety_plan_row N --set urls=...` and the window's URLs box already do it.
+safety_plan_row N --set urls=...` and the window's URLs box already do it. Since 0.23.0 `confluence link <row>
+<id-or-url>` is the per-row way with the page checked live, and `confluence evidence` / `confluence check` the
+proof and the watch over the pages a plan row names (see [Confluence (read only)](#confluence-read-only)).
 
 A plan row *has* a standard when one of its QMS reference flags names the folder: `ref_qf_17` set names a
 folder starting `qf-17`.
@@ -645,6 +681,9 @@ asi-kletz plan urls --audit                                            # the fin
 asi-kletz plan urls --audit --rows 1 --rows 3                          # only these rows (id or uid)
 asi-kletz plan urls --replace https://www.microsoft.com/ "https://asirobots.atlassian.net/wiki/pages/viewpage.action?pageId=399343803" --check
 asi-kletz plan urls --replace https://www.microsoft.com/ "https://asirobots.atlassian.net/wiki/pages/viewpage.action?pageId=399343803"
+asi-kletz confluence link 12 399343803                                 # the page's URL onto row 12, through the guard (0.23.0)
+asi-kletz confluence evidence --rows 12 --comments                     # a Hopper bundle of its pages, audited once
+asi-kletz confluence check --rows 12                                   # still there? which version? moved since the bundle?
 asi-kletz people lookup "Roy"                           # the Outlook address book: name and email per match
 ```
 
@@ -685,7 +724,9 @@ points chosen or the note that the default is never exported, the sprint end, th
 status); then the form as before, where the **Work product URLs** box (0.20.0) takes one URL per line, shows
 the links beside it as clickable text, each prefixed with its kind (0.22.0: `confluence: https://...`,
 `placeholder: https://www.microsoft.com/`) and the first marked as the link, and its **Open** button launches
-the first in the browser (a click on any other line launches that one).
+the first in the browser (a click on any other line launches that one); beside Open, **Find page** (0.23.0)
+opens the Confluence search window (see [Confluence (read only)](#confluence-read-only)), greyed when Hopper
+has no session on this machine.
 
 The **Parameters** screen edits the same rows: its table shows `name`, `standard`, `value`, `people` (a role's
 people as `Ann Lee <ann@...>; Ben Ray <ben@...>`) and `note`; in the form the name decides which editor is
@@ -991,6 +1032,57 @@ and shared by every tool, so one `asi-hopper auth login` serves all. The same wi
 `jira_live`, title `JIRA Live Data`, verbs, columns, filters, comments window) exists in the
 sister tool under the same convention; shared as a convention, never as code.
 
+## Confluence (read only)
+
+Since 0.23.0 (Phase B of `asi_hopper/docs/confluence-integration-plan.md`) Kletz reads Confluence through the
+same door, asi_hopper, and only reads: nothing in Kletz creates, edits or comments on a page (the family policy,
+*Confluence: reads only*). The association between a deliverable and its page is the row's work product
+`urls` list of 0.20.0, nothing else; what 0.23.0 adds is the way to find a page without leaving the window, to
+put its URL on a row with the page checked live, to prove what the page said and to tell when it moved. The
+`confluence` verb has the `jira` verb's shape: one verb, an action word, a JSON `Result`; a rejected Atlassian
+session is the one line the Jira verbs show, `no Atlassian session for this account; run `asi-hopper auth
+login` once`, and `asi-kletz jira login` signs in.
+
+| Action | Target | Flags | Returns |
+|---|---|---|---|
+| `search` | part of a page title | `--space KEY --limit n` | `{text, cql, space, limit, fetched_at, count, pages: [{id, title, space_key, url, last_modified, excerpt}]}`; one CQL, `title ~ "<text>" AND type = page ORDER BY lastmodified DESC`, restricted to the space (`--space`, else `[confluence] space` in `kletz.toml`, else `STPA`); never Rovo |
+| `page` | a page id, or a page URL (`pageId=<id>` or `/pages/<id>`) | `--body` | the page's record (`id, title, status, type, space_id, parent_id, parent_type, author_id, owner_id, created, updated, version, version_message, version_author_id, body_format, url`), `body` (Markdown) only with `--body` |
+| `link` | the row (id or uid), then the page id or URL | `--first` | `{row: {id, uid, order, deliverable}, page: {id, title, version, updated, url}, urls, position, first}`; the page must exist and be visible; its canonical URL (`.../wiki/pages/viewpage.action?pageId=<id>`) is appended to the row's `urls` (first with `--first`) through the ordinary update path: the guard parses, the audit records an `update`, `entity.updated` fires; a page already on the row, under any URL form, is refused |
+| `evidence` | (none) | `--rows <id>... --comments --out DIR --name NAME` | Hopper's manifest (`kind: confluence`, `source: {kind: pages, ids}`, `pages: [{id, title, version, updated, body_sha256}]`, `sha256`, `folder`, `taken_at`...) plus `rows` (which rows contributed which page ids); the bundle (`pages.json`, `pages/<id>.md`, `pages.csv`, `pages.md`, `manifest.json`) under `--out`, else `evidence_dir`, in a folder named `--name`, else `safety-plan-work-products-<date>`; one audit entry `confluence_evidence` (`{folder, pages, rows, taken_at, versions, comments}`) and the event `plan.confluence_evidence`; a selection without a Confluence page is refused |
+| `check` | (none) | `--rows <id>...` | `{fetched_at, count, pages: [{row, uid, order, deliverable, id, title, version, updated, url, last_evidence: {folder, taken_at, version} or null, moved: bool or null, error}]}`; `last_evidence` is the latest bundle whose audit entry names the page (the manifest read when the folder still exists), `moved` whether the live version differs from it; a page that cannot be read keeps its line with `error`; read only, nothing audited |
+
+The evidence is the Hopper bundle and nothing else: no page text enters `kletz.db`, the workbook or a dump;
+`asi-hopper verify <folder>` checks it and `asi-hopper diff <folder>` says what moved since. The folder is
+git-ignored (`evidence/`): page text is ASI-internal and this repository is public. `evidence_dir` in
+`kletz.toml` moves it; `status` reports it as `evidence_dir`, and the default space as `confluence_space`.
+
+```powershell
+asi-kletz confluence search "Locator"                        # pages of STPA whose title contains it, newest first
+asi-kletz confluence search "Braking" --space FST --limit 5
+asi-kletz confluence page 399343803                          # title, version, updated, url, parent; no body
+asi-kletz confluence page "https://asirobots.atlassian.net/wiki/spaces/STPA/pages/399343803/Locator+Safety+Function+STPA" --body
+asi-kletz confluence link 12 399343803                       # appended to row 12's URLs, through the guard
+asi-kletz confluence link 12 5763236170 --first              # first, as the link
+asi-kletz confluence evidence                                # every linked page of every row, into evidence/
+asi-kletz confluence evidence --rows 12 --rows 13 --comments --out "..\proof" --name stpa-pages-review
+asi-kletz confluence check                                   # every linked page: still there, version, moved?
+asi-kletz --compact confluence check | jq '.data.pages[] | select(.moved)'
+```
+
+In the window the **Find page** button beside the Work product URLs box (greyed when Hopper has no session on
+this machine: `Hopper.session_store().has_session()`, the stored token read locally, nothing connects) opens a
+small window in the Look up pattern (`gui/page_lookup.py:PageLookup`): a title entry, a space drop-down
+(default from the configuration), Search, the hits in a list (title, space, last modified), Insert appends the
+page's URL to the editor as a line of its own (Save writes it through the same verb an agent uses). The search
+is one `confluence search` on a worker thread (`BackgroundFetch`, polled with `after`), never on the Tk thread;
+a refusal is one line in the status bar and the window; no page body is shown. The Dashboard's **Work product
+links** tiles count the deliverables with a Confluence page among their URLs, with the placeholder still among
+them and with no URL at all (`plan_queries.counts_by_link`, the kinds of `schema/urls.py`); a click opens the
+plan.
+
+Kletz imports from asi_hopper only `Hopper`, the records, `PageSource`, `page_id_of` and the error classes,
+inside the functions that need them, never `asi_hopper.gateway`; `import asi_kletz` never loads it.
+
 ## One at a time
 
 Decided 2026-10-27 and enforced from 0.6.0: **at most one primary tool runs at a time**, and the
@@ -1134,8 +1226,9 @@ not, on Windows).
 - `asi_escher` and `asi_gutenberg`, the sibling generators, declared as editable path sources
   (`../asi_escher`, `../asi_gutenberg`) in `pyproject.toml`; they bring matplotlib, Pillow,
   reportlab and python-docx
-- `asi_hopper`, the sibling Jira door, declared the same way (`../asi_hopper`) and imported only
-  when a `jira` verb runs; it brings `mcp` and `keyring`
+- `asi_hopper`, the sibling Atlassian door (Jira, and Confluence since 0.23.0), declared the same way
+  (`../asi_hopper`) and imported only when a `jira` or `confluence` verb runs (or the Find page button asks
+  whether a session is stored); it brings `mcp` and `keyring`
 - `pytest` for the test suite
 
 ## Install
@@ -1161,12 +1254,16 @@ doc_id = "ASI-FS-PLAN-001"
 project = "WA485 Autonomous Wheel Loader"
 jira_live_jql = "project = HWL AND (assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) ORDER BY updated DESC"
 jira_live_autofetch = false
+evidence_dir = "evidence"
 
 [[revision]]
 rev = "0.1"
 date = "2026-10-27"
 author = "FuSa Engineer"
 description = "Initial draft"
+
+[confluence]
+space = "STPA"
 
 [urls]
 hosts = { jama = "jama.example.com", dms = ["dms.example.com", "*.dms.example.org"] }
@@ -1198,7 +1295,10 @@ that `status` reports (`config_warnings`). The optional `[urls] hosts` table (0.
 URL kinds than the built-in five (`confluence`, `jira`, `sharepoint`, `placeholder`, `other`): each key is a
 kind, its value a host or a list of hosts (`*.example.com` for every host under a domain); a value that is
 neither is ignored with a warning. The kinds label the export's Work product cell, the form's link lines and
-`plan urls --audit` (see Standards and export).
+`plan urls --audit` (see Standards and export). `evidence_dir` (0.23.0; a path, default `evidence/` beside the
+database) is where `confluence evidence` writes its Hopper page bundles, and `[confluence] space` (a space key,
+default `STPA`; another value is ignored with a warning) the space `confluence search` and the Find page window
+look in when none is named (see Confluence (read only)).
 
 ## Quick start
 
@@ -1216,6 +1316,10 @@ asi-kletz plan urls --placeholder https://www.microsoft.com/   # every work prod
 asi-kletz plan urls --audit                                     # which rows still point at the placeholder, and more
 asi-kletz plan urls --replace https://www.microsoft.com/ "https://asirobots.atlassian.net/wiki/pages/viewpage.action?pageId=399343803"
 asi-kletz people lookup "Roy"                                   # the Outlook address book, name and email per match
+asi-kletz confluence search "Locator"                           # the pages of the STPA space with it in the title (read only)
+asi-kletz confluence link 3 399343803                           # the page's URL onto row 3, through the guard
+asi-kletz confluence evidence --rows 3                          # a Hopper bundle of its pages under evidence/, audited once
+asi-kletz confluence check                                      # every linked page: still there, which version, moved?
 asi-kletz export excel --out "kletz.xlsx"
 asi-kletz dump --out kletz.json
 asi-kletz document safety_plan --out out
@@ -1379,7 +1483,12 @@ The jira tests run the verb against asi_hopper's recorded fixtures (`../asi_hopp
 replay gateway, no network, no session) and a stub Hopper, and are skipped when the fixtures are
 not checked out; the GUI tests feed the live screen and the comments window from a stubbed
 `execute_quiet` (answering on the worker thread, as the real one does, and holding on a
-`threading.Event` when a test wants to look at a fetch in flight), so no test ever reaches Jira. The lock tests start real second processes: a Kletz
+`threading.Event` when a test wants to look at a fetch in flight), so no test ever reaches Jira. The confluence
+tests (0.23.0) run the verb the same way on a temporary copy of Hopper's fixtures with index entries added for
+the CQL this verb sends, aliased to the recorded STPA space search (nothing is recorded into asi_hopper), take a
+bundle that Hopper's own `verify` accepts, and drive the Find page window from a stubbed `execute_quiet`; the
+session probe behind the Find page button is stubbed to *no session* for the whole suite, so no test reads a
+keyring. The lock tests start real second processes: a Kletz
 holder, a simulated sibling that takes `primary.lock` by the raw convention with no package
 import, and a probe that reports whether a lock is held; every test points
 `ASI_PRIMARY_LOCK_DIR` at its own folder, so the suite never collides with a running tool or with

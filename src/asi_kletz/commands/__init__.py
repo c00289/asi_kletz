@@ -1,6 +1,7 @@
 """Command layer: the single entry point every front end uses."""
 
 from . import (  # noqa: F401  (registers the built-in commands)
+    confluence,
     crud,
     generate,
     gui,

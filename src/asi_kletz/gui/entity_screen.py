@@ -32,6 +32,7 @@ from .widgets import LOOK_UP, FieldWidget, JiraPickerWidget, PeopleWidget, Point
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
+    from .page_lookup import PageLookup
     from .people_lookup import PeopleLookup
 
 TRUNCATE = 70  # a cell shows this much of a long text; the column fits the clipped text, not the value
@@ -97,6 +98,7 @@ class EntityScreen(Screen):
         self.ticket_loader: Any = None  # the Load tickets fetch in flight, made on the first press (0.15.0)
         self.lookup_buttons: dict[str, ttk.Button] = {}  # the pane's Look up button per role (0.20.0)
         self.lookup_window: PeopleLookup | None = None  # the Outlook search window, one at a time (0.20.0)
+        self.page_window: PageLookup | None = None  # the Confluence Find page window, one at a time (0.23.0)
         super().__init__(master, window)
 
     # -- layout ---------------------------------------------------------
@@ -192,6 +194,10 @@ class EntityScreen(Screen):
                 extra["lookup"] = self.lookup_people
             elif spec.picker == "urls":  # 0.22.0: the link lines carry the kind; the owner's extra kinds too
                 extra["hosts"] = self.brain.url_hosts
+                # 0.23.0: Find page opens the Confluence search; greyed when Hopper has no session (a local
+                # read of the stored token, nothing connects)
+                extra["find"] = self.lookup_page
+                extra["find_enabled"] = self.brain.confluence.has_session()
             widget = factory.create(parent, spec, **extra)
             widget.grid(row=row, column=1, sticky="ew", pady=3)
             self.widgets[spec.name] = widget
@@ -286,11 +292,30 @@ class EntityScreen(Screen):
         """The pane's Look up button of a role: the pick lands as a new line of that role's box."""
         return self.lookup_people(lambda line, n=name: append_line(self.param_texts[n], line))
 
+    # -- the Confluence Find page (0.23.0) -------------------------------------------------------------
+    def lookup_page(self, insert: Callable[[str], None], initial: str = "") -> PageLookup:
+        """Find page: the Confluence search window (one at a time; a second press brings it to the front with
+        the new target); the picked page URL goes to ``insert``, the URLs editor that asked."""
+        from .page_lookup import PageLookup
+
+        win = self.page_window
+        if win is not None and win.winfo_exists():
+            win.on_pick = insert
+            if initial:
+                win.query_var.set(initial)
+            win.lift()
+            win.entry.focus_set()
+            return win
+        win = self.page_window = PageLookup(self.window, insert, self.brain.confluence.space, initial)
+        return win
+
     def destroy(self) -> None:
         if self.ticket_loader is not None:
             self.ticket_loader.cancel()
         if self.lookup_window is not None and self.lookup_window.winfo_exists():
             self.lookup_window.destroy()
+        if self.page_window is not None and self.page_window.winfo_exists():
+            self.page_window.destroy()
         super().destroy()
 
     # -- the standards pane (0.14.0) ---------------------------------------------------------------

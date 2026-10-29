@@ -10,6 +10,7 @@ from asi_kletz.brain import ENV_CONFIG, ENV_DB, ENV_OUT, ENV_STANDARDS, ENV_WORK
 from asi_kletz.gui.theme import ENV_THEME
 from asi_kletz.locks import ENV_LOCK_DIR
 from asi_kletz.prefs import ENV_PREFS
+from asi_kletz.services.confluence_service import ConfluenceService
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
@@ -28,6 +29,9 @@ ENTITIES = [PLAN, "sprint", "sprint_item", "week", "holiday", "parameter"]
 TABLES = {"safety_plan", "sprint", "sprint_item", "week", "holiday", "parameter"}
 TABLES_0_8_4 = TABLES - {"holiday", "parameter"}  # what the 0.8.4 fixture database holds
 SHEETS = ["Safety Plan", "Sprints", "Sprint Items", "Weekly Status", "Holidays", "Parameters"]
+# the real session probe (0.23.0), kept here because the autouse fixture below replaces it on the class; the one
+# test of the probe itself puts it back with a stub Hopper
+REAL_HAS_SESSION = ConfluenceService.has_session
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +54,9 @@ def _isolated_config(monkeypatch, tmp_path):
     monkeypatch.delenv(ENV_AUTOMATION, raising=False)
     # the standards folder is per test too: never the sibling repo (a test that wants one writes it)
     monkeypatch.setenv(ENV_STANDARDS, str(tmp_path / "standards"))
+    # the Find page button's session probe (0.23.0) reads the developer's keyring through asi_hopper: never
+    # in a test (the Confluence GUI tests set it to True themselves)
+    monkeypatch.setattr(ConfluenceService, "has_session", lambda self: False)
 
 
 @pytest.fixture
