@@ -7,6 +7,7 @@ specification: an import followed by a history build must give it back, line for
 from __future__ import annotations
 
 import datetime as dt
+import json
 from pathlib import Path
 
 import pytest
@@ -342,3 +343,107 @@ def test_planned_sprints_add_one_bullet_and_no_block_to_the_history(imported):
     week = _read(imported.execute("tracker", action="build", what="week", as_of=AS_OF))
     assert week.count("planned.") == 1 and week.count(fmt.RULE) == 2
     assert imported.execute("list", entity="sprint").data[-1]["number"] == 8  # the database keeps them all
+
+
+# -- an item points at its plan row by uid too (0.13.0) ---------------------------------------------------------
+
+
+def _uid(brain, row_id):
+    return brain.execute("get", entity=PLAN, id=row_id).data["uid"]
+
+
+def test_plan_row_and_plan_uid_name_the_same_row(seeded):
+    assert seeded.execute("create", entity="sprint", data={"number": 2, "status": "Active"}).ok
+    item = seeded.execute("create", entity="sprint_item", data={"sprint": 2, "kind": "Deliverable", "title": "HARA",
+                                                                 "plan_row": 2})
+    assert item.ok and item.data["plan_uid"] == _uid(seeded, 2) and item.warnings == []
+    moved = seeded.execute("update", entity="sprint_item", id=item.data["id"], set=["plan_row=3"])
+    assert moved.ok and moved.data["plan_uid"] == _uid(seeded, 3)
+    by_uid = seeded.execute("update", entity="sprint_item", id=item.data["id"], set=[f"plan_uid={_uid(seeded, 1)}"])
+    assert by_uid.ok and by_uid.data["plan_row"] == 1
+    # both given and disagreeing: the uid wins, with a warning
+    both = seeded.execute("create", entity="sprint_item", data={
+        "sprint": 2, "kind": "Deliverable", "title": "FSC", "plan_row": 2, "plan_uid": _uid(seeded, 3).upper(),
+    })
+    assert both.ok and both.data["plan_row"] == 3 and both.data["plan_uid"] == _uid(seeded, 3)
+    assert both.warnings == [f"plan_row 2 and plan_uid {_uid(seeded, 3)} disagree; the uid wins: plan_row 3"]
+    cleared = seeded.execute("update", entity="sprint_item", id=both.data["id"], set=["plan_row="])
+    assert cleared.ok and cleared.data["plan_row"] is None and cleared.data["plan_uid"] is None
+    unknown = seeded.execute("create", entity="sprint_item", data={
+        "sprint": 2, "title": "x", "plan_uid": "00000000-0000-4000-8000-000000000000",
+    })
+    assert not unknown.ok and "names no Safety Plan row" in unknown.errors[0]
+    assert not seeded.execute("create", entity="sprint_item", data={"sprint": 2, "title": "x", "plan_uid": "nope"}).ok
+    assert not seeded.execute("create", entity="sprint_item", data={"sprint": 2, "title": "x", "plan_row": 99}).ok
+    # the scheduler pins by the uid: the item moved to row 1 by uid pins row 1, not the row its old id named
+    rows = {r["id"]: r for r in seeded.execute("list", entity=PLAN).data}
+    assert rows[1]["sprint"] is None  # Done: untouched
+    assert seeded.execute("update", entity="sprint_item", id=item.data["id"], set=[f"plan_uid={_uid(seeded, 3)}",
+                                                                                   "points=3"]).ok
+    schedule = seeded.execute("plan", action="schedule").data["rows"]
+    assert next(r["committed"] for r in schedule if r["id"] == 3) == 3
+
+
+def test_items_written_before_the_column_are_linked_on_open(tmp_path):
+    db = tmp_path / "old.db"
+    with Brain(db) as brain:
+        brain.execute("create", entity=PLAN, data={"deliverable": "one", "order": 1})
+        brain.execute("create", entity=PLAN, data={"deliverable": "two", "order": 2})
+        brain.execute("create", entity="sprint", data={"number": 1, "status": "Active"})
+        repo = brain.service("sprint_item").repo  # straight into the table, as a 0.12.x item was written
+        repo.create({"sprint": 1, "kind": "Deliverable", "title": "a", "plan_row": 2})
+        repo.create({"sprint": 1, "kind": "Deliverable", "title": "b", "plan_row": 99})  # a row that is gone
+        repo.create({"sprint": 1, "kind": "Meeting", "title": "c"})
+        uids = {r["id"]: r["uid"] for r in brain.execute("list", entity=PLAN).data}
+    with Brain(db) as brain:
+        assert brain.migration["plan_uids_filled"] == 1
+        items = {i["title"]: i for i in brain.execute("list", entity="sprint_item").data}
+        assert items["a"]["plan_uid"] == uids[2] and items["b"]["plan_uid"] is None and items["c"]["plan_uid"] is None
+        entry = brain.storage.audit_tail(1)[0]
+        assert entry["action"] == "link_plan_uids" and entry["payload"]["count"] == 1
+    with Brain(db) as brain:
+        assert brain.migration["plan_uids_filled"] == 0 and brain.storage.audit_tail(1)[0]["action"] == "link_plan_uids"
+
+
+def test_a_tracker_dump_survives_a_plan_re_import_that_renumbered_the_rows(seeded, tmp_path):
+    """The point of plan_uid: dump the items, replace-import the plan under new ids, load the items back, and
+    every item points at the right deliverable."""
+    assert seeded.execute("create", entity="sprint", data={"number": 2, "status": "Active"}).ok
+    for plan_row, title in ((2, "HARA"), (3, "FSC")):
+        assert seeded.execute("create", entity="sprint_item", data={
+            "sprint": 2, "kind": "Deliverable", "title": title, "plan_row": plan_row, "points": 2,
+        }).ok
+    before = {r["uid"]: r["deliverable"] for r in seeded.execute("list", entity=PLAN).data}
+    items_dump, plan_dump = tmp_path / "items.json", tmp_path / "plan.json"
+    assert seeded.execute("dump", entity="sprint_item", out=str(items_dump)).ok
+    assert seeded.execute("dump", entity=PLAN, out=str(plan_dump)).ok
+    payload = json.loads(plan_dump.read_text(encoding="utf-8"))
+    for row in payload["rows"]:
+        row["id"] += 100  # the file's ids mean nothing to a replace: the rows come back under fresh ids
+    plan_dump.write_text(json.dumps(payload), encoding="utf-8")
+    replaced = seeded.execute("load", path=str(plan_dump), mode="replace")
+    assert replaced.ok and replaced.data["entities"][PLAN]["inserted"] == 3
+    rows = {r["uid"]: r for r in seeded.execute("list", entity=PLAN).data}
+    assert {r["id"] for r in rows.values()} == {4, 5, 6} and {u: r["deliverable"] for u, r in rows.items()} == before
+    # the items still carry the old ids and the uids; a load re-resolves the ids from the uids
+    loaded = seeded.execute("load", path=str(items_dump), mode="merge")
+    assert loaded.ok and loaded.data["entities"]["sprint_item"]["updated"] == 2 and loaded.warnings == []
+    items = seeded.execute("list", entity="sprint_item").data
+    assert [(i["title"], rows[i["plan_uid"]]["deliverable"], i["plan_row"]) for i in items] == [
+        ("HARA", "Hazard Analysis and Risk Assessment", rows[items[0]["plan_uid"]]["id"]),
+        ("FSC", "Functional Safety Concept", rows[items[1]["plan_uid"]]["id"]),
+    ]
+    assert [i["plan_row"] for i in items] == [5, 6]
+    # and the schedule follows the uids: the two items are the committed part of their deliverables
+    table = {r["deliverable"]: r for r in seeded.execute("plan", action="schedule").data["rows"]}
+    assert table["Hazard Analysis and Risk Assessment"]["committed"] == 2
+    assert table["Functional Safety Concept"]["committed"] == 2
+    # a file whose uid no row carries any more: plan_row is left empty rather than a stale number
+    orphan = json.loads(items_dump.read_text(encoding="utf-8"))
+    orphan["rows"] = [{**orphan["rows"][0], "id": 50, "uid": "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f",
+                       "plan_uid": "00000000-0000-4000-8000-000000000000", "title": "lost"}]
+    items_dump.write_text(json.dumps(orphan), encoding="utf-8")
+    lost = seeded.execute("load", path=str(items_dump), mode="merge")
+    assert lost.ok and any("names no Safety Plan row; plan_row left empty" in w for w in lost.warnings)
+    lost_item = next(i for i in seeded.execute("list", entity="sprint_item").data if i["title"] == "lost")
+    assert lost_item["plan_row"] is None

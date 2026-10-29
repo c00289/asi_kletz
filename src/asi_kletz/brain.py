@@ -180,6 +180,8 @@ class Brain:
         # the capacity rule: every sprint that is not Closed is 8 points, set here the first time a database
         # written before the rule is opened (audited once with the count), nothing on a database that follows it
         self.migration["capacity_enforced"] = self.sprints.enforce_capacity()
+        # 0.13.0: an item written before the plan_uid column points at its plan row by uid too
+        self.migration["plan_uids_filled"] = self.sprints.fill_plan_uids()
         # the plan's floor (kletz.toml) must be known before the first recompute below
         self.default_points: int = int(self.config.get("default_points") or DEFAULT_POINTS)
         # the calculated sprint and deadline of every plan row, written where they moved (a database written
@@ -215,6 +217,9 @@ class Brain:
                 service.guard = self.sprints.guard  # the capacity rule on every create and update of a sprint
             if schema.name == "safety_plan_row":
                 service.guard = self.schedule.guard  # the calculated fields and the panel's default stay out
+            if schema.name == "sprint_item":
+                service.guard = self.sprints.link_item  # plan_row and plan_uid name the same row; the uid wins
+                service.on_load = self.sprints.link_loaded  # a file's plan_uid re-resolves plan_row
             if schema.name in ("safety_plan_row", "sprint", "sprint_item"):
                 service.after = self.schedule.on_change  # a change here can move a deadline
             self._services[schema.name] = service

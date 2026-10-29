@@ -60,35 +60,52 @@ def free_capacity(sprint: dict[str, Any], items: Iterable[dict[str, Any]]) -> in
     return max(0, capacity_of(sprint) - committed(own))
 
 
-def own_items(items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+UidMap = dict[str, int]  # a plan row's uid -> its id, from the rows; the pointer an item carries since 0.13.0
+
+
+def uid_map(rows: Iterable[dict[str, Any]]) -> UidMap:
+    return {str(r["uid"]): int(r["id"]) for r in rows if r.get("uid") and r.get("id") is not None}
+
+
+def plan_row_of(item: dict[str, Any], uids: UidMap | None = None) -> int | None:
+    """The plan row an item points at: by ``plan_uid`` when the item carries one the rows know (0.13.0), else
+    by ``plan_row``."""
+    if uids and item.get("plan_uid") in uids:
+        return uids[item["plan_uid"]]
+    return int(item["plan_row"]) if item.get("plan_row") else None
+
+
+def own_items(items: Iterable[dict[str, Any]], uids: UidMap | None = None) -> list[dict[str, Any]]:
     """A deliverable's own sprint items: kind Deliverable, pointing at a plan row, not Carried (the copy left
     behind by a carry is a trace, the item itself lives on in the next sprint)."""
     return [
         i for i in items
-        if i.get("kind") == "Deliverable" and i.get("plan_row") and i.get("status") != "Carried"
+        if i.get("kind") == "Deliverable" and plan_row_of(i, uids) is not None and i.get("status") != "Carried"
     ]
 
 
-def pins(items: Iterable[dict[str, Any]], numbers: set[int] | None = None) -> dict[int, int]:
+def pins(
+    items: Iterable[dict[str, Any]], numbers: set[int] | None = None, uids: UidMap | None = None
+) -> dict[int, int]:
     """``{plan row id: sprint number}``: the last sprint that holds one of the deliverable's own items (any
     sprint when ``numbers`` is None, else sprints of the chain only); a deliverable never finishes before it."""
     out: dict[int, int] = {}
-    for item in own_items(items):
+    for item in own_items(items, uids):
         number = item.get("sprint")
         if number is None or (numbers is not None and number not in numbers):
             continue
-        row_id = int(item["plan_row"])
+        row_id = plan_row_of(item, uids)
         out[row_id] = max(out.get(row_id, 0), int(number))
     return out
 
 
-def committed_points(items: Iterable[dict[str, Any]]) -> dict[int, int]:
+def committed_points(items: Iterable[dict[str, Any]], uids: UidMap | None = None) -> dict[int, int]:
     """``{plan row id: points}``: the part of each deliverable already committed as its own sprint items (any
     sprint, any status but Carried; an unpointed item commits nothing). The owner's rule, 2026-10-28."""
     out: dict[int, int] = {}
-    for item in own_items(items):
+    for item in own_items(items, uids):
         if item.get("points"):
-            row_id = int(item["plan_row"])
+            row_id = plan_row_of(item, uids)
             out[row_id] = out.get(row_id, 0) + int(item["points"])
     return out
 
@@ -108,14 +125,17 @@ def schedule(
     finishes in that last sprint, Closed or not.
     """
     items = list(items)
+    rows = list(rows)
+    uids = uid_map(rows)
     line = chain(sprints)
     free = [free_capacity(s, items) for s in line]
     numbers = {int(s["number"]) for s in line}
     index_of = {int(s["number"]): i for i, s in enumerate(line)}
     by_number = {int(s["number"]): s for s in sprints if s.get("number") is not None}
-    pinned = pins(items, numbers)
-    held = pins(items)  # the last sprint holding one of the deliverable's items, Closed ones included
-    committed = committed_points(items)
+    pinned = pins(items, numbers, uids)
+    held = pins(items, None, uids)  # the last sprint holding one of the deliverable's items, Closed ones included
+    committed = committed_points(items, uids)
+    mine = own_items(items, uids)
     out = Schedule()
     for row in rows:
         row_id = int(row["id"])
@@ -132,7 +152,7 @@ def schedule(
         out.weights[row_id], out.sources[row_id] = weight, source
         out.committed[row_id] = committed.get(row_id, 0)
         out.occupancy[row_id] = {
-            int(i["sprint"]) for i in own_items(items) if int(i["plan_row"]) == row_id and i.get("sprint") is not None
+            int(i["sprint"]) for i in mine if plan_row_of(i, uids) == row_id and i.get("sprint") is not None
         }
         remaining = max(0, weight - out.committed[row_id])
         if remaining == 0 and held.get(row_id) in by_number:  # fully committed: it finishes where its last item is

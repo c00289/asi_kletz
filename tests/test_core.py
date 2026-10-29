@@ -218,6 +218,8 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
         assert brain.migration["created"] == ["holiday"]  # the 0.10.0 table; the four of 0.8.4 are altered
         altered = {table: [UID] for table in TABLES_0_8_4}
         altered["safety_plan"] = ["points", "default_points", "sprint", "sprint_start", "sprint_end", UID]
+        altered["sprint_item"] = ["plan_uid", UID]  # 0.13.0: the plan row's uid beside its id
+        assert brain.migration["plan_uids_filled"] == 0  # the fixture has no item
         assert brain.migration["altered"] == altered
         assert brain.migration["scheduled"] == 0  # Sprint 1 is Closed: no chain, nothing to write
         assert brain.migration["uids_stamped"] == {PLAN: 3, "sprint": 1, "sprint_item": 0, "week": 0, "holiday": 0}

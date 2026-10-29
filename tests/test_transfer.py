@@ -15,7 +15,7 @@ def test_json_dump_and_load_modes(seeded, tmp_path):
     dumped = seeded.execute("dump", out=str(out))
     assert dumped.ok and dumped.data["entities"] == {PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0, "holiday": 0}
     payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 6 and list(payload["entities"]) == ENTITIES
+    assert payload["schema_version"] == 7 and list(payload["entities"]) == ENTITIES
 
     uids = {r["id"]: r["uid"] for r in payload["entities"][PLAN]}
     assert len(uids) == 3 and all(uids.values())  # the dump carries the hidden identity like any field
@@ -93,10 +93,12 @@ def test_excel_export_and_reimport(seeded, tmp_path):
     uids = {r["id"]: r["uid"] for r in seeded.execute("list", entity=PLAN).data}
     assert ws.column_dimensions["BQ"].hidden is True and not ws.column_dimensions["BP"].hidden  # uid, 69th
     assert [ws.cell(row=r, column=69).value for r in (2, 3, 4)] == [uids[1], uids[2], uids[3]]
-    for name, width in (("Sprints", 10), ("Sprint Items", 16), ("Weekly Status", 6), ("Holidays", 5)):
+    for name, width in (("Sprints", 10), ("Sprint Items", 17), ("Weekly Status", 6), ("Holidays", 5)):
         sheet = wb[name]
         assert sheet.cell(row=1, column=width).value == "uid" and sheet.cell(row=1, column=width + 1).value is None
         assert sheet.column_dimensions[get_column_letter(width)].hidden is True
+    items = wb["Sprint Items"]
+    assert items.cell(row=1, column=6).value == "Safety Plan row uid" and items.column_dimensions["F"].hidden is True
 
     with Brain(tmp_path / "re.db") as other:
         result = other.execute("import", format="excel", path=path, mode="replace")

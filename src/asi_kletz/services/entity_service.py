@@ -31,7 +31,10 @@ class EntityService:
         self.events = events
         # an entity's own rule, run after coercion and before the write: ``guard(current_row_or_None, clean)``
         # may fill ``clean`` or raise ``ValidationError`` (the sprint's capacity rule; ``Brain.service`` sets it)
-        self.guard: Callable[[dict[str, Any] | None, dict[str, Any]], None] | None = None
+        self.guard: Callable[[dict[str, Any] | None, dict[str, Any]], list[str] | None] | None = None
+        # a per-row check on load (``load_rows``): ``on_load(clean)`` may fill ``clean`` and return warnings
+        # (the sprint item's plan_row re-resolved from the file's plan_uid; ``Brain.service`` sets it)
+        self.on_load: Callable[[dict[str, Any]], list[str] | None] | None = None
         # a hook run once after a committed create, update, delete or load: ``after(action, row_id)`` (the
         # plan's recompute; ``Brain.service`` sets it on the plan, sprint and sprint-item services)
         self.after: Callable[[str, int | None], None] | None = None
@@ -82,7 +85,7 @@ class EntityService:
     def create(self, data: Mapping[str, Any], actor: str = "python") -> tuple[dict[str, Any], list[str]]:
         clean, warnings = self.schema.coerce_row(data, self.lookups)
         if self.guard is not None:
-            self.guard(None, clean)
+            warnings.extend(self.guard(None, clean) or ())
         if self.schema.has(UID) and not clean.get(UID):  # assigned once, here; a uid handed in is kept
             clean[UID] = new_uid()
         with self.storage.transaction():
@@ -102,7 +105,7 @@ class EntityService:
             current = self.repo.get(row_id)
             if current is None:
                 raise NotFound(f"{self.schema.name} {row_id} not found")
-            self.guard(current, clean)
+            warnings.extend(self.guard(current, clean) or ())
         with self.storage.transaction():
             if UID in clean:
                 clean = self._check_uid(row_id, clean)
@@ -183,6 +186,8 @@ class EntityService:
                     summary["skipped"] += 1
                     continue
                 summary["warnings"].extend(f"row {index}: {w}" for w in warnings)
+                if self.on_load is not None:
+                    summary["warnings"].extend(f"row {index}: {w}" for w in (self.on_load(clean) or ()))
                 if calculated and clean.get("status") == "Done":
                     ignored = {}  # the past keeps what the file says (a free-text deadline is history)
                 else:

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 from ..errors import CommandError, ValidationError
 from ..generate import plan_queries as pq
 from ..generate import sprint_queries as q
+from ..schema import normalise_uid
 from ..schema.definitions import CAPACITY_RULE, SPRINT_CAPACITY
 from ..tracker.business_days import add_business_days, holidays_within, next_business_day
 
@@ -80,6 +81,73 @@ class SprintService:
                 {"count": len(rows), "ids": [r["id"] for r in rows], "capacity": SPRINT_CAPACITY},
             )
         return len(rows)
+
+    # -- an item and its plan row (0.13.0) ---------------------------------------------------------
+    def link_item(self, current: dict[str, Any] | None, clean: dict[str, Any]) -> list[str] | None:
+        """The guard of ``sprint_item``: ``plan_row`` and ``plan_uid`` name the same Safety Plan row. Given
+        ``plan_row``, ``plan_uid`` follows; given ``plan_uid``, ``plan_row`` is resolved from it; the uid wins
+        when both are given and disagree, with a warning. An unknown uid or id is refused."""
+        return self._link(clean, loading=False)
+
+    def link_loaded(self, clean: dict[str, Any]) -> list[str] | None:
+        """The load hook of ``sprint_item``: a file's ``plan_uid`` is kept and ``plan_row`` re-resolved from
+        it, silently (a stale id in the file is the very case the uid is for), so a tracker dump survives a
+        plan re-import that renumbered the rows; an unknown uid leaves ``plan_row`` empty, with a warning,
+        rather than a stale number."""
+        return self._link(clean, loading=True)
+
+    def _link(self, clean: dict[str, Any], *, loading: bool) -> list[str] | None:
+        plan = self.brain.service(pq.PLAN_ENTITY).repo
+        warnings: list[str] = []
+        given_uid = clean.get("plan_uid") not in (None, "")
+        given_row = clean.get("plan_row") is not None
+        if given_uid:
+            uid = normalise_uid(clean["plan_uid"])
+            if uid is None:
+                raise ValidationError(q.ITEM, [f"plan_uid: {clean['plan_uid']!r} is not a uid"])
+            row = plan.get_by_uid(uid)
+            if row is None:
+                if not loading:
+                    raise ValidationError(q.ITEM, [f"plan_uid {uid} names no Safety Plan row"])
+                warnings.append(f"plan_uid {uid} names no Safety Plan row; plan_row left empty")
+                clean["plan_uid"], clean["plan_row"] = uid, None
+            else:
+                if given_row and int(clean["plan_row"]) != int(row["id"]) and not loading:
+                    # by hand the two disagreeing is worth a word; on a load a stale id is the very case the uid is for
+                    warnings.append(
+                        f"plan_row {clean['plan_row']} and plan_uid {uid} disagree; the uid wins: plan_row {row['id']}"
+                    )
+                clean["plan_uid"], clean["plan_row"] = uid, int(row["id"])
+        elif given_row:
+            row = plan.get(int(clean["plan_row"]))
+            if row is None:
+                if not loading:
+                    raise ValidationError(q.ITEM, [f"plan_row {clean['plan_row']} names no Safety Plan row"])
+                warnings.append(f"plan_row {clean['plan_row']} names no Safety Plan row")
+            else:
+                clean["plan_uid"] = row.get("uid")
+        elif "plan_row" in clean or "plan_uid" in clean:  # cleared on purpose: both go
+            clean["plan_row"] = clean["plan_uid"] = None
+        return warnings or None
+
+    def fill_plan_uids(self, actor: str = "system") -> int:
+        """On open: every item with a ``plan_row`` and no ``plan_uid`` gets the row's uid (an item written
+        before 0.13.0), through the repository, audited once with the count. Returns the count."""
+        items = self.brain.service(q.ITEM)
+        plan = self.brain.service(pq.PLAN_ENTITY).repo
+        filled: list[int] = []
+        with self.brain.storage.transaction():
+            for item in items.list():
+                if item.get("plan_row") is None or item.get("plan_uid"):
+                    continue
+                row = plan.get(int(item["plan_row"]))
+                if row is None or not row.get("uid"):
+                    continue
+                items.repo.update(item["id"], {"plan_uid": row["uid"]})
+                filled.append(item["id"])
+            if filled:
+                self.brain.storage.audit(actor, "link_plan_uids", q.ITEM, None, {"count": len(filled), "ids": filled})
+        return len(filled)
 
     # -- reads -------------------------------------------------------------------------
     def board(self, number: int | None = None, as_of: Any = None) -> dict[str, Any]:

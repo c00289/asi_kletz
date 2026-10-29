@@ -123,7 +123,7 @@ def test_every_entity_ends_with_the_hidden_uid():
         last = schema.fields[-1]
         assert last.name == UID and last.type is FieldType.TEXT and last.header == UID and last.hidden
         assert last == uid_field() and not last.required and last.group is None
-        assert [f.name for f in schema.visible_fields] == [f.name for f in schema.fields][:-1]
+        assert [f.name for f in schema.visible_fields] == [f.name for f in schema.fields if not f.hidden]
         assert not any(f.hidden for f in schema.visible_fields)
         assert schema.to_dict()["fields"][-1] == {
             "name": UID, "type": "text", "header": UID, "required": False, "lookup": None, "group": None,
@@ -131,6 +131,8 @@ def test_every_entity_ends_with_the_hidden_uid():
             "readonly": False, "source": True,
         }
     assert definitions.ALL_ENTITIES[0].fields[-1].name == UID
+    hidden = [f.name for f in default_registry.get("sprint_item").fields if f.hidden]
+    assert hidden == ["plan_uid", UID]  # 0.13.0: the plan row's uid beside its id, hidden like the uid
     assert FieldSpec("x").hidden is False and "hidden" in FieldSpec("x").to_dict()
     # the fingerprint moved, so a 0.8.4 database gains a schema_migrations row when 0.9.0 opens it
     assert default_registry.fingerprint() != FINGERPRINT_0_8_4

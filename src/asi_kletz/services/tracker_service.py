@@ -163,7 +163,8 @@ class TrackerService:
             row["kind"] = "Other"
             warnings.append(f"no Safety Plan row matches {target.title!r}; imported as Other")
         else:
-            row.update({"kind": "Deliverable", "plan_row": match["id"], "title": pq.one_line(match["deliverable"])})
+            row.update({"kind": "Deliverable", "plan_row": match["id"], "plan_uid": match.get("uid"),
+                        "title": pq.one_line(match["deliverable"])})
         return row
 
     def _sync(self, entity: str, desired: list[dict[str, Any]], key, actor: str) -> dict[str, int]:

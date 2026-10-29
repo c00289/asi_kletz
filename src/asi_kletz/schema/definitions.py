@@ -180,6 +180,11 @@ SPRINT_ITEM = register_entity(EntitySchema(
         FieldSpec("kind", E, "Kind (Deliverable/ Jira/ Meeting/ Question/ Other)", lookup="item_kind"),
         FieldSpec("title", M, "Title", required=True),
         FieldSpec("plan_row", N, "Safety Plan row id"),
+        # 0.13.0: the plan row's uid beside its id, hidden; the pointer that survives a plan re-import that
+        # renumbered the rows (docs/hidden-identity-plan.md, open question 1). Kept in step with plan_row by
+        # the sprint service: given one, the other follows; the uid wins when both are given and disagree.
+        FieldSpec("plan_uid", T, "Safety Plan row uid", hidden=True,
+                  help="Hidden: the uid of the Safety Plan row plan_row points at."),
         FieldSpec("jira_key", T, "Jira key"),
         FieldSpec("issue_type", T, "Jira type"),
         FieldSpec("heading", M, "Heading printed before the item"),

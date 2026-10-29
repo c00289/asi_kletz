@@ -181,14 +181,17 @@ README.md, CHANGELOG.md, pyproject.toml, docs/hidden-identity-plan.md (Status)
 
 ## 8. Open questions
 
-- Should `sprint_item.plan_row` become `plan_uid` (a uid), so a tracker dump survives a plan re-import
-  that renumbers ids? Probably yes, in the release after this one, with the tracker import matching
-  deliverables by uid first and title second.
+- ~~Should `sprint_item.plan_row` become `plan_uid` (a uid), so a tracker dump survives a plan re-import
+  that renumbers ids?~~ Answered 2026-10-28 (asi_kletz 0.13.0): `plan_uid`, hidden, beside `plan_row`, the
+  two kept in step by the sprint service (the uid wins); a file's `plan_uid` re-resolves `plan_row` on load;
+  the scheduler pins by uid; the board keeps showing the id as the handle.
 - Should Gutenberg documents print the uid of every row they cite, in a provenance appendix? Owner's call;
   the hidden rule says a document asks for it by name.
 
 ## 9. Change log
 
 - 2026-10-28: written, decided; the sister plan written the same day.
+- 2026-10-28: open question 1 answered and implemented as asi_kletz 0.13.0 (`sprint_item.plan_uid`, schema
+  version 7; filled from `plan_row` the first time 0.13.0 opens a database).
 - 2026-10-28: implemented as asi_kletz 0.9.0 in four commits (one per phase); every deviation and
   what the plan got wrong are in `CHANGELOG.md`, section `[0.9.0]`.
