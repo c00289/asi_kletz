@@ -94,9 +94,9 @@ def test_urls_editor_shows_the_links_and_open_launches_the_first(window, seeded,
     screen.select(3)  # no URL: nothing to open, no links
     assert widget.get() is None and widget.link_labels == [] and str(widget.open_button.cget("state")) == "disabled"
     assert widget.open_first() is None and opened == []
-    screen.select(1)  # two URLs, in the order stored; the first marked as the link
+    screen.select(1)  # two URLs, in the order stored; the first marked as the link; the kind as a prefix (0.22.0)
     assert widget.get() == f"{MS}\n{A}"
-    assert [str(label.cget("text")) for label in widget.link_labels] == [MS + THE_LINK, A]
+    assert [str(label.cget("text")) for label in widget.link_labels] == [f"placeholder: {MS}" + THE_LINK, f"other: {A}"]
     assert str(widget.open_button.cget("state")) == "normal"
     assert widget.open_first() == MS and opened == [MS]  # Open: the first in the browser
     widget.open_url(A)  # a click on any other line: that one
@@ -105,7 +105,7 @@ def test_urls_editor_shows_the_links_and_open_launches_the_first(window, seeded,
     assert cells["urls"] == f"{MS}; {A}" and cell_text(screen.schema.field("urls"), [B, A]) == f"{B}; {A}"
     # typed in another order and saved: the order kept exactly as typed, through the same verb an agent uses
     widget.set(f"{B}\n{MS}")
-    assert [str(label.cget("text")) for label in widget.link_labels] == [B + THE_LINK, MS]
+    assert [str(label.cget("text")) for label in widget.link_labels] == [f"other: {B}" + THE_LINK, f"placeholder: {MS}"]
     screen.save()
     assert window.status_text() == "Saved safety plan row 1"
     assert seeded.execute("get", entity=PLAN, id=1).data["urls"] == [B, MS]

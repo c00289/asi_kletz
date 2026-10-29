@@ -1,5 +1,6 @@
 """The ``plan`` verb: the Safety Plan's points, the sprint and deadline calculated from them, the standards an
-export fills, and since 0.20.0 the work product URLs (``plan urls --placeholder <url>``).
+export fills, and since 0.20.0 the work product URLs (``plan urls --placeholder <url>``; since 0.22.0 also
+``--audit`` and ``--replace <old-url> <new-url>``, Phase A of the Confluence integration plan).
 
 ``plan schedule`` recomputes now and prints the table (order, deliverable, points, the weight and its
 source, sprint, deadline, status, warnings); ``plan weights load <file>`` sets ``default_points`` from the
@@ -30,7 +31,12 @@ class PlanCommand(Command):
         "parameters --row <id> prints that value set without building, with the people per role and the roles "
         "still legacy or empty; tickets lists every work product with its Jira key and the ones still without "
         "one; urls --placeholder <url> puts that URL on every work product that has none (idempotent; --check "
-        "names the rows and writes nothing)."
+        "names the rows and writes nothing); urls --audit [--rows <id>...] reads every work product's URLs by "
+        "kind (confluence, jira, sharepoint, placeholder, other) and lists the findings, writing nothing: a "
+        "placeholder still present, no Confluence page where the work product location names Confluence, a "
+        "Jira URL that disagrees with the row's Jira key; urls --replace <old-url> <new-url> puts the new URL "
+        "where the old one stands on every row that carries it, one audited step (--check names the rows and "
+        "writes nothing; a row that already carries the new URL is left alone with a warning)."
     )
     arguments = (
         Argument("action", "schedule | weights | export | parameters | tickets | urls", required=True,
@@ -43,8 +49,14 @@ class PlanCommand(Command):
         Argument("standard", "export / parameters: one standard's folder (default: every standard the row has)",
                  flag=True),
         Argument("placeholder", "urls: the URL every row with no work product URL gets", flag=True),
-        Argument("check", "urls: a dry run; the rows that would be filled are named and nothing is written",
+        Argument("audit", "urls: the findings on the work product URLs, by kind; nothing is written",
                  flag=True, type="bool"),
+        Argument("rows", "urls --audit: only these Safety Plan rows (id or uid; repeatable)", flag=True, type="ref",
+                 multiple=True),
+        Argument("replace", "urls: the old URL and the new one; every row carrying the old gets the new in its place",
+                 flag=True, nargs=2),
+        Argument("check", "urls: a dry run; the rows that would be filled or changed are named and nothing is "
+                 "written", flag=True, type="bool"),
     )
 
     def run(self, ctx: Context, args: dict[str, Any]) -> Result:
@@ -52,12 +64,7 @@ class PlanCommand(Command):
         if args["action"] == "tickets":
             return Result.success(tickets(ctx.brain))
         if args["action"] == "urls":
-            if not (args.get("placeholder") or "").strip():
-                return Result.failure("plan urls needs --placeholder <url>")
-            data = ctx.brain.work_products.fill_placeholder(
-                args["placeholder"], actor=ctx.actor, check=bool(args.get("check"))
-            )
-            return Result.success(data)
+            return urls(ctx, args)
         if args["action"] in ("export", "parameters"):
             if args.get("row") is None:
                 return Result.failure(f"plan {args['action']} needs --row <id>")
@@ -81,6 +88,28 @@ class PlanCommand(Command):
             return Result.failure("plan weights load needs the path of the JSON file")
         data = service.load_weights(args["file"], ctx.actor)
         return Result.success(data, data.pop("warnings"))
+
+
+def urls(ctx: Context, args: dict[str, Any]) -> Result:
+    """``plan urls``: ``--audit`` (the findings, a list; ``ok`` even with findings, they are data), ``--replace
+    <old> <new>`` (the rows changed, the refusals as warnings) or ``--placeholder <url>`` (0.20.0)."""
+    work_products = ctx.brain.work_products
+    check = bool(args.get("check"))
+    if args.get("audit"):
+        rows = args.get("rows")
+        if rows is not None and not isinstance(rows, (list, tuple)):
+            rows = [rows]
+        return Result.success(work_products.audit(list(rows) if rows else None))
+    replace = args.get("replace")
+    if replace is not None:
+        pair = [str(p) for p in replace] if isinstance(replace, (list, tuple)) else [str(replace)]
+        if len(pair) != 2:
+            return Result.failure("plan urls --replace needs two URLs: the old and the new")
+        data = work_products.replace(pair[0], pair[1], actor=ctx.actor, check=check)
+        return Result.success(data, data.pop("warnings"))
+    if (args.get("placeholder") or "").strip():
+        return Result.success(work_products.fill_placeholder(args["placeholder"], actor=ctx.actor, check=check))
+    return Result.failure("plan urls needs --placeholder <url>, --audit or --replace <old-url> <new-url>")
 
 
 def tickets(brain: Any) -> dict[str, Any]:

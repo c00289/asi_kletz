@@ -12,6 +12,61 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.22.0] - 2026-10-29
+
+Phase A of the Confluence integration plan (`asi_hopper/docs/confluence-integration-plan.md`, "Kletz: URLs that
+know what they are"; the plan numbered it 0.21.0, a version 0.21.0 of the same day had taken). The owner,
+2026-10-29: "when we add confluence read only into kletz we should be able to associate objects with jama urls;
+obviously the next candidate is replacing the google.com placeholder with a real url once known; but more
+importantly there may be a way to tie in individual stpa objects to confluence." And right after: "i said jama
+but meant confluence." No schema change (schema version stays 10); nothing here reads Confluence or Jira.
+
+### Added
+- **URL kinds** (`schema/urls.py`): `URL_KINDS = ("confluence", "jira", "sharepoint", "placeholder", "other")`
+  and `url_kind(url, hosts=None)`, decided from the host and the path, nothing fetched: `asirobots.atlassian.net`
+  under `/wiki/` is `confluence`, the same host under `/browse/` or `/jira/` is `jira`, any `*.sharepoint.com` is
+  `sharepoint`, `www.microsoft.com` (the 0.20.0 placeholder) is `placeholder`, anything else is `other`; `hosts`
+  (the owner's extra kinds, name to host or list of hosts, `*.` for a domain) is looked at first. `kind_label`
+  (`Confluence, asirobots.atlassian.net`; `placeholder` alone), `url_kinds` (each kind once, in order) and
+  `jira_issue_key` (`HWL-2554` off `/browse/`, `/issues/` or `selectedIssue=`). The existing functions are
+  untouched. Jama gets no host, no kind and no door: the owner's "jama" was a slip for Confluence.
+- **`[urls] hosts`** in `kletz.toml` (`brain.load_config`, `Brain.url_hosts`), optional and not asked for: more
+  kinds so a pasted Jama or DMS link is not mislabelled (`hosts = { jama = "jama.example.com", dms = [...] }`); a
+  value that is not a host or a list of hosts is ignored with a warning `status` reports. `kletz.example.toml`
+  shows the table, commented out.
+- **`plan urls --audit [--rows <id>...]`** (`WorkProductService.audit`): no write; the findings on every row (or
+  the ones named, id or uid, repeatable; an unknown one is refused), each `{id, uid, order, deliverable, code,
+  finding, kinds, urls}`: `placeholder` (the placeholder is still a URL of the row), `no_confluence` (the Work
+  Product Location names Confluence and no URL is a Confluence page), `jira_key` (a Jira URL names an issue other
+  than the row's key). A JSON Result whose `data` is the list, `ok` with findings or without: findings are data,
+  not errors.
+- **`plan urls --replace <old-url> <new-url> [--check]`** (`WorkProductService.replace`, the shape of
+  `fill_placeholder`): every row whose list contains the old URL gets the new one in the same position, one
+  transaction, one audit entry (`urls_replace`: the two URLs, the ids changed, the ids refused), the event
+  `plan.urls_replaced`; `--check` names the rows and writes nothing; a row that already carries the new URL
+  elsewhere is left alone and named in a warning (a URL is never listed twice); both URLs must be absolute
+  http(s) URLs and differ, else the verb refuses. The answer carries the new URL's `kind`.
+- `Argument.nargs` (`commands/base.py`, `automation/cli.py`): a flag that takes exactly that many values at
+  once, so the CLI reads `--replace <old> <new>` as the plan spells it; `schema` prints it.
+- Tests (`tests/test_url_kinds.py`): every kind and the edge hosts, the host map and the owner's word winning,
+  the labels, the issue key, the map read from `kletz.toml` with a bad value warned, the audit's three findings
+  on the seeded database with `--rows`, the owner's map in the audit, the replacement in the three forms
+  (Python, the wire format, the CLI) with its position kept, its one audit entry and event, a page that moves
+  corrected once, the dry run, the refusal of a row that already has the new URL, every refusal, the Excel cell
+  text with and without the map and the import still skipping the column, the form's link text. 410 tests, 397
+  before.
+
+### Changed
+- The Excel export's **Work product** cell text is the first URL's kind and host (`io/exporters.py`,
+  `kind_label`) instead of the bare host; the hyperlink is the first URL as before; the import skips the column
+  as before.
+- The form's link lines (`gui/widgets.py:UrlsWidget`, `link_text`) carry the kind as a prefix
+  (`confluence: https://... (the link)`); the screen hands the widget the owner's host map (`hosts`).
+- `plan urls` with none of `--placeholder`, `--audit` and `--replace` says so naming all three; the `plan` help
+  names the two new verbs; `--check` covers both the placeholder and the replacement.
+- README: *What is in 0.22.0*; Standards and export (the cell text, URL kinds, the two verbs, the CLI lines);
+  the form's link lines; Configuration (`[urls] hosts`); Quick start.
+
 ## [0.21.0] - 2026-10-29
 
 The owner, 2026-10-29, on the exported QF-17 Safety Plan: "Could we turn the name of the safety deliverable

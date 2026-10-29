@@ -190,6 +190,8 @@ class EntityScreen(Screen):
                 extra["load"] = self.load_tickets
             elif spec.picker == "people":  # 0.20.0: the Look up button opens the Outlook search
                 extra["lookup"] = self.lookup_people
+            elif spec.picker == "urls":  # 0.22.0: the link lines carry the kind; the owner's extra kinds too
+                extra["hosts"] = self.brain.url_hosts
             widget = factory.create(parent, spec, **extra)
             widget.grid(row=row, column=1, sticky="ew", pady=3)
             self.widgets[spec.name] = widget

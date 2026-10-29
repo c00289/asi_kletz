@@ -50,6 +50,7 @@ class Argument:
     choices: tuple[str, ...] = ()
     default: Any = None
     multiple: bool = False
+    nargs: int = 0  # a flag that takes exactly this many values at once (`--replace <old> <new>`); 0: one
 
     @property
     def dest(self) -> str:
@@ -59,7 +60,7 @@ class Argument:
         return {
             "name": self.name, "help": self.help, "required": self.required, "flag": self.flag,
             "type": self.type, "choices": list(self.choices), "default": self.default,
-            "multiple": self.multiple,
+            "multiple": self.multiple, "nargs": self.nargs,
         }
 
 

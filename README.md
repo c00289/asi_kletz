@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.21.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.22.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,38 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.22.0
+
+**URLs that know what they are.** Phase A of the Confluence integration plan
+(`asi_hopper/docs/confluence-integration-plan.md`). The owner, 2026-10-29: "when we add confluence read only into
+kletz we should be able to associate objects with [confluence] urls; obviously the next candidate is replacing the
+... placeholder with a real url once known" (and, right after, "i said jama but meant confluence"). No schema
+change; nothing here reads Confluence or Jira: the kind is read off the URL.
+
+*Kinds.* Every work product URL has a kind, decided from its host and path (`schema/urls.py:url_kind`):
+`confluence` (`asirobots.atlassian.net` under `/wiki/`), `jira` (the same host under `/browse/` or `/jira/`),
+`sharepoint` (any `*.sharepoint.com`), `placeholder` (`www.microsoft.com`, the 0.20.0 placeholder) and `other`
+(anything else, a Jama or DMS link today). An optional `[urls] hosts` table in `kletz.toml` names more kinds
+(`hosts = { jama = "jama.example.com", dms = ["dms.example.com", "*.dms.example.org"] }`) so a pasted link is not
+mislabelled; Jama gets no host, kind or door of its own. The Excel export's **Work product** cell now reads the
+kind and the host (`Confluence, asirobots.atlassian.net`; a placeholder row reads `placeholder`), so a reviewer
+sees at a glance which deliverables still point nowhere; the hyperlink is the first URL as before, and the
+import skips the column as before. The form's link lines carry the kind as a prefix
+(`confluence: https://... (the link)`).
+
+*The audit.* `plan urls --audit [--rows <id>...]` writes nothing and lists the findings an agent acts on, one
+per line: a placeholder still present; no Confluence page on a deliverable whose Work Product Location names
+Confluence; a Jira URL whose issue key is not the row's Jira key. Each finding carries `id`, `uid`, `order`,
+`deliverable`, `code` (`placeholder`, `no_confluence`, `jira_key`), `finding`, the row's `kinds` and `urls`;
+the Result is `ok` even with findings (they are data, not errors).
+
+*The replacement.* `plan urls --replace <old-url> <new-url> [--check]` puts the new URL where the old one
+stands on every row that carries it, in the same position, one transaction, one audit entry (`urls_replace`,
+with the ids) and the event `plan.urls_replaced`; `--check` names the rows and writes nothing; a row that
+already carries the new URL elsewhere is left alone with a warning; both URLs must be absolute http(s) URLs.
+This is how the placeholder gives way to a real page URL on every row at once, and how a page that moves is
+corrected once. See [Standards and export](#standards-and-export) and [Configuration](#configuration).
 
 ## What is in 0.21.0
 
@@ -567,12 +599,29 @@ list of absolute http(s) URLs, the first the link, kept in the order given, neve
 https://b"` (URLs separated by `;` or a line break); each must be an absolute http or https URL and none may
 appear twice, every problem named with its line (`urls, line 2 ('nope'): not an absolute http(s) URL`); an empty
 value clears the list. The Excel export's Safety Plan sheet carries them in two columns right after Jira key:
-**Work product**, a clickable hyperlink to the first URL whose cell text is the URL's host (the export's own
-column, no field; the import skips it silently), and **Work product URLs**, the whole list one per line, read
-back in order by the import. A row with no Jira ticket prints `no ticket attached` in its Jira key cell instead
-of an empty one, and the import (and the verbs) read that text as no key. The dump carries the array.
+**Work product**, a clickable hyperlink to the first URL whose cell text is the URL's kind and host (0.22.0:
+`Confluence, asirobots.atlassian.net`, `Jira, ...`, `SharePoint, ...`, `other, <host>`, or `placeholder` alone;
+the export's own column, no field; the import skips it silently), and **Work product URLs**, the whole list one
+per line, read back in order by the import. A row with no Jira ticket prints `no ticket attached` in its Jira key
+cell instead of an empty one, and the import (and the verbs) read that text as no key. The dump carries the array.
 `plan urls --placeholder <url>` fills `urls` of every row that has none with that one URL, audited once
 (`urls_placeholder`, with the ids), idempotent; `--check` names the rows it would fill and writes nothing.
+
+**URL kinds** (0.22.0, Phase A of the Confluence integration plan): `url_kind(url, hosts=None)` in
+`schema/urls.py` decides from the host and the path, nothing fetched: `confluence` is `asirobots.atlassian.net`
+under `/wiki/`; `jira` the same host under `/browse/` or `/jira/`; `sharepoint` any `*.sharepoint.com`;
+`placeholder` is `www.microsoft.com`; everything else is `other`, unless `kletz.toml` names its host under
+`[urls] hosts` (name = host or list of hosts, `*.` for a whole domain; the owner's word wins). `kind_label` is
+the export's cell text. `plan urls --audit [--rows <id>...]` reads every row's URLs by kind and lists the
+findings, writing nothing: `placeholder` (the placeholder is still a URL of the row), `no_confluence` (the Work
+Product Location names Confluence and no URL is a Confluence page), `jira_key` (a Jira URL names an issue other
+than the row's Jira key); each finding carries `id`, `uid`, `order`, `deliverable`, `code`, `finding`, `kinds`,
+`urls`, and the Result is `ok` with findings or without. `plan urls --replace <old-url> <new-url>` puts the new
+URL where the old one stands on every row that carries it (the same position), one transaction, one audit
+entry (`urls_replace`: the two URLs, the ids changed, the ids refused), the event `plan.urls_replaced`; a row
+that already carries the new URL elsewhere is left alone and named in a warning; `--check` names the rows and
+writes nothing; both URLs must be absolute http(s) URLs and differ. A per-kind setter is not added: `update
+safety_plan_row N --set urls=...` and the window's URLs box already do it.
 
 A plan row *has* a standard when one of its QMS reference flags names the folder: `ref_qf_17` set names a
 folder starting `qf-17`.
@@ -592,6 +641,10 @@ asi-kletz update safety_plan_row 1 --set "urls=https://dms.example.com/doc/17; h
 asi-kletz update safety_plan_row 1 --data "{\"urls\": [\"https://dms.example.com/doc/17\"]}"
 asi-kletz plan urls --placeholder https://www.microsoft.com/ --check   # the rows that would get it; nothing written
 asi-kletz plan urls --placeholder https://www.microsoft.com/           # every row with no URL gets it, once
+asi-kletz plan urls --audit                                            # the findings by URL kind; nothing written
+asi-kletz plan urls --audit --rows 1 --rows 3                          # only these rows (id or uid)
+asi-kletz plan urls --replace https://www.microsoft.com/ "https://asirobots.atlassian.net/wiki/pages/viewpage.action?pageId=399343803" --check
+asi-kletz plan urls --replace https://www.microsoft.com/ "https://asirobots.atlassian.net/wiki/pages/viewpage.action?pageId=399343803"
 asi-kletz people lookup "Roy"                           # the Outlook address book: name and email per match
 ```
 
@@ -630,8 +683,9 @@ line is refused and named in the status bar, `Error: fusa_engineer, line 2 ('Ben
 <email>`; a box left as it was is not saved); a line with the row's own values as the export will fill them (the
 points chosen or the note that the default is never exported, the sprint end, the Jira key and its last fetched
 status); then the form as before, where the **Work product URLs** box (0.20.0) takes one URL per line, shows
-the links beside it as clickable text with the first marked as the link, and its **Open** button launches the
-first in the browser (a click on any other line launches that one).
+the links beside it as clickable text, each prefixed with its kind (0.22.0: `confluence: https://...`,
+`placeholder: https://www.microsoft.com/`) and the first marked as the link, and its **Open** button launches
+the first in the browser (a click on any other line launches that one).
 
 The **Parameters** screen edits the same rows: its table shows `name`, `standard`, `value`, `people` (a role's
 people as `Ann Lee <ann@...>; Ben Ray <ben@...>`) and `note`; in the form the name decides which editor is
@@ -1113,6 +1167,9 @@ rev = "0.1"
 date = "2026-10-27"
 author = "FuSa Engineer"
 description = "Initial draft"
+
+[urls]
+hosts = { jama = "jama.example.com", dms = ["dms.example.com", "*.dms.example.org"] }
 ```
 
 Relative paths resolve against the config file, so the workbook and the generated views can go
@@ -1137,7 +1194,11 @@ export). `default_points` (an integer,
 default 2) is the floor a Safety Plan row weighs when it has neither its own points nor the estimation
 panel's default. `sprint_capacity` is no setting
 since 0.10.0: capacity is the rule (8, fixed), and the key, when present, is ignored with a warning
-that `status` reports (`config_warnings`).
+that `status` reports (`config_warnings`). The optional `[urls] hosts` table (0.22.0) names more work product
+URL kinds than the built-in five (`confluence`, `jira`, `sharepoint`, `placeholder`, `other`): each key is a
+kind, its value a host or a list of hosts (`*.example.com` for every host under a domain); a value that is
+neither is ignored with a warning. The kinds label the export's Work product cell, the form's link lines and
+`plan urls --audit` (see Standards and export).
 
 ## Quick start
 
@@ -1152,6 +1213,8 @@ asi-kletz create safety_plan_row --set deliverable="Safety Case" --set lifecycle
 asi-kletz update safety_plan_row 3 --data '{"status": "Done", "reviewer_pat": true}'
 asi-kletz update safety_plan_row 3 --set "urls=https://dms.example.com/doc/17; https://jama.example.com/items/2554"
 asi-kletz plan urls --placeholder https://www.microsoft.com/   # every work product without a URL gets this one
+asi-kletz plan urls --audit                                     # which rows still point at the placeholder, and more
+asi-kletz plan urls --replace https://www.microsoft.com/ "https://asirobots.atlassian.net/wiki/pages/viewpage.action?pageId=399343803"
 asi-kletz people lookup "Roy"                                   # the Outlook address book, name and email per match
 asi-kletz export excel --out "kletz.xlsx"
 asi-kletz dump --out kletz.json

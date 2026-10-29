@@ -194,12 +194,13 @@ def test_the_excel_export_links_the_work_product_and_says_no_ticket_attached(see
     key_col = headers.index("Jira key") + 1
     link_col, urls_col = headers.index(WORK_PRODUCT_HEADER) + 1, headers.index(WORK_PRODUCT_URLS_HEADER) + 1
     assert (link_col, urls_col) == (key_col + 1, key_col + 2) and headers[urls_col] == "uid"
-    # row 1: the Work product cell is a hyperlink to the first URL, its text the host, the Hyperlink style
+    # row 1: the Work product cell is a hyperlink to the first URL, its text the kind and host (0.22.0: the
+    # placeholder reads `placeholder` alone), the Hyperlink style
     link = ws.cell(row=2, column=link_col)
-    assert link.value == "www.microsoft.com" and link.hyperlink.target == MS and link.style == "Hyperlink"
+    assert link.value == "placeholder" and link.hyperlink.target == MS and link.style == "Hyperlink"
     assert ws.cell(row=2, column=urls_col).value == f"{MS}\n{A}"  # all of them, one per line
     assert ws.cell(row=2, column=key_col).value == "HWL-2554"
-    assert ws.cell(row=3, column=link_col).value == "jama.example.com"
+    assert ws.cell(row=3, column=link_col).value == "other, jama.example.com"
     assert ws.cell(row=3, column=link_col).hyperlink.target == B
     assert ws.cell(row=3, column=urls_col).value == B
     assert ws.cell(row=3, column=key_col).value == NO_TICKET  # no ticket: the text, not an empty cell
@@ -256,7 +257,9 @@ def test_plan_urls_fills_the_rows_without_a_url_once(seeded):
     assert seeded.execute("plan", action="urls", placeholder="microsoft.com").errors == [
         "'microsoft.com' is not an absolute http(s) URL"
     ]
-    assert seeded.execute("plan", action="urls").errors == ["plan urls needs --placeholder <url>"]
+    assert seeded.execute("plan", action="urls").errors == [
+        "plan urls needs --placeholder <url>, --audit or --replace <old-url> <new-url>"
+    ]
 
 
 # -- the migration ----------------------------------------------------------------------------------------------

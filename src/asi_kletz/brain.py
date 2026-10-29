@@ -112,6 +112,21 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
             for item in revisions
             if isinstance(item, dict)
         ]
+    # 0.22.0: ``[urls] hosts = {jama = "jama.example.com", dms = ["dms.example.com", "*.dms.example.org"]}``
+    # names more URL kinds than the built-in five (schema/urls.py); a value that is not a host or a list of
+    # hosts is ignored with a warning. Optional, and not asked for: the plan's "so a pasted link is not mislabelled".
+    urls = data.get("urls")
+    if isinstance(urls, dict) and isinstance(urls.get("hosts"), dict):
+        hosts: dict[str, list[str]] = {}
+        for name, value in urls["hosts"].items():
+            values = value if isinstance(value, list) else [value]
+            if values and all(isinstance(v, str) and v.strip() for v in values):
+                hosts[str(name).strip().lower()] = [v.strip() for v in values]
+            else:
+                config.setdefault("warnings", []).append(
+                    f"[urls] hosts.{name} = {value!r} in kletz.toml is ignored: write a host or a list of hosts"
+                )
+        config["url_hosts"] = hosts
     return config
 
 
@@ -214,6 +229,9 @@ class Brain:
         self.doc_id: str = self.config.get("doc_id", "")
         self.project: str = self.config.get("project", "")
         self.revisions: list[dict[str, str]] = [dict(r) for r in self.config.get("revisions", [])]
+        # 0.22.0: the owner's extra URL kinds (``[urls] hosts`` in kletz.toml), read by ``url_kind`` wherever a
+        # URL is labelled: the export's Work product cell, the form's link lines, ``plan urls --audit``
+        self.url_hosts: dict[str, list[str]] = {k: list(v) for k, v in self.config.get("url_hosts", {}).items()}
         # the capacity and the length are the rules (fixed, never from the config): 8 points, 14 days
         self.sprint_capacity: int = SPRINT_CAPACITY
         self.sprint_length: int = SPRINT_LENGTH

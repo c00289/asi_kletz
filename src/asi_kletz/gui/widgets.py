@@ -342,16 +342,27 @@ THE_LINK = " (the link)"
 OPEN = "Open"
 
 
+def link_text(url: str, index: int = 1, hosts: dict[str, Any] | None = None) -> str:
+    """One link line of the URLs editor: the kind as a prefix (0.22.0), the URL, and ``(the link)`` on the
+    first: ``confluence: https://asirobots.atlassian.net/wiki/... (the link)``."""
+    from ..schema.urls import url_kind
+
+    return f"{url_kind(url, hosts)}: {url}" + (THE_LINK if index == 0 else "")
+
+
 class UrlsWidget(MultilineWidget):
     """The work product URLs of a deliverable (0.20.0, the owner: "each deliverable may have multiple url...
     on multiple urls just go to first; list of urls is sequential"): a small text box, one URL per line, in
     the order typed (the verb's guard validates: absolute http(s), none twice; it never sorts), and beside it
-    the links as clickable text, one per line, the first marked as the link, with an **Open** button that
-    launches the first in the browser; a click (left or right) on any line launches that one."""
+    the links as clickable text, one per line, each prefixed with its kind (0.22.0: ``confluence``, ``jira``,
+    ``sharepoint``, ``placeholder``, ``other`` or a kind of kletz.toml's ``[urls] hosts``, handed in as
+    ``hosts``), the first marked as the link, with an **Open** button that launches the first in the browser; a
+    click (left or right) on any line launches that one."""
 
     def build(self) -> None:
         self.options.setdefault("height", 3)
         self.options.setdefault("width", 56)
+        self.hosts: dict[str, Any] = dict(self.options.pop("hosts", None) or {})
         super().build()
         self.side = ttk.Frame(self)
         self.side.pack(side="left", anchor="n", padx=(6, 0))
@@ -379,7 +390,7 @@ class UrlsWidget(MultilineWidget):
         self.link_labels = []
         urls = self.urls()
         for index, url in enumerate(urls):
-            label = ttk.Label(self.links_box, text=url + (THE_LINK if index == 0 else ""), style="Link.TLabel",
+            label = ttk.Label(self.links_box, text=link_text(url, index, self.hosts), style="Link.TLabel",
                               cursor="hand2")
             label.pack(anchor="w")
             label.bind("<Button-1>", lambda e, u=url: self.open_url(u))

@@ -12,6 +12,10 @@ no Jira ticket prints ``no ticket attached`` in its Jira key cell, which the imp
 0.21.0, the owner: "turn the name of the safety deliverable into a clickable URL". The Safety Deliverables cell
 of a row that has a URL is itself a hyperlink to the first one (the Hyperlink style), beside the Work product
 column; the import reads its text as before.
+
+0.22.0 (Phase A of the Confluence integration plan): the Work product cell's text is the first URL's kind and
+host (``Confluence, asirobots.atlassian.net``; a placeholder row reads ``placeholder``), so a reviewer sees at a
+glance which deliverables still point nowhere; the hyperlink is the first URL as before.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from ..errors import NotFound
 from ..schema import EntitySchema, FieldType
 from ..schema.definitions import NO_TICKET, WORK_PRODUCT_HEADER
 from ..schema.fields import json_text
-from ..schema.urls import first_url, url_host, urls_lines
+from ..schema.urls import first_url, kind_label, urls_lines
 from ..version import SCHEMA_VERSION, __version__
 
 if TYPE_CHECKING:
@@ -158,7 +162,7 @@ class ExcelExporter(Exporter):
                         link = first_url(row.get("urls"))
                         if not link:
                             continue
-                        cell.value = url_host(link)
+                        cell.value = kind_label(link, brain.url_hosts)  # 0.22.0: the kind and the host
                         cell.hyperlink = link
                         cell.style = "Hyperlink"
                         widths[col - 1] = max(widths[col - 1], min(len(str(cell.value)), 60))

@@ -72,6 +72,8 @@ def build_parser(factory: CommandFactory | None = None) -> argparse.ArgumentPars
             if arg.flag:
                 if arg.multiple:
                     kwargs["action"] = "append"
+                if arg.nargs:  # `--replace <old> <new>`: exactly that many values, handed on as a list
+                    kwargs["nargs"] = arg.nargs
                 if arg.type == "bool":  # `--list` alone means true; `--list false` still works
                     kwargs["nargs"] = "?"
                     kwargs["const"] = True

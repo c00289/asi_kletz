@@ -70,3 +70,8 @@ tracker_jira_scope = "project HWL, open items I am assigned, reported or watchin
 # The floor in sprint points for a Safety Plan row that has neither its own points nor the estimation
 # panel's default (`plan weights load data/deliverable-points.json`). A TOML integer; default 2.
 default_points = 2
+
+# Optional (0.22.0): more work product URL kinds than the built-in five (confluence, jira, sharepoint,
+# placeholder, other), name = host or list of hosts (`*.` for a whole domain), so a pasted link is not mislabelled.
+# [urls]
+# hosts = { jama = "jama.example.com", dms = ["dms.example.com", "*.dms.example.org"] }
