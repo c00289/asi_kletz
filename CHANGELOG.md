@@ -12,6 +12,26 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.17.0] - 2026-10-29
+
+The owner, 2026-10-29, on the exported QF-17: "bring back the color formatting for parameters and make it
+a nice green, not neon, not forest ... please include the prefix before the colon of the assigned Jira
+ticket name stacked with a line break, with points at the top and the status at the bottom". Schema
+version unchanged (8). The lock takes asi_gutenberg 0.7.2 (the green `mark_bg`).
+
+### Added
+- **`row_N_jira_key`** (`services/standards_service.py:row_values`, `ROW_PARAM`): the deliverable's Jira key,
+  upper-cased, the part before a colon when one was typed; the QF-17 source (asi_standards, 2026-10-29,
+  later the same day) stacks it over `row_N_status` in the Status column, the points staying at the top of
+  the Expected Duration/Deadline cell beside. A row without a key leaves it unfilled, named with the status.
+
+### Changed
+- **The Word original is filled with marks** (`export`): `fill_docx(..., mark=True)`, so every filled value is
+  shaded the theme's green in the exact Word file and in Word's print of it, as the Markdown rendering
+  marks them; 0.16.0 wrote the Word file unmarked.
+- The table header repeating on every page ("the sticky columns") is unchanged since 0.16.0; an export made
+  from a window started before 0.16.0 does not have it, a relaunch does.
+
 ## [0.16.1] - 2026-10-29
 
 The family's integration review of 2026-10-29. Schema version unchanged (8). The lock takes asi_gutenberg
@@ -1503,7 +1523,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://example.invalid/asi-kletz/compare/v0.16.1...HEAD
+[Unreleased]: https://example.invalid/asi-kletz/compare/v0.17.0...HEAD
+[0.17.0]: https://example.invalid/asi-kletz/compare/v0.16.1...v0.17.0
 [0.16.1]: https://example.invalid/asi-kletz/compare/v0.16.0...v0.16.1
 [0.16.0]: https://example.invalid/asi-kletz/compare/v0.15.3...v0.16.0
 [0.15.3]: https://example.invalid/asi-kletz/compare/v0.15.2...v0.15.3

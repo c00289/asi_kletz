@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from ..brain import Brain
 
 PARAMETER = "parameter"
-ROW_PARAM = re.compile(r"^row_(\d+)_(points|sprint_end|status)$")
+ROW_PARAM = re.compile(r"^row_(\d+)_(points|sprint_end|jira_key|status)$")
 PARAM_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 UNFILLED = "unfilled parameter: "
 NO_STANDARD = "No standard for this deliverable: its QMS references name none in {root}"
@@ -51,7 +51,7 @@ class Standard:
 
     @property
     def row_parameters(self) -> list[str]:
-        """The names Kletz supplies: ``row_N_points``, ``row_N_sprint_end``, ``row_N_status``."""
+        """The names Kletz supplies: ``row_N_points``, ``row_N_sprint_end``, ``row_N_jira_key``, ``row_N_status``."""
         return [p for p in self.parameters if ROW_PARAM.match(p)]
 
     def to_dict(self) -> dict[str, Any]:
@@ -142,13 +142,16 @@ class StandardsService:
     def row_values(
         self, rows: list[dict[str, Any]], statuses: dict[str, str | None], warnings: list[str] | None = None
     ) -> dict[str, str]:
-        """``row_N_points``, ``row_N_sprint_end``, ``row_N_status`` for every plan row that has an order.
+        """``row_N_points``, ``row_N_sprint_end``, ``row_N_jira_key``, ``row_N_status`` for every plan row that
+        has an order.
 
         The points are the weight the schedule used for the row, as ``plan_schedule.weight_of`` resolves it
         (the owner's revision of 2026-10-29): the chosen ``points`` when set, else the row's
         ``default_points``; only a row with neither (the scheduler fell back to the floor) stays unfilled,
         with one warning naming the rows. So the points and the sprint end printed under them agree. The
-        status is the Jira status of the row's key; absent when unknown.
+        status is the Jira status of the row's key; absent when unknown. The key is the row's ``jira_key``
+        upper-cased, the part before a colon when one was typed (the owner, 2026-10-29: "the prefix before
+        the colon of the assigned Jira ticket name", stacked over the status in the Status column).
         """
         values: dict[str, str] = {}
         floored: list[str] = []
@@ -164,6 +167,8 @@ class StandardsService:
             if row.get("sprint_end"):
                 values[f"row_{order}_sprint_end"] = str(row["sprint_end"])
             key = (row.get("jira_key") or "").strip().upper()
+            if key:
+                values[f"row_{order}_jira_key"] = key.split(":", 1)[0].strip()
             if key and statuses.get(key):
                 values[f"row_{order}_status"] = str(statuses[key])
         if floored and warnings is not None:
@@ -216,8 +221,9 @@ class StandardsService:
 
         The Markdown is always written (the filled source, its values marked). When the standard's folder
         holds the Word original under ``source/`` (0.16.0, the owner: "match the template exactly"), the
-        Word file is that original filled in place, every table's first row repeating per page, and the
-        PDF is Word's own print of it; without an original, or when Word cannot print, the PDF and Word
+        Word file is that original filled in place, every filled value shaded the theme's green (0.17.0, the
+        owner: "bring back the color formatting for parameters"), every table's first row repeating per
+        page, and the PDF is Word's own print of it; without an original, or when Word cannot print, the PDF and Word
         file are Gutenberg's renderings of the source, as before, and a warning says so for the PDF."""
         from asi_gutenberg import build, fill_docx, from_markdown
 
@@ -241,7 +247,7 @@ class StandardsService:
             if std.get("template"):
                 filled = fill_docx(
                     std["template"], source, std["values"], str(target / f"{std['folder']}.docx"),
-                    strict=False, mark=False, pdf=True,
+                    strict=False, mark=True, pdf=True,
                 )
                 files["docx"] = filled.docx
                 exact["docx"] = True

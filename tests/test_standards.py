@@ -24,8 +24,8 @@ Author: {{ fusa_engineer }}
 
 | Deliverable | Expected Duration/Deadline | Status |
 | :--- | :--- | :--- |
-| Safety Plan | {{ row_1_points }} points<br>{{ row_1_sprint_end }} | {{ row_1_status }} |
-| HARA | {{ row_2_points }} points<br>{{ row_2_sprint_end }} | {{ row_2_status }} |
+| Safety Plan | {{ row_1_points }} points<br>{{ row_1_sprint_end }} | {{ row_1_jira_key }}<br>{{ row_1_status }} |
+| HARA | {{ row_2_points }} points<br>{{ row_2_sprint_end }} | {{ row_2_jira_key }}<br>{{ row_2_status }} |
 """
 
 
@@ -78,8 +78,8 @@ def test_standards_list_reads_the_folder(seeded, standards):
     assert result.data["standards_dir"] == str(standards)
     [std] = result.data["standards"]
     assert std["folder"] == "qf-17-test" and std["title"] == "{{ vehicle_type }} Safety Plan (test)"
-    assert std["document_parameters"] == ["fusa_engineer", "vehicle_type"] and std["row_parameters"] == 6
-    assert std["parameters"] == 8 and Path(std["path"]).name == "qf-17-test.md"
+    assert std["document_parameters"] == ["fusa_engineer", "vehicle_type"] and std["row_parameters"] == 8
+    assert std["parameters"] == 10 and Path(std["path"]).name == "qf-17-test.md"
     assert qms_slug("ref_qf_17") == "qf_17" and folder_names("qf-17-safety-plan", "qf_17")
     assert folder_names("QF-17", "qf_17") and not folder_names("qf-170-x", "qf_17")
     assert not folder_names("qp-17", "qf_17")
@@ -135,10 +135,11 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
     [std] = preview.data["standards"]
     assert std["values"] == {
         "vehicle_type": "Wheel Loader", "fusa_engineer": "the contractor",
-        "row_1_points": "5", "row_1_sprint_end": "2026-11-09", "row_1_status": "In Progress",
+        "row_1_points": "5", "row_1_sprint_end": "2026-11-09", "row_1_jira_key": "HWL-2554",
+        "row_1_status": "In Progress",
         "row_2_points": "3", "row_2_sprint_end": "2026-11-09",  # row 2: the panel's default, the weight used
     }
-    assert std["filled"] == 7 and std["unfilled"] == ["row_2_status"]
+    assert std["filled"] == 8 and std["unfilled"] == ["row_2_jira_key", "row_2_status"]
     assert preview.data["statuses"] == {"HWL-2554": "In Progress"} and stub.calls == ["HWL-2554"] and stub.closed
     assert any("row(s) 2, 3 have no Jira key" in w for w in preview.warnings)
 
@@ -146,12 +147,13 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
     result = seeded.execute("plan", action="export", row=1, out=str(out), actor="me")
     assert result.ok, result.errors
     [built] = result.data["exports"]
-    assert built["standard"] == "qf-17-test" and built["filled"] == 7
-    assert built["unfilled"] == ["row_2_status"]
+    assert built["standard"] == "qf-17-test" and built["filled"] == 8
+    assert built["unfilled"] == ["row_2_jira_key", "row_2_status"]
     assert set(built["files"]) == {"md", "pdf", "docx"} and all(Path(p).is_file() for p in built["files"].values())
     assert Path(built["primary"]).name == "qf-17-test.pdf" and built["pages"]
     text = Path(built["files"]["md"]).read_text(encoding="utf-8")
     for mark in ("==Wheel Loader==", "==the contractor==", "==5== points", "==2026-11-09==", "==In Progress==",
+                 "==HWL-2554==<br>",
                  "==3== points"):
         assert mark in text, mark
     assert "{{ row_2_points }}" not in text and "{{ row_2_status }}" in text  # the default is the weight used

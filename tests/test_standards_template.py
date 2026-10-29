@@ -13,6 +13,15 @@ from tests.conftest import PLAN, SEED_WEIGHTS
 from tests.test_standards import _stub, standards_dir
 
 WINWORD = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Microsoft Office/root/Office16/WINWORD.EXE"
+GREEN = "A0D8A0"  # asi_gutenberg 0.7.2 THEME["mark_bg"], the owner's "nice green, not neon, not forest"
+
+
+def _fill_of(run) -> str | None:
+    from docx.oxml.ns import qn
+
+    rpr = run._r.find(qn("w:rPr"))
+    shd = rpr.find(qn("w:shd")) if rpr is not None else None
+    return shd.get(qn("w:fill")) if shd is not None else None
 PARAMETERS = ({"name": "vehicle_type", "value": "Wheel Loader"}, {"name": "fusa_engineer", "value": "the contractor"})
 
 
@@ -35,8 +44,8 @@ def _original(path: Path) -> Path:
     t.style = "Table Grid"
     for c, h in enumerate(("Deliverable", "Expected Duration/Deadline", "Status")):
         t.cell(0, c).text = h
-    t.cell(1, 0).text, t.cell(1, 1).text, t.cell(1, 2).text = "Safety Plan", "__ points\n__________", "_____"
-    t.cell(2, 0).text, t.cell(2, 1).text, t.cell(2, 2).text = "HARA", "__ points\n__________", "_____"
+    t.cell(1, 0).text, t.cell(1, 1).text, t.cell(1, 2).text = "Safety Plan", "__ points\n__________", "___\n_____"
+    t.cell(2, 0).text, t.cell(2, 1).text, t.cell(2, 2).text = "HARA", "__ points\n__________", "___\n_____"
     d.sections[0].footer.paragraphs[0].text = "Proprietary & Confidential"
     path.parent.mkdir(parents=True, exist_ok=True)
     d.save(str(path))
@@ -73,11 +82,18 @@ def test_export_fills_the_word_original_when_the_standard_has_one(seeded, standa
     table = word.tables[0]
     assert table.style.name == "Table Grid" and table.rows[0]._tr.find(".//" + qn("w:tblHeader")) is not None
     assert [p.text for p in table.cell(1, 1).paragraphs] == ["5 points", "2026-11-09"]
-    assert table.cell(1, 2).text == "In Progress"
+    assert [p.text for p in table.cell(1, 2).paragraphs] == ["HWL-2554", "In Progress"]  # the key over the status
     assert [p.text for p in table.cell(2, 1).paragraphs] == ["3 points", "2026-11-09"]
-    assert table.cell(2, 2).text == "{{ row_2_status }}"  # unfilled stays, as the Markdown's does
+    unfilled_cell = [p.text for p in table.cell(2, 2).paragraphs]
+    assert unfilled_cell == ["{{ row_2_jira_key }}", "{{ row_2_status }}"]  # unfilled stays
     assert word.sections[0].footer.paragraphs[0].text == "Proprietary & Confidential"
-    assert "==" not in word.paragraphs[0].text  # the template exactly: no marks in the Word file
+    assert "==" not in word.paragraphs[0].text  # a mark is shading on the run, never text in the Word file
+    green = GREEN
+    shaded = [r.text for p in word.paragraphs for r in p.runs if _fill_of(r) == green]
+    assert shaded == ["Wheel Loader", "the contractor"]  # 0.17.0: the filled values shaded the theme's green
+    status_runs = [r.text for p in table.cell(1, 2).paragraphs for r in p.runs if _fill_of(r) == green]
+    assert status_runs == ["HWL-2554", "In Progress"]
+    assert not any(_fill_of(r) == green for r in author.runs[:1])  # the template's own text is not
     assert "==Wheel Loader==" in Path(built["files"]["md"]).read_text(encoding="utf-8")  # the source keeps them
     if WINWORD.is_file():
         assert built["exact"]["pdf"] is True and Path(built["files"]["pdf"]) == out / "qf-17-test.pdf"

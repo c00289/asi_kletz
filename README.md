@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.16.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.17.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -419,8 +419,10 @@ file; `$ASI_KLETZ_STANDARDS` overrides it; `status` reports it). Two kinds of pa
   `points` when set, else the row's `default_points`, exactly as the scheduler's `weight_of` resolves it,
   so the points and the sprint end under them agree; a row with neither stays unfilled, with one warning
   naming the rows); `row_N_sprint_end`, the date the owning sprint concludes;
-  `row_N_status`, the live status of the deliverable's Jira ticket (`jira_key`), read once per distinct key
-  through asi_hopper, non-interactively; a row without a key, or no session, leaves the blank with one
+  `row_N_jira_key`, the deliverable's Jira key (`jira_key` upper-cased, the part before a colon when one was
+  typed; 0.17.0, the owner: "the prefix before the colon of the assigned Jira ticket name", stacked over the
+  status in the QF-17 Status column); `row_N_status`, the live status of that ticket, read once per distinct
+  key through asi_hopper, non-interactively; a row without a key, or no session, leaves the blank with one
   warning naming what was skipped.
 
 A plan row *has* a standard when one of its QMS reference flags names the folder: `ref_qf_17` set names a
@@ -444,7 +446,9 @@ folder is the configuration's `out`.
 folder holds exactly one `.docx` under `source/` (the controlled original, preserved byte for byte in
 asi_standards), the Word file written is that original filled in place by asi_gutenberg 0.7.0's `fill_docx`:
 every style, header, footer, table, column width and page orientation the template's, every table's first
-row repeating at the top of each page, the text changed only where the source changed it, no marks. The PDF
+row repeating at the top of each page, the text changed only where the source changed it, every filled value
+shaded green (asi_gutenberg 0.7.2 `mark_bg`; 0.17.0, the owner: "bring back the color formatting for
+parameters, a nice green, not neon, not forest"). The PDF
 is Word's own print of that file (Windows with Word installed); when Word cannot print, the PDF stays
 Gutenberg's rendering and a warning says so. Without an original the PDF and the Word file are Gutenberg's
 renderings, their filled values highlighted in mint. Each export entry says which it was (`exact`:
