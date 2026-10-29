@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.18.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.18.1**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,17 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.18.1
+
+The owner, 2026-10-29: the window "crashed for the first time", twice in an afternoon, and left nothing
+in the terminal either time. A window that ends now says why: `gui.log` beside the preferences file
+(`%LOCALAPPDATA%\asi\kletz\gui.log`; `$ASI_KLETZ_PREFS` moves both) records every start (pid, version,
+server on or off), every close with the caller that asked for it (Ctrl+Q, the close box, the automation
+server's `/quit`, or code), the moment the main loop returns and any exception that escapes it; Python's
+`faulthandler` is enabled on the same file, so a hard crash inside Tk writes the stack of every thread
+there before the process dies. The file rolls to `gui.log.1` above a megabyte. Paste its tail when a
+window vanishes.
 
 ## What is in 0.18.0
 

@@ -21,10 +21,18 @@ def launch(brain: Brain, interactive: bool = True, theme: str | None = None, ser
     ``server=False`` (``--no-server``) opens it without the local automation server; so does
     ``ASI_KLETZ_AUTOMATION=off``.
     """
+    from . import trace
     from .main_window import MainWindow
 
     window = MainWindow(brain, interactive=interactive, theme=theme, server=server)
-    window.mainloop()
+    try:
+        window.mainloop()
+    except BaseException as exc:  # noqa: BLE001  (noted, then raised: the trace is the point)
+        trace.note("exception", kind=type(exc).__name__, text=exc)
+        raise
+    finally:
+        trace.note("mainloop returned", closed=window._closed)
+        trace.stop()
 
 
 def ask_retry(exc: PrimaryToolBusy) -> bool:

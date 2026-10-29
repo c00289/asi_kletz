@@ -30,6 +30,7 @@ from ..commands import Result
 from ..locks import lock_dir
 from ..prefs import prefs_path, prefs_problem, read_prefs
 from ..version import __version__
+from . import trace
 from .jira_comments_window import JiraCommentsWindow
 from .screens import Screen, ScreenFactory, build_default_screens
 from .theme import Theme, ThemeFactory
@@ -117,6 +118,7 @@ class MainWindow(tk.Tk):
         self._build_menu()
         self._build_body()
         self._bind_keys()
+        trace.start(__version__, server=server)  # gui.log beside the preferences: why a window ends (0.18.1)
         self.protocol("WM_DELETE_WINDOW", self.close)
         self._handler = self.brain.events.subscribe("*", self._on_event)
         self.show("dashboard" if "dashboard" in self.factory else self.factory.items()[0][0])
@@ -483,6 +485,7 @@ class MainWindow(tk.Tk):
         if self._closed:
             return
         self._closed = True
+        trace.note("close", via=trace.caller())
         self.brain.events.unsubscribe("*", self._handler)
         self._cancel_refresh()
         if self.server is not None:  # before destroy(): a request in flight gets its 504, not a dead window
@@ -492,3 +495,4 @@ class MainWindow(tk.Tk):
             self.server = None
             clear_session()
         self.destroy()
+        trace.note("destroyed")

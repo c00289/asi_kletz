@@ -12,6 +12,21 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.18.1] - 2026-10-29
+
+The owner, 2026-10-29: "kletz just crashed for the first time", then again while saving a pasted
+parameter; both times the terminal showed nothing and the audit log only that the save had not landed.
+Headless replays of the save (plain, multi-line, tab, emoji, long, surrogate, quoted strings) all survive.
+Schema version unchanged (8).
+
+### Added
+- **`gui.log`, the window's trace** (`gui/trace.py`, `MainWindow.__init__` / `close`, `app.launch`): beside
+  the preferences file, every start (pid, version, server on or off, the arguments), every `close()` with
+  the three frames that asked for it, the main loop's return and any exception escaping it; Python's
+  `faulthandler` is enabled on the same file (all threads), so an access violation or abort inside Tk
+  leaves the Python stacks there. Rolls to `gui.log.1` above a megabyte. A folder that cannot be written
+  is skipped silently: the window opens regardless.
+
 ## [0.18.0] - 2026-10-29
 
 The owner, 2026-10-29: "what we know as sprint 3 is actually sprint 31, renumber appropriately, and then ensure that sprints always go Tuesday to Tuesday; this supersedes anything I said before; I also included a picture from systems engineering that is law for our sprints." The picture, a strip of seven sprints: 31 10/27 to 11/9, 32 11/10 to 11/23,
@@ -1590,7 +1605,9 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://example.invalid/asi-kletz/compare/v0.17.0...HEAD
+[Unreleased]: https://example.invalid/asi-kletz/compare/v0.18.1...HEAD
+[0.18.1]: https://example.invalid/asi-kletz/compare/v0.18.0...v0.18.1
+[0.18.0]: https://example.invalid/asi-kletz/compare/v0.17.0...v0.18.0
 [0.17.0]: https://example.invalid/asi-kletz/compare/v0.16.1...v0.17.0
 [0.16.1]: https://example.invalid/asi-kletz/compare/v0.16.0...v0.16.1
 [0.16.0]: https://example.invalid/asi-kletz/compare/v0.15.3...v0.16.0
