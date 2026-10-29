@@ -125,6 +125,7 @@ class PlanScheduleService:
                 "id": row["id"], "order": row.get("order"),
                 "deliverable": pq.one_line(row.get("deliverable") or "", 60),
                 "points": row.get("points"), "default_points": row.get("default_points"), "weight": weight,
+                "committed": result.committed.get(row["id"], 0),
                 "source": source, "sprint": row.get("sprint"), "sprint_start": row.get("sprint_start"),
                 "sprint_end": row.get("sprint_end"), "deadline": row.get("deadline"), "status": row.get("status"),
             })

@@ -61,9 +61,37 @@ def test_a_deliverable_spans_sprints_and_ends_in_the_last_one():
 
 
 def test_a_committed_item_pins_the_start():
-    items = [{"kind": "Deliverable", "plan_row": 2, "sprint": 4, "points": 2, "status": "To Do"}]
+    items = [{"kind": "Deliverable", "plan_row": 2, "sprint": 4, "points": None, "status": "To Do"}]
     result = schedule([_row(1, points=2), _row(2, points=2), _row(3, points=2)], SPRINTS, items, 2)
     assert result.assignments == {1: (2, "2026-11-10"), 2: (4, "2027-01-04"), 3: (2, "2026-11-10")}
+    assert result.committed == {1: 0, 2: 0, 3: 0}  # an unpointed item pins and commits nothing
+
+
+def test_own_items_are_the_committed_part_of_the_weight():
+    """The owner's rule (0.11.4): the item's points are the part of the deliverable already committed."""
+    from asi_kletz.generate.plan_schedule import committed_points, own_items, pins
+
+    items = [
+        {"kind": "Deliverable", "plan_row": 1, "sprint": 3, "points": 4, "status": "To Do"},
+        {"kind": "Deliverable", "plan_row": 2, "sprint": 4, "points": 4, "status": "In Progress"},
+        {"kind": "Deliverable", "plan_row": 3, "sprint": 2, "points": 3, "status": "Done"},
+        {"kind": "Deliverable", "plan_row": 3, "sprint": 3, "points": 1, "status": "To Do"},
+        {"kind": "Deliverable", "plan_row": 4, "sprint": 1, "points": 2, "status": "Carried"},  # a trace: ignored
+        {"kind": "Jira", "plan_row": 4, "sprint": 2, "points": 5, "status": "To Do"},  # not a deliverable's own
+        {"kind": "Deliverable", "plan_row": 5, "sprint": 1, "points": 6, "status": "Done"},  # a Closed sprint
+    ]
+    assert [i["plan_row"] for i in own_items(items)] == [1, 2, 3, 3, 5]
+    assert committed_points(items) == {1: 4, 2: 4, 3: 4, 5: 6}
+    assert pins(items) == {1: 3, 2: 4, 3: 3, 5: 1} and pins(items, {2, 3, 4, 5}) == {1: 3, 2: 4, 3: 3}
+    # Sprint 2 is full (3 + 5 committed), Sprint 3 has 3 free (8 minus 4 minus 1), Sprint 4 has 4 (8 minus 4)
+    rows = [_row(1, points=7), _row(2, points=4), _row(3, points=10), _row(5, points=6)]
+    result = schedule(rows, SPRINTS, items, 2)
+    assert result.committed == {1: 4, 2: 4, 3: 4, 5: 6}
+    assert result.assignments[1] == (3, "2027-01-03")  # 7 with a 4-point item: the 3 left fit Sprint 3, done there
+    assert result.assignments[2] == (4, "2027-01-04")  # fully committed: it finishes where its item is
+    assert result.assignments[3] == (5, "2027-01-05")  # two items, two sprints: 6 left from Sprint 3 on (4 + 2)
+    assert result.assignments[5] == (1, "2026-10-27")  # fully committed in a Closed sprint: finishes there
+    assert result.warnings == []
 
 
 def test_done_keeps_its_own_and_the_excluded_get_nothing():
@@ -152,12 +180,12 @@ def test_every_write_recomputes_and_the_rows_carry_the_answer(planned):
     assert planned.execute("create", entity=ITEM, data={
         "sprint": 3, "kind": "Deliverable", "plan_row": 2, "title": "Hazard analysis", "points": 4, "status": "To Do",
     }).ok
-    # the item's 4 points also count against Sprint 3's capacity, so 7 points end in Sprint 4 (open question 1)
-    assert _plan(planned)[2][2:] == (4, "2026-12-08") and _plan(planned)[3][2:] == (2, "2026-11-10")
-    # closing Sprint 2 moves everything after it: row 3's two points now land in Sprint 4 behind row 2
+    # the item's 4 points are the committed part of the 7 (0.11.4): the 3 left fit Sprint 3 beside the item
+    assert _plan(planned)[2][2:] == (3, "2026-11-24") and _plan(planned)[3][2:] == (2, "2026-11-10")
+    # closing Sprint 2 moves everything after it: Sprint 3 has one point left after row 2, row 3 spills into 4
     closed = planned.execute("sprint", action="close", as_of="2026-11-10")
     assert closed.ok, closed.errors
-    assert _plan(planned)[2][2:] == (4, "2026-12-08") and _plan(planned)[3][2:] == (4, "2026-12-08")
+    assert _plan(planned)[2][2:] == (3, "2026-11-24") and _plan(planned)[3][2:] == (4, "2026-12-08")
     # the planner's new sprints and a replan recompute too; a second recompute changes nothing
     assert planned.execute("sprint", action="plan", until="2027-01-31").ok
     before = len(planned.storage.audit_tail(50))
@@ -169,8 +197,8 @@ def test_every_write_recomputes_and_the_rows_carry_the_answer(planned):
     assert result.ok and _plan(planned)[3][2:] == (None, None) and result.data["unscheduled"] == [3]
     assert result.warnings and "run sprint plan" in result.warnings[0]
     table = result.data["rows"]
-    assert [(r["id"], r["weight"], r["source"], r["sprint"]) for r in table] == [
-        (1, 0, "done", None), (2, 7, "points", 4), (3, 90, "points", None),
+    assert [(r["id"], r["weight"], r["committed"], r["source"], r["sprint"]) for r in table] == [
+        (1, 0, 0, "done", None), (2, 7, 4, "points", 3), (3, 90, 0, "points", None),
     ]
     # the recompute only touches rows whose answer moved: a delete of the item frees Sprint 3
     item = planned.execute("list", entity=ITEM, filter=["plan_row=2"]).data[0]

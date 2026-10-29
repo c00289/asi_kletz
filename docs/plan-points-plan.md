@@ -230,8 +230,10 @@ README.md, CHANGELOG.md, docs/plan.md, pyproject.toml, docs/plan-points-plan.md 
 
 ## 8. Open questions
 
-- Should a Deliverable sprint item's points be subtracted from the deliverable's remaining weight instead of
-  from the sprint's capacity (no double count)? Owner's call after the first schedule is read.
+- ~~Should a Deliverable sprint item's points be subtracted from the deliverable's remaining weight instead of
+  from the sprint's capacity (no double count)?~~ Answered 2026-10-28 (asi_kletz 0.11.4): the item's points
+  are the part of the deliverable already committed; they come off its weight, the remainder pours from the
+  last sprint holding one of its items, and the items' points reduce their sprints' capacity once.
 - Should the dashboard's open table show `sprint`? Not in 0.11.0.
 - Should `plan schedule --as-of` schedule from a date rather than from the Active sprint? Not in 0.11.0.
 
@@ -240,3 +242,5 @@ README.md, CHANGELOG.md, docs/plan.md, pyproject.toml, docs/plan-points-plan.md 
 - 2026-10-28: written, decided.
 - 2026-10-28: implemented as asi_kletz 0.11.0 in four commits (one per phase); every deviation and what the
   design got wrong once it met the code are in `CHANGELOG.md`, section `[0.11.0]`.
+- 2026-10-28: open question 1 answered by the owner and implemented as asi_kletz 0.11.4 (the committed-item
+  double count: a deliverable's own items are the committed part of its weight).

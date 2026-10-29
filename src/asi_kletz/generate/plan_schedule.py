@@ -29,6 +29,7 @@ class Schedule:
     spans: dict[int, tuple[str | None, str | None]] = field(default_factory=dict)  # row id -> the sprint's (start, end)
     sources: dict[int, str] = field(default_factory=dict)  # row id -> where its weight came from
     weights: dict[int, int] = field(default_factory=dict)  # row id -> the weight used
+    committed: dict[int, int] = field(default_factory=dict)  # row id -> points already committed as its own items
     warnings: list[str] = field(default_factory=list)
 
 
@@ -58,17 +59,36 @@ def free_capacity(sprint: dict[str, Any], items: Iterable[dict[str, Any]]) -> in
     return max(0, capacity_of(sprint) - committed(own))
 
 
-def pins(items: Iterable[dict[str, Any]], numbers: set[int]) -> dict[int, int]:
-    """``{plan row id: sprint number}``: a deliverable with a sprint item (kind Deliverable) in sprint n of the
-    chain never finishes before n; the highest such n wins."""
+def own_items(items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A deliverable's own sprint items: kind Deliverable, pointing at a plan row, not Carried (the copy left
+    behind by a carry is a trace, the item itself lives on in the next sprint)."""
+    return [
+        i for i in items
+        if i.get("kind") == "Deliverable" and i.get("plan_row") and i.get("status") != "Carried"
+    ]
+
+
+def pins(items: Iterable[dict[str, Any]], numbers: set[int] | None = None) -> dict[int, int]:
+    """``{plan row id: sprint number}``: the last sprint that holds one of the deliverable's own items (any
+    sprint when ``numbers`` is None, else sprints of the chain only); a deliverable never finishes before it."""
     out: dict[int, int] = {}
-    for item in items:
-        if item.get("kind") != "Deliverable" or not item.get("plan_row") or item.get("status") == "Carried":
-            continue
+    for item in own_items(items):
         number = item.get("sprint")
-        if number in numbers:
+        if number is None or (numbers is not None and number not in numbers):
+            continue
+        row_id = int(item["plan_row"])
+        out[row_id] = max(out.get(row_id, 0), int(number))
+    return out
+
+
+def committed_points(items: Iterable[dict[str, Any]]) -> dict[int, int]:
+    """``{plan row id: points}``: the part of each deliverable already committed as its own sprint items (any
+    sprint, any status but Carried; an unpointed item commits nothing). The owner's rule, 2026-10-28."""
+    out: dict[int, int] = {}
+    for item in own_items(items):
+        if item.get("points"):
             row_id = int(item["plan_row"])
-            out[row_id] = max(out.get(row_id, 0), int(number))
+            out[row_id] = out.get(row_id, 0) + int(item["points"])
     return out
 
 
@@ -80,13 +100,21 @@ def schedule(
     A Done row keeps what it has (absent from ``assignments``); Blocked, Alternative and Out-of-Scope get
     ``(None, None)``; every other row gets the number of the sprint its last point lands in and that sprint's
     ``end``, or ``(None, None)`` and a warning when the chain runs out.
+
+    The points of a deliverable's own sprint items are the part of it already committed (0.11.4): they come
+    off its weight, the remainder pours from the last sprint that holds one of its items onward, and the
+    items' points reduce their sprints' free capacity once, as any committed item's do. A remainder of 0
+    finishes in that last sprint, Closed or not.
     """
     items = list(items)
     line = chain(sprints)
     free = [free_capacity(s, items) for s in line]
     numbers = {int(s["number"]) for s in line}
     index_of = {int(s["number"]): i for i, s in enumerate(line)}
+    by_number = {int(s["number"]): s for s in sprints if s.get("number") is not None}
     pinned = pins(items, numbers)
+    held = pins(items)  # the last sprint holding one of the deliverable's items, Closed ones included
+    committed = committed_points(items)
     out = Schedule()
     for row in rows:
         row_id = int(row["id"])
@@ -101,7 +129,13 @@ def schedule(
             continue
         weight, source = weight_of(row, floor)
         out.weights[row_id], out.sources[row_id] = weight, source
-        remaining = weight
+        out.committed[row_id] = committed.get(row_id, 0)
+        remaining = max(0, weight - out.committed[row_id])
+        if remaining == 0 and row_id in held:  # fully committed: it finishes where its last item is
+            sprint = by_number[held[row_id]]
+            out.assignments[row_id] = (int(sprint["number"]), sprint.get("end") or None)
+            out.spans[row_id] = (sprint.get("start") or None, sprint.get("end") or None)
+            continue
         first_free = next((i for i, f in enumerate(free) if f > 0), len(line))
         pointer = max(first_free, index_of.get(pinned.get(row_id, -1), 0))
         finished: int | None = None
