@@ -1987,3 +1987,81 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
     assert screen.standard_var.get() == SELECT_A_ROW and str(screen.export_button.cget("state")) == "disabled"
     screen.export_document()
     assert window.status_text() == "Select a deliverable with a standard to export"
+
+
+# -- the Jira ticket picker on every work product (0.15.0) ----------------------------------------------------
+
+
+def test_jira_picker_filters_stores_the_key_and_shows_the_status(window, seeded):
+    from asi_kletz.gui.widgets import LOAD_TICKETS, NOT_IN_LIST, JiraPickerWidget
+
+    screen = window.show("safety_plan")
+    picker = screen.widgets["jira_key"]
+    assert isinstance(picker, JiraPickerWidget) and picker.load_button.cget("text") == LOAD_TICKETS
+    assert list(picker.combo["values"]) == [] and picker.get() is None  # nothing fetched: an entry with a list
+    picker.set("HWL-7")  # a key not in any list is free text
+    assert picker.get() == "HWL-7" and picker.status_var.get() == ""
+    window.jira_live = Result.success(SAMPLE, verb="jira")  # what a fetch leaves on the window
+    screen.feed_pickers()
+    assert list(picker.combo["values"]) == [
+        "HWL-9  Brake test plan", "HWL-10  E-stop guard missing", "HWL-100  Loss scenarios",
+        "HWL-2  Old brake issue", "HWL-33  Hazard list review",
+    ]
+    assert picker.status_var.get() == NOT_IN_LIST  # HWL-7 is not among them
+    assert picker.filter("brake") == ["HWL-9  Brake test plan", "HWL-2  Old brake issue"]  # summary, any case
+    assert picker.filter("hwl-1") == ["HWL-10  E-stop guard missing", "HWL-100  Loss scenarios"]  # key
+    assert picker.filter("") == picker.filter("   ") and len(picker.filter("")) == 5
+    picker.set("HWL-10  E-stop guard missing")  # what a pick puts in the box
+    picker.picked()
+    assert picker.get() == "HWL-10" and picker.var.get() == "HWL-10" and picker.status_var.get() == "In Progress"
+    picker.set("hwl-9")
+    assert picker.get() == "HWL-9" and picker.status_var.get() == "Done"
+    picker.set("")
+    assert picker.get() is None and picker.status_var.get() == ""
+    # through the form: a picked key saves on the row, a cleared box clears it
+    screen.select(2)
+    picker.set("HWL-100")
+    screen.save()
+    assert seeded.execute("get", entity=PLAN, id=2).data["jira_key"] == "HWL-100"
+    assert screen.tree.set("2", "jira_key") == "HWL-100"  # the table column, unchanged in kind
+    screen.select(2)
+    assert picker.var.get() == "HWL-100" and picker.status_var.get() == "To Do"
+    picker.set("")
+    screen.save()
+    assert seeded.execute("get", entity=PLAN, id=2).data["jira_key"] is None
+
+
+def test_load_tickets_runs_the_live_fetch_once_and_fills_the_picker(window, live, seeded):
+    screen = window.show("safety_plan")
+    picker = screen.widgets["jira_key"]
+    assert window.jira_live is None and list(picker.combo["values"]) == []
+    live.gate = threading.Event()  # hold the worker, so the fetch in flight can be looked at
+    assert screen.load_tickets() and screen.ticket_loader.fetching and "disabled" in picker.load_button.state()
+    assert screen.load_tickets() is False  # a second press while one runs is ignored
+    assert live.started.wait(5.0)
+    live.gate.set()
+    result = screen.ticket_loader.wait_fetch()
+    assert result.ok and live.calls == {"live": 1, "comments": 0, "login": 0}
+    assert live.threads[0] is not threading.main_thread()  # on the worker, through execute_quiet
+    assert window.jira_live is result and len(picker.combo["values"]) == 5
+    assert "disabled" not in picker.load_button.state() and not screen.ticket_loader.fetching
+    assert window.status_text() == "Jira: 5 tickets loaded; pick one per deliverable"
+    live_screen = window.show("jira_live")  # the same Result: the live screen paints it without a fetch
+    assert len(_keys(live_screen)) == 5 and live.calls["live"] == 1
+    window.show("safety_plan")
+    assert len(screen.widgets["jira_key"].combo["values"]) == 5
+
+
+def test_load_tickets_signs_in_on_a_rejected_session_like_refresh(window, live, seeded):
+    screen = window.show("safety_plan")
+    live.live_failures = [NO_SESSION]
+    assert screen.load_tickets()
+    result = screen.ticket_loader.wait_fetch()
+    assert result.ok and live.calls == {"live": 2, "login": 1, "comments": 0}  # rejected, signed in, fetched
+    assert len(screen.widgets["jira_key"].combo["values"]) == 5 and not screen.ticket_loader._login_tried
+    live.live_failures = [NO_SESSION, NO_SESSION]  # a second rejection in the same press: offline, no loop
+    assert screen.load_tickets()
+    result = screen.ticket_loader.wait_fetch()
+    assert not result.ok and live.calls == {"live": 4, "login": 2, "comments": 0}
+    assert window.status_text().startswith("Error: no Atlassian session")
+    assert len(screen.widgets["jira_key"].combo["values"]) == 5  # the earlier rows stay

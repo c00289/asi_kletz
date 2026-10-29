@@ -111,6 +111,7 @@ class FieldSpec:
     readonly: bool = False
     source: bool = True
     default_from: str | None = None
+    picker: str | None = None  # the form's widget for this field: "jira" picks a ticket from the last live fetch
 
     def __post_init__(self) -> None:
         if not self.name.isidentifier() or self.name.startswith("_"):

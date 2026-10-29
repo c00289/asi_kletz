@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..errors import CommandError, NotFound, ValidationError
 from ..generate import plan_queries as pq
+from ..generate.plan_schedule import SOURCE_FLOOR, weight_of
 
 if TYPE_CHECKING:
     from ..brain import Brain
@@ -134,21 +135,37 @@ class StandardsService:
                 values[row["name"]] = str(row["value"])
         return values
 
-    def row_values(self, rows: list[dict[str, Any]], statuses: dict[str, str | None]) -> dict[str, str]:
-        """``row_N_points`` (the chosen points, never the default), ``row_N_sprint_end``, ``row_N_status``
-        (the Jira status of the row's key) for every plan row that has an order; absent when unknown."""
+    def row_values(
+        self, rows: list[dict[str, Any]], statuses: dict[str, str | None], warnings: list[str] | None = None
+    ) -> dict[str, str]:
+        """``row_N_points``, ``row_N_sprint_end``, ``row_N_status`` for every plan row that has an order.
+
+        The points are the weight the schedule used for the row, as ``plan_schedule.weight_of`` resolves it
+        (the owner's revision of 2026-10-29): the chosen ``points`` when set, else the row's
+        ``default_points``; only a row with neither (the scheduler fell back to the floor) stays unfilled,
+        with one warning naming the rows. So the points and the sprint end printed under them agree. The
+        status is the Jira status of the row's key; absent when unknown.
+        """
         values: dict[str, str] = {}
+        floored: list[str] = []
         for row in rows:
             order = row.get("order")
             if order is None:
                 continue
-            if row.get("points"):
-                values[f"row_{order}_points"] = str(row["points"])
+            weight, source = weight_of(row, self.brain.default_points)
+            if source == SOURCE_FLOOR:
+                floored.append(str(order))
+            else:
+                values[f"row_{order}_points"] = str(weight)
             if row.get("sprint_end"):
                 values[f"row_{order}_sprint_end"] = str(row["sprint_end"])
             key = (row.get("jira_key") or "").strip().upper()
             if key and statuses.get(key):
                 values[f"row_{order}_status"] = str(statuses[key])
+        if floored and warnings is not None:
+            warnings.append(
+                f"row(s) {', '.join(floored)} have neither points nor a default: their points stay unfilled"
+            )
         return values
 
     def jira_statuses(self, rows: list[dict[str, Any]], warnings: list[str]) -> dict[str, str | None]:
@@ -175,7 +192,7 @@ class StandardsService:
         rows = pq.all_rows(self.brain)
         warnings: list[str] = []
         statuses = self.jira_statuses(rows, warnings)
-        row_values = self.row_values(rows, statuses)
+        row_values = self.row_values(rows, statuses, warnings)
         out = []
         for std in standards:
             values = {**self.document_values(std), **row_values}

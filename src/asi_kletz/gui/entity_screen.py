@@ -7,6 +7,7 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 from typing import TYPE_CHECKING, Any
 
+from ..generate.plan_schedule import SOURCE_DEFAULT, SOURCE_POINTS, weight_of
 from ..schema import EntitySchema, FieldSpec, FieldType
 from .screens import (
     INDENT,
@@ -24,7 +25,7 @@ from .screens import (
     stack,
     style_group_rows,
 )
-from .widgets import FieldWidget, PointsWidget, WidgetFactory
+from .widgets import FieldWidget, JiraPickerWidget, PointsWidget, WidgetFactory
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
@@ -67,6 +68,7 @@ class EntityScreen(Screen):
         self.param_vars: dict[str, tk.StringVar] = {}  # the document-level parameters of those standards
         self.param_entries: dict[str, ttk.Entry] = {}
         self.jira_statuses: dict[str, str | None] = {}  # the statuses the last export of this session fetched
+        self.ticket_loader: Any = None  # the Load tickets fetch in flight, made on the first press (0.15.0)
         super().__init__(master, window)
 
     # -- layout ---------------------------------------------------------
@@ -155,7 +157,8 @@ class EntityScreen(Screen):
             ttk.Label(parent, text=spec.header + (" *" if spec.required else "")).grid(
                 row=row, column=0, sticky="ne", padx=(4, 8), pady=3
             )
-            widget = factory.create(parent, spec)
+            extra = {"load": self.load_tickets} if spec.picker == "jira" else {}
+            widget = factory.create(parent, spec, **extra)
             widget.grid(row=row, column=1, sticky="ew", pady=3)
             self.widgets[spec.name] = widget
             row += 1
@@ -184,6 +187,34 @@ class EntityScreen(Screen):
                     grid_row += 1
                 self.widgets[spec.name] = widget
             row += 1
+
+    # -- the Jira pickers (0.15.0) ---------------------------------------------------------------------
+    def pickers(self) -> list[JiraPickerWidget]:
+        return [w for w in self.widgets.values() if isinstance(w, JiraPickerWidget)]
+
+    def feed_pickers(self) -> None:
+        """Every picker lists the issues of the window's last JIRA Live Data fetch (``window.jira_live``)."""
+        result = self.window.jira_live
+        issues = list((result.data or {}).get("issues") or []) if result is not None and result.ok else []
+        for widget in self.pickers():
+            widget.set_issues(issues)
+
+    def set_pickers_busy(self, busy: bool) -> None:
+        for widget in self.pickers():
+            widget.load_button.state(["disabled"] if busy else ["!disabled"])
+
+    def load_tickets(self) -> bool:
+        """Load tickets: the live screen's fetch, because a person pressed it; the pickers fill when it lands."""
+        from .ticket_loader import TicketLoader
+
+        if self.ticket_loader is None:
+            self.ticket_loader = TicketLoader(self)
+        return self.ticket_loader.fetch()
+
+    def destroy(self) -> None:
+        if self.ticket_loader is not None:
+            self.ticket_loader.cancel()
+        super().destroy()
 
     # -- the standards pane (0.14.0) ---------------------------------------------------------------
     def _build_standards_pane(self, parent: ttk.Frame) -> None:
@@ -271,11 +302,13 @@ class EntityScreen(Screen):
             return ""
         order = row.get("order")
         head = f"This row (row_{order}_*): " if order is not None else "This row: "
-        if row.get("points"):
-            points = f"{row['points']} points"
+        weight, source = weight_of(row, self.brain.default_points)
+        if source == SOURCE_POINTS:
+            points = f"{weight} points"
+        elif source == SOURCE_DEFAULT:
+            points = f"{weight} points (the panel's default, no points chosen)"
         else:
-            default = row.get("default_points") or self.brain.default_points
-            points = f"no points chosen (the default {default} is never exported)"
+            points = f"no points chosen and no default (the floor {weight} is not exported)"
         sprint_end = f"sprint end {row['sprint_end']}" if row.get("sprint_end") else "no sprint end (unscheduled)"
         key = (row.get("jira_key") or "").strip().upper()
         if not key:
@@ -350,6 +383,7 @@ class EntityScreen(Screen):
             self.selected_id = None
             self.form_box.configure(text=self.details_title(None))
         self._populate()
+        self.feed_pickers()  # a fetch on the live screen since the last refresh reaches the pickers too
 
     def _visible_rows(self) -> list[dict[str, Any]]:
         needle = self.search_var.get().strip().casefold()

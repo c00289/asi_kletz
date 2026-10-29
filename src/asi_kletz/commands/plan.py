@@ -25,11 +25,12 @@ class PlanCommand(Command):
         "weights load <file> sets each row's default points from the estimation panel's record; "
         "export --row <id> [--out <dir>] [--standard <folder>] builds the row's standards with asi_gutenberg, "
         "the parameters filled (the chosen points, never the default; the sprint's end; the Jira ticket's "
-        "status); parameters --row <id> prints that value set without building."
+        "status); parameters --row <id> prints that value set without building; tickets lists every work "
+        "product with its Jira key and the ones still without one."
     )
     arguments = (
-        Argument("action", "schedule | weights | export | parameters", required=True,
-                 choices=("schedule", "weights", "export", "parameters")),
+        Argument("action", "schedule | weights | export | parameters | tickets", required=True,
+                 choices=("schedule", "weights", "export", "parameters", "tickets")),
         Argument("what", "weights: load"),
         Argument("file", "weights load: the JSON list of {id, order, deliverable, points[, uid]}", type="path"),
         Argument("row", "export / parameters: the Safety Plan row (id or uid)", flag=True, type="ref"),
@@ -41,6 +42,8 @@ class PlanCommand(Command):
 
     def run(self, ctx: Context, args: dict[str, Any]) -> Result:
         service = ctx.brain.schedule
+        if args["action"] == "tickets":
+            return Result.success(tickets(ctx.brain))
         if args["action"] in ("export", "parameters"):
             if args.get("row") is None:
                 return Result.failure(f"plan {args['action']} needs --row <id>")
@@ -64,3 +67,19 @@ class PlanCommand(Command):
             return Result.failure("plan weights load needs the path of the JSON file")
         data = service.load_weights(args["file"], ctx.actor)
         return Result.success(data, data.pop("warnings"))
+
+
+def tickets(brain: Any) -> dict[str, Any]:
+    """Every work product with its Jira key, in plan order, and the orders of the ones still without one
+    (the owner, 2026-10-29: "every work product needs to be linked to some Jira ticket")."""
+    from ..generate import plan_queries as pq
+
+    rows = []
+    for row in pq.all_rows(brain):
+        key = (row.get("jira_key") or "").strip().upper() or None
+        rows.append({
+            "id": row["id"], "order": row.get("order"), "deliverable": pq.one_line(row.get("deliverable") or "", 70),
+            "status": row.get("status"), "jira_key": key, "missing": key is None,
+        })
+    missing = [r["order"] if r["order"] is not None else r["id"] for r in rows if r["missing"]]
+    return {"rows": rows, "count": len(rows), "with_ticket": len(rows) - len(missing), "missing": missing}

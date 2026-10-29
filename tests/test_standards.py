@@ -131,9 +131,9 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
     assert std["values"] == {
         "vehicle_type": "Wheel Loader", "fusa_engineer": "the contractor",
         "row_1_points": "5", "row_1_sprint_end": "2026-11-09", "row_1_status": "In Progress",
-        "row_2_sprint_end": "2026-11-09",  # row 2 has a default, not chosen points: no row_2_points
+        "row_2_points": "3", "row_2_sprint_end": "2026-11-09",  # row 2: the panel's default, the weight used
     }
-    assert std["filled"] == 6 and std["unfilled"] == ["row_2_points", "row_2_status"]
+    assert std["filled"] == 7 and std["unfilled"] == ["row_2_status"]
     assert preview.data["statuses"] == {"HWL-2554": "In Progress"} and stub.calls == ["HWL-2554"] and stub.closed
     assert any("row(s) 2, 3 have no Jira key" in w for w in preview.warnings)
 
@@ -141,14 +141,15 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
     result = seeded.execute("plan", action="export", row=1, out=str(out), actor="me")
     assert result.ok, result.errors
     [built] = result.data["exports"]
-    assert built["standard"] == "qf-17-test" and built["filled"] == 6
-    assert built["unfilled"] == ["row_2_points", "row_2_status"]
+    assert built["standard"] == "qf-17-test" and built["filled"] == 7
+    assert built["unfilled"] == ["row_2_status"]
     assert set(built["files"]) == {"md", "pdf", "docx"} and all(Path(p).is_file() for p in built["files"].values())
     assert Path(built["primary"]).name == "qf-17-test.pdf" and built["pages"]
     text = Path(built["files"]["md"]).read_text(encoding="utf-8")
-    for mark in ("==Wheel Loader==", "==the contractor==", "==5== points", "==2026-11-09==", "==In Progress=="):
+    for mark in ("==Wheel Loader==", "==the contractor==", "==5== points", "==2026-11-09==", "==In Progress==",
+                 "==3== points"):
         assert mark in text, mark
-    assert "{{ row_2_points }}" in text and "{{ row_2_status }}" in text and "==3==" not in text  # never the default
+    assert "{{ row_2_points }}" not in text and "{{ row_2_status }}" in text  # the default is the weight used
     assert any("unfilled parameter row_2_status" in w for w in result.warnings)
     entry = seeded.storage.audit_tail(1)[0]
     assert entry["action"] == "export" and entry["actor"] == "me" and entry["payload"]["standards"] == ["qf-17-test"]
@@ -183,3 +184,33 @@ def test_export_default_out_is_the_config_out(seeded, standards):
     assert Path(seeded.out_dir, "qf-17-test.pdf").is_file()
     with pytest.raises(CommandError):
         seeded.standards.value_set(3)
+
+
+def test_the_points_printed_are_the_weight_the_schedule_used(seeded, standards, tmp_path):
+    """The owner's revision, 2026-10-29: `{{ row_11_points }} points` over a sprint end the scheduler computed
+    at the default is wrong; the two lines must agree. Chosen points, else the default, else unfilled."""
+    assert seeded.execute("create", entity="sprint", data={
+        "number": 2, "label": "SPRINT 2", "start": "2026-10-27", "end": "2026-11-09", "status": "Active",
+    }).ok
+    assert seeded.execute("update", entity=PLAN, id=2, set=["ref_qf_17=1", "points=5"]).ok  # chosen
+    assert seeded.execute("plan", action="weights", what="load", file=str(SEED_WEIGHTS)).ok  # row 3: default 2
+    assert seeded.execute("create", entity=PLAN, data={"deliverable": "Neither", "order": 4}).ok  # the floor
+    schedule = {r["order"]: r for r in seeded.execute("plan", action="schedule").data["rows"]}
+    assert (schedule[2]["weight"], schedule[2]["source"]) == (5, "points")
+    assert (schedule[3]["weight"], schedule[3]["source"]) == (2, "default")
+    assert (schedule[4]["weight"], schedule[4]["source"]) == (2, "floor")
+    preview = seeded.execute("plan", action="parameters", row=2)
+    values = preview.data["standards"][0]["values"]
+    assert values["row_2_points"] == "5" and "row_4_points" not in values
+    full = seeded.standards.row_values(seeded.execute("list", entity=PLAN).data, {}, [])
+    assert full["row_3_points"] == "2" and "row_4_points" not in full
+    assert full["row_1_points"] == "5"  # row 1 is Done: its own default, still printed
+    assert any("row(s) 4 have neither points nor a default" in w for w in preview.warnings)
+    for order in (2, 3):  # what the export prints equals the schedule's weight column
+        assert full[f"row_{order}_points"] == str(schedule[order]["weight"])
+    tickets = seeded.execute("plan", action="tickets").data
+    assert tickets["count"] == 4 and tickets["with_ticket"] == 0 and tickets["missing"] == [1, 2, 3, 4]
+    assert seeded.execute("update", entity=PLAN, id=2, set=["jira_key=hwl-9"]).ok
+    tickets = seeded.execute("plan", action="tickets").data
+    assert tickets["missing"] == [1, 3, 4] and tickets["with_ticket"] == 1
+    assert [(r["order"], r["jira_key"], r["missing"]) for r in tickets["rows"]][1] == (2, "HWL-9", False)

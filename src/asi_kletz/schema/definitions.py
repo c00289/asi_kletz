@@ -106,7 +106,7 @@ SAFETY_PLAN_ROW = register_entity(EntitySchema(
                   lookup="plan_status"),
         # 0.14.0, the owner: "this company ties deliverables to Jira tickets"; the ticket's live status is the
         # Status column of an exported standard (docs: README, Standards and export)
-        FieldSpec("jira_key", T, "Jira key", source=False,
+        FieldSpec("jira_key", T, "Jira key", source=False, picker="jira",
                   help="The Jira ticket that tracks the deliverable; its live status fills an exported standard."),
         uid_field(),
     ),

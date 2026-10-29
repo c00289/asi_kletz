@@ -186,6 +186,91 @@ class PointsWidget(EntryWidget):
             self.caption_var.set("")
 
 
+LOAD_TICKETS = "Load tickets"
+NOT_IN_LIST = "not in the fetched list"
+
+
+class JiraPickerWidget(FieldWidget):
+    """The Jira ticket picker (owner, 2026-10-29: "for every work product allow the user to select a Jira
+    ticket"): a combobox whose list is the issues of the window's last JIRA Live Data fetch, shown as
+    ``HWL-2554  Perform Platform Safety Plan``; typing filters the list on key or summary; picking one stores
+    the key alone; the entry stays free text, so a key not in the list can still be typed; a cleared box
+    clears the key. ``Load tickets`` beside it runs the live screen's fetch (``options["load"]``); after a
+    fetch the status of the picked ticket shows beside the box, read from the fetched rows, nothing stored."""
+
+    def build(self) -> None:
+        self.var = tk.StringVar()
+        self.issues: list[dict[str, Any]] = []
+        self.combo = ttk.Combobox(self, textvariable=self.var, width=self.options.get("width", 44), values=[])
+        self.combo.pack(side="left", fill="x", expand=True)
+        self.combo.bind("<<ComboboxSelected>>", lambda e: self.picked())
+        self.combo.bind("<KeyRelease>", lambda e: self.filter(self.var.get()))
+        self.load_button = ttk.Button(self, text=LOAD_TICKETS, command=self._load)
+        self.load_button.pack(side="left", padx=(4, 0))
+        self.status_var = tk.StringVar()
+        ttk.Label(self, textvariable=self.status_var, style="Muted.TLabel").pack(side="left", padx=(6, 0))
+        self.var.trace_add("write", lambda *_: self.refresh_status())
+
+    def _load(self) -> None:
+        load = self.options.get("load")
+        if load is not None:
+            load()
+
+    @staticmethod
+    def label(issue: dict[str, Any]) -> str:
+        return f"{issue['key']}  {issue.get('summary') or ''}".rstrip()
+
+    def set_issues(self, issues: list[dict[str, Any]]) -> None:
+        """The fetched rows (``key``, ``summary``, ``status``); the list and the status follow."""
+        self.issues = [i for i in issues if i.get("key")]
+        self.filter("")  # the whole list: typing narrows it, a key already in the box does not hide it
+        self.refresh_status()
+
+    def filter(self, text: str) -> list[str]:
+        """The list narrowed to the issues whose key or summary contains ``text`` (case-insensitive)."""
+        needle = (text or "").strip().casefold()
+        shown = [
+            i for i in self.issues
+            if not needle or needle in str(i["key"]).casefold() or needle in str(i.get("summary") or "").casefold()
+        ]
+        if not shown and needle:  # a picked label (key + summary) narrows to its own issue
+            shown = [i for i in self.issues if self.label(i).casefold() == needle]
+        values = [self.label(i) for i in shown]
+        self.combo["values"] = values
+        return values
+
+    def picked(self) -> None:
+        """A pick from the list: the key alone stays in the box."""
+        text = self.var.get().strip()
+        if text:
+            self.var.set(text.split()[0].upper())
+
+    def get(self) -> Any:
+        text = self.var.get().strip()
+        if not text:
+            return None
+        for issue in self.issues:
+            if text.casefold() == self.label(issue).casefold():
+                return str(issue["key"])
+        return text.split()[0].upper() if " " not in text else text
+
+    def set(self, value: Any) -> None:
+        self.var.set("" if value is None else str(value))
+
+    def refresh_status(self) -> None:
+        key = (self.get() or "").upper()
+        issue = next((i for i in self.issues if str(i["key"]).upper() == key), None)
+        if issue is not None:
+            self.status_var.set(str(issue.get("status") or ""))
+        elif key and self.issues:
+            self.status_var.set(NOT_IN_LIST)
+        else:
+            self.status_var.set("")
+
+    def focus_field(self) -> None:
+        self.combo.focus_set()
+
+
 class EnumWidget(FieldWidget):
     def build(self) -> None:
         self.var = tk.StringVar()
@@ -232,6 +317,8 @@ class WidgetFactory:
             return ReadOnlyWidget(master, spec, self.lookups, **options)
         if spec.default_from:  # the Points entry: the default as a placeholder, a caption when the value differs
             return PointsWidget(master, spec, self.lookups, **options)
+        if spec.picker == "jira":  # a ticket picked from the last live fetch; `load` runs the fetch
+            return JiraPickerWidget(master, spec, self.lookups, **options)
         if spec.type is FieldType.INT:
             options.setdefault("width", 10)
         return self._registry[spec.type](master, spec, self.lookups, **options)
