@@ -85,11 +85,15 @@ class UpdateCommand(Command):
 class DeleteCommand(Command):
     verb = "delete"
     help = "Delete a row by id or uid."
-    arguments = (ENTITY, ROW_ID)
+    arguments = (
+        ENTITY, ROW_ID,
+        Argument("cascade", "Take the row's dependants along (a control structure, a controller, an edge, an STPA "
+                 "analysis); without it such a delete is refused", flag=True, type="bool", default=False),
+    )
 
     def run(self, ctx: Context, args: dict[str, Any]) -> Result:
         service = ctx.brain.service(args["entity"])
-        row_id = service.delete(args["id"], ctx.actor)
+        row_id = service.delete(args["id"], ctx.actor, cascade=bool(args.get("cascade")))
         return Result.success({"entity": service.schema.name, "deleted": row_id})
 
 

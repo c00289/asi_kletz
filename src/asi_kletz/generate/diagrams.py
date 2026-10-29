@@ -1,4 +1,4 @@
-"""The built-in diagrams: four views of the Safety Plan drawn with asi_escher.
+"""The built-in diagrams: four views of the Safety Plan drawn with asi_escher, and since 0.24.0 the STPA trace.
 
 Each builder is ``(brain, params, ctx) -> asi_escher.Diagram``. They read the plan only
 through ``plan_queries`` and import asi_escher lazily, so the catalog can be listed without
@@ -157,4 +157,92 @@ def pdp_map(brain: Brain, params: dict[str, str], ctx: BuildContext) -> Any:
             compartments=[("lifecycle phases", phases or ["none planned"])],
         )
         d.edge("plan", node_id, kind="composition")
+    return d
+
+
+# -- stpa_trace (0.24.0, from the sister tool's 0.10.0) --------------------------------------------------------
+TRACE_LABEL_CHARS = 48
+RETIRED_TINT = "state"
+
+
+def short(text: Any, limit: int = TRACE_LABEL_CHARS) -> str:
+    line = q.one_line(text)
+    return line if len(line) <= limit else line[: limit - 1].rstrip() + "…"
+
+
+@register_diagram(Spec(
+    "stpa_trace", "STPA trace",
+    "Hazards, unsafe control actions, loss scenarios and constraints of one analysis as four columns with the "
+    "edges the page states; a swimlane per controller of the linked control structure when the UCAs are linked "
+    "to one, a retired UCA in the state tint, a duplicate as a dashed edge.",
+    params=(Param("analysis", "The analysis: its id, uid or slug", required=True),),
+))
+def stpa_trace(brain: Brain, params: dict[str, str], ctx: BuildContext) -> Any:
+    from asi_escher import THEME, Diagram
+
+    from ..schema.lists import list_of
+
+    row = brain.stpa.resolve(params["analysis"])
+    parts = brain.stpa.parts(row["slug"])
+    hazards = {h["code"]: h for h in parts["hazards"]}
+    ucas = {u["code"]: u for u in parts["ucas"]}
+    constraints = {c["code"]: c for c in parts["constraints"]}
+    linked = [u["cs_controller"] for u in parts["ucas"] if u.get("cs_controller")]
+    structure = row.get("control_structure")
+    lanes: dict[str, str] = {}  # lane id -> title, in order; empty: a plain layered graph, left to right
+    if structure and linked:
+        order = {c["key"]: (c.get("order") or 0, c.get("name") or c["key"])
+                 for c in brain.service("cs_controller").list({"structure": structure})}
+        lanes["lane_hazards"] = "Hazards"
+        for key in sorted(dict.fromkeys(linked), key=lambda k: order.get(k, (10**6, k))):
+            lanes[f"lane_{slug(key)}"] = order.get(key, (0, key))[1]
+        if any(not u.get("cs_controller") for u in parts["ucas"]):
+            lanes["lane_unlinked"] = "Not linked"
+        lanes["lane_constraints"] = "Constraints"
+    d = Diagram(f"STPA trace: {row['name']}", "flowchart", direction="TB" if lanes else "LR")
+    for lane_id, title in lanes.items():
+        d.lane(lane_id, title)
+
+    def lane_of(uca: dict[str, Any] | None) -> str | None:
+        if not lanes:
+            return None
+        if uca is None or not uca.get("cs_controller"):
+            return "lane_unlinked"
+        return f"lane_{slug(uca['cs_controller'])}"
+
+    retired_fill, retired_stroke = THEME[RETIRED_TINT]
+    for code, h in hazards.items():
+        d.node(f"h_{slug(code)}", f"{code}\n{short(h.get('text'))}", "io", lane="lane_hazards" if lanes else None)
+    for code, u in ucas.items():
+        label = f"{code}\n{short(u.get('text'))}"
+        if u.get("retired"):
+            label += "\n«retired»"
+        tint = (retired_fill, retired_stroke) if u.get("retired") else (None, None)
+        d.node(f"u_{slug(code)}", label, "process", lane=lane_of(u), fill=tint[0], stroke=tint[1])
+    for code, c in constraints.items():
+        d.node(f"c_{slug(code)}", f"{code}\n{short(c.get('text')) or '(referenced only)'}", "document",
+               lane="lane_constraints" if lanes else None)
+    for s in parts["scenarios"]:
+        uca = ucas.get(s.get("uca") or "")
+        row_text = f"row {s['row']}" if s.get("row") is not None else f"order {s.get('order')}"
+        head = s.get("counterpart") or s.get("uca") or row_text
+        if s.get("row") is not None:
+            head += f" ({row_text})"
+        types = ", ".join(f"type {t}" for t in list_of(s.get("types")))
+        label = "\n".join(x for x in (head, types, short(s.get("causal_factors"))) if x)
+        node_id = f"s_{s['id']}"
+        d.node(node_id, label, "action", lane=lane_of(uca))
+        if uca is not None:
+            d.edge(f"u_{slug(uca['code'])}", node_id)
+        for c in list_of(s.get("constraints")):
+            if c in constraints:
+                d.edge(node_id, f"c_{slug(c)}")
+    for code, u in ucas.items():
+        for h in list_of(u.get("hazards")):
+            if h in hazards:
+                d.edge(f"h_{slug(h)}", f"u_{slug(code)}")
+        if u.get("duplicate_of") in ucas:
+            d.edge(f"u_{slug(code)}", f"u_{slug(u['duplicate_of'])}", "duplicate of", style="dashed")
+    if not d.nodes:
+        d.note("empty", "The analysis holds no objects yet", lane="lane_hazards" if lanes else None)
     return d

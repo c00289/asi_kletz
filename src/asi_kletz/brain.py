@@ -21,12 +21,14 @@ from .schema import LookupRegistry, SchemaRegistry, default_lookups, default_reg
 from .schema.definitions import CADENCE_RULE, CAPACITY_RULE, DEFAULT_POINTS, SPRINT_CAPACITY, SPRINT_LENGTH
 from .services import (
     ConfluenceService,
+    ControlStructureService,
     EntityService,
     HolidayService,
     JiraService,
     PlanScheduleService,
     SprintService,
     StandardsService,
+    StpaService,
     TrackerService,
     TransferService,
     WorkProductService,
@@ -44,10 +46,15 @@ ENV_WORKBOOK = "ASI_KLETZ_WORKBOOK"
 ENV_OUT = "ASI_KLETZ_OUT"
 ENV_CONFIG = "ASI_KLETZ_CONFIG"
 ENV_STANDARDS = "ASI_KLETZ_STANDARDS"
+ENV_CONTROL_STRUCTURES = "ASI_KLETZ_CONTROL_STRUCTURES"
 CONFIG_NAME = "kletz.toml"
 DEFAULT_STANDARDS = "../asi_standards"  # the sibling repo of parametrised standards, beside this one
+# 0.24.0: the private shelf the template builder reads the owner's control structure from (the plan, section 3)
+DEFAULT_CONTROL_STRUCTURES = "../asi_standards/control-structures"
 DEFAULT_EVIDENCE_NAME = "evidence"  # the Hopper page bundles `confluence evidence` writes (0.23.0), beside the database
-CONFIG_KEYS = ("db", "workbook", "out", "standards_dir", "evidence_dir")  # file paths, resolved against the config file
+CONFIG_KEYS = (  # file paths, resolved against the config file
+    "db", "workbook", "out", "standards_dir", "evidence_dir", "control_structures_dir",
+)
 CONFIG_TEXT_KEYS = (  # document metadata, the live JQL and the tracker's header lines, kept verbatim
     "doc_id", "project", "jira_live_jql", "tracker_title", "tracker_byline", "tracker_scope", "tracker_jira_scope",
 )
@@ -79,7 +86,10 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     panel's default. ``standards_dir`` is the folder of parametrised standards (default ``../asi_standards``
     beside the config file). ``evidence_dir`` (0.23.0) is where ``confluence evidence`` writes its Hopper page
     bundles (default ``evidence/`` beside the database) and ``[confluence] space`` the space ``confluence
-    search`` and the Find page window look in by default (``STPA``). Missing file: ``{}``.
+    search`` and the Find page window look in by default (``STPA``). ``control_structures_dir`` (0.24.0) is the
+    shelf the ``template:wheel_loader_master`` builder reads the owner's control structure from (default
+    ``../asi_standards/control-structures`` beside the config file; ``$ASI_KLETZ_CONTROL_STRUCTURES`` overrides
+    it). Missing file: ``{}``.
     """
     import tomllib
 
@@ -214,6 +224,9 @@ class Brain:
         self.transfer = TransferService(self)
         self.jira = JiraService(self)  # read only; asi_hopper is imported when a jira verb runs, never here
         self.confluence = ConfluenceService(self)  # read only too (0.23.0); the same lazy import rule
+        # 0.24.0: STPA lives here (the owner: "move everything to Kletz"); the factories come on first use
+        self.control_structures = ControlStructureService(self)  # the structures as wholes; the rules per entity
+        self.stpa = StpaService(self)  # the analyses as wholes; the rules per entity; the refresh and the link
         self.tracker = TrackerService(self)  # the Weekly Activity Tracker text, in and out
         self.holidays = HolidayService(self)  # the holidays the planner skips, loaded from a JSON list
         self.dispatcher = Dispatcher(self)
@@ -269,6 +282,37 @@ class Brain:
         return str((base / DEFAULT_STANDARDS).resolve())
 
     @property
+    def control_structures_dir(self) -> str:
+        """The shelf the ``template:wheel_loader_master`` builder reads (0.24.0): ``$ASI_KLETZ_CONTROL_STRUCTURES``,
+        else ``control_structures_dir`` in kletz.toml (resolved against the file), else
+        ``../asi_standards/control-structures`` beside the config file (or the working directory when there is
+        none). Read when asked, so a test can point it elsewhere after opening; never copied from."""
+        if os.environ.get(ENV_CONTROL_STRUCTURES):
+            return os.environ[ENV_CONTROL_STRUCTURES]
+        if self.config.get("control_structures_dir"):
+            return str(self.config["control_structures_dir"])
+        base = Path(self.config["path"]).parent if self.config.get("path") else Path.cwd()
+        return str((base / DEFAULT_CONTROL_STRUCTURES).resolve())
+
+    @property
+    def factory(self):
+        """The ``ControlStructureFactory`` on this Brain (built on first use; see ``asi_kletz.stpa``)."""
+        if not hasattr(self, "_factory"):
+            from .stpa.factory import ControlStructureFactory
+
+            self._factory = ControlStructureFactory(self)
+        return self._factory
+
+    @property
+    def stpa_factory(self):
+        """The ``StpaFactory`` on this Brain (built on first use; see ``asi_kletz.stpa.stpa_factory``)."""
+        if not hasattr(self, "_stpa_factory"):
+            from .stpa.stpa_factory import StpaFactory
+
+            self._stpa_factory = StpaFactory(self)
+        return self._stpa_factory
+
+    @property
     def evidence_dir(self) -> str:
         """Where ``confluence evidence`` writes its Hopper page bundles (0.23.0): ``evidence_dir`` in kletz.toml
         (resolved against the file), else ``evidence/`` beside the database (the working directory for
@@ -300,6 +344,11 @@ class Brain:
                 service.on_load = self.sprints.link_loaded  # a file's plan_uid re-resolves plan_row
             if schema.name in ("safety_plan_row", "sprint", "sprint_item"):
                 service.after = self.schedule.on_change  # a change here can move a deadline
+            # 0.24.0: a control structure's or an STPA analysis's entity carries its own rules (the guard, the
+            # load, the cascade on delete, the cs.changed / stpa.changed event); the services attach them
+            rules = self.control_structures.rules_for(schema.name) or self.stpa.rules_for(schema.name)
+            if rules is not None:
+                rules.attach(service)
             self._services[schema.name] = service
         return self._services[schema.name]
 
@@ -341,6 +390,7 @@ class Brain:
             "default_points": self.default_points,
             "standards_dir": self.standards_dir,
             "evidence_dir": self.evidence_dir,
+            "control_structures_dir": self.control_structures_dir,
             "confluence_space": self.confluence.space,
             "config_warnings": list(self.config_warnings),
             "tracker": {"title": self.tracker.title, "byline": self.tracker.byline, "scope": self.tracker.scope},

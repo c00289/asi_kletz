@@ -3,6 +3,7 @@
 from . import (  # noqa: F401  (registers the built-in commands)
     confluence,
     crud,
+    cs,
     generate,
     gui,
     holiday,
@@ -12,6 +13,7 @@ from . import (  # noqa: F401  (registers the built-in commands)
     session,
     sprint,
     standards,
+    stpa,
     theme,
     tracker,
     transfer,

@@ -38,6 +38,12 @@ class EntityService:
         # a hook run once after a committed create, update, delete or load: ``after(action, row_id)`` (the
         # plan's recompute; ``Brain.service`` sets it on the plan, sprint and sprint-item services)
         self.after: Callable[[str, int | None], None] | None = None
+        # 0.24.0, the control structures and the STPA analyses (``Brain.service`` attaches an entity's rules):
+        # ``before_delete(stored, cascade, actor)`` runs inside the delete's transaction and raises to refuse a
+        # row with dependants unless ``cascade`` lets it take them along; ``after_change(action, row, actor)``
+        # runs after a committed create, update or delete with the row itself (the ``cs.changed`` event)
+        self.before_delete: Callable[[dict[str, Any], bool, str], None] | None = None
+        self.after_change: Callable[[str, dict[str, Any], str], None] | None = None
 
     # -- reads ----------------------------------------------------------
     def list(
@@ -94,6 +100,8 @@ class EntityService:
         self.events.publish("entity.created", entity=self.schema.name, id=row["id"], actor=actor, row=row)
         if self.after is not None:
             self.after("create", row["id"])
+        if self.after_change is not None:
+            self.after_change("create", row, actor)
         return row, warnings
 
     def update(
@@ -116,6 +124,8 @@ class EntityService:
         self.events.publish("entity.updated", entity=self.schema.name, id=row_id, actor=actor, row=row)
         if self.after is not None:
             self.after("update", row_id)
+        if self.after_change is not None:
+            self.after_change("update", row, actor)
         return row, warnings
 
     def _check_uid(self, row_id: int, clean: dict[str, Any]) -> dict[str, Any]:
@@ -131,16 +141,27 @@ class EntityService:
             raise ValidationError(self.schema.name, [UID_IMMUTABLE])
         return clean
 
-    def delete(self, ref: int | str, actor: str = "python") -> int:
-        """Delete the row behind ``ref``; returns its id."""
+    def delete(self, ref: int | str, actor: str = "python", cascade: bool = False) -> int:
+        """Delete the row behind ``ref``; returns its id. ``cascade`` (0.24.0) lets an entity with dependants
+        (a control structure, a controller, an edge, an STPA analysis) take them along through its
+        ``before_delete`` rule; without it such a delete is refused."""
         row_id = self.resolve(ref)
+        stored: dict[str, Any] | None = None
         with self.storage.transaction():
+            if self.before_delete is not None or self.after_change is not None:
+                stored = self.repo.get(row_id)
+                if stored is None:
+                    raise NotFound(f"{self.schema.name} {row_id} not found")
+            if self.before_delete is not None:
+                self.before_delete(stored, cascade, actor)
             if not self.repo.delete(row_id):
                 raise NotFound(f"{self.schema.name} {row_id} not found")
             self.storage.audit(actor, "delete", self.schema.name, row_id)
         self.events.publish("entity.deleted", entity=self.schema.name, id=row_id, actor=actor)
         if self.after is not None:
             self.after("delete", row_id)
+        if self.after_change is not None and stored is not None:
+            self.after_change("delete", stored, actor)
         return row_id
 
     def load_rows(

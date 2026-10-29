@@ -222,7 +222,7 @@ def test_urls_round_trip_through_the_dump_and_a_bad_list_is_dropped_with_a_warni
     dump = tmp_path / "dump.json"
     assert seeded.execute("dump", out=str(dump), entity=PLAN).ok
     payload = json.loads(dump.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 10 and payload["rows"][0]["urls"] == [B, A]
+    assert payload["schema_version"] == 11 and payload["rows"][0]["urls"] == [B, A]
     payload["rows"][1]["urls"] = ["ftp://x.io", A]  # bad: dropped, warned, the row still loads
     payload["rows"][2]["urls"] = f"{MS}; {A}"  # the text form in a file: parsed too
     dump.write_text(json.dumps(payload), encoding="utf-8")
@@ -277,7 +277,7 @@ def test_a_schema_9_database_gains_the_urls_column_and_keeps_every_row(tmp_path,
     conn.close()
     with Brain(db) as after:
         assert after.migration["created"] == [] and after.migration["altered"] == {"safety_plan": ["urls"]}
-        assert after.status()["schema_version"] == 10
+        assert after.status()["schema_version"] == 11
         rows = after.execute("list", entity=PLAN).data
         assert [{**r, "urls": None} for r in rows_before] == rows and rows[0]["urls"] is None
         assert after.storage.audit_tail(1)[0]["action"] != "update"  # the migration edits no row

@@ -142,3 +142,11 @@ class SqlRepository:
     def delete_all(self) -> int:
         cur = self.storage.execute(f"DELETE FROM {self.table}")
         return cur.rowcount
+
+    def delete_where(self, **filters: Any) -> int:
+        """Delete every row matching ``filters`` (a cascade, 0.24.0); returns the count. No filter: nothing."""
+        if not filters:
+            return 0
+        where, params = self._where(filters)
+        cur = self.storage.execute(f"DELETE FROM {self.table}{where}", params)
+        return cur.rowcount

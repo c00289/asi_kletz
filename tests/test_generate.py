@@ -15,9 +15,9 @@ from asi_kletz.generate import BuildContext, DiagramFactory, DocumentFactory
 from asi_kletz.generate import plan_queries as q
 from tests.conftest import PLAN, REPO_ROOT, TABLES
 
-DIAGRAMS = ["lifecycle_overview", "phase_flow", "status_board", "pdp_map", "sprint_burndown", "velocity",
+DIAGRAMS = ["lifecycle_overview", "phase_flow", "status_board", "pdp_map", "stpa_trace", "sprint_burndown", "velocity",
             "plan_roadmap"]
-DOCUMENTS = ["safety_plan", "status_report", "phase_checklist", "sprint_report", "plan_roadmap"]
+DOCUMENTS = ["safety_plan", "status_report", "phase_checklist", "sprint_report", "plan_roadmap", "stpa_report"]
 FENCE = {"png", "svg", "dot", "mmd"}
 
 

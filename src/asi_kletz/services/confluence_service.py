@@ -219,6 +219,25 @@ class ConfluenceService:
         )
         return {**manifest, "rows": contributions, "warnings": warnings}
 
+    def snapshot_page(
+        self, page_id: str, out: str | Path | None = None, *, comments: bool = True, hopper: Any = None,
+    ) -> dict[str, Any]:
+        """A Hopper page bundle of one page (0.24.0, the STPA factory's ``from_confluence`` and ``stpa
+        refresh``), written under ``out`` (else the evidence folder), its comments included by default; the
+        answer is the manifest. The same door as ``evidence``: a missing session is the login hint, a failed
+        read ``Confluence read failed:``, never a browser. No audit entry: the analysis records the bundle."""
+        folder = Path(out) if out else Path(self.brain.evidence_dir)
+        own = hopper is None
+        hopper = hopper or self.open_hopper()
+        try:
+            from asi_hopper.services.evidence import PageSource  # lazy
+
+            source = PageSource.parse(str(page_id).strip())
+            return self._guard(lambda: hopper.evidence.snapshot_pages(source, str(folder), comments=bool(comments)))
+        finally:
+            if own:
+                hopper.close()
+
     def check(self, rows: list[Any] | None = None, *, hopper: Any = None) -> dict[str, Any]:
         """For every Confluence URL on the chosen rows: is the page still there and what version is it
         (``hopper.page``, the body dropped); ``last_evidence`` names the latest bundle that holds the page

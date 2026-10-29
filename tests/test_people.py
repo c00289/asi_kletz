@@ -273,7 +273,7 @@ def test_people_round_trip_through_the_dump_and_the_workbook(seeded, tmp_path):
     dump = tmp_path / "dump.json"
     assert seeded.execute("dump", out=str(dump), entity="parameter").ok
     payload = json.loads(dump.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 10 and payload["rows"][0]["people"] == [ANN, BEN]
+    assert payload["schema_version"] == 11 and payload["rows"][0]["people"] == [ANN, BEN]
     payload["rows"][0]["people"] = [BEN, ANN]  # unsorted in the file: sorted on the way in
     payload["rows"].append({"name": "pat", "people": [{"name": "No Email"}], "uid": None})  # bad: dropped, warned
     payload["rows"].append({"name": "dev_manager", "value": "Legacy Name", "people": [ANN], "uid": None})  # people win

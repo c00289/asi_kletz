@@ -67,6 +67,9 @@ class Dispatcher:
                 if spec.required:
                     raise ValueError(f"{command.verb}: missing required argument {spec.name!r}")
                 clean[dest] = spec.default
-            elif spec.choices and clean[dest] not in spec.choices:
-                raise ValueError(f"{command.verb}: {spec.name} must be one of {', '.join(spec.choices)}")
+            elif spec.choices:
+                # a repeatable flag (`--format svg --format drawio`, 0.24.0) is checked item by item
+                values = clean[dest] if spec.multiple and isinstance(clean[dest], (list, tuple)) else [clean[dest]]
+                if any(value not in spec.choices for value in values):
+                    raise ValueError(f"{command.verb}: {spec.name} must be one of {', '.join(spec.choices)}")
         return clean

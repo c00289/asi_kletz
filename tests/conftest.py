@@ -6,7 +6,15 @@ import pytest
 
 from asi_kletz import Brain
 from asi_kletz.automation.session import ENV_AUTOMATION, ENV_SESSION
-from asi_kletz.brain import ENV_CONFIG, ENV_DB, ENV_OUT, ENV_STANDARDS, ENV_WORKBOOK, load_config
+from asi_kletz.brain import (
+    ENV_CONFIG,
+    ENV_CONTROL_STRUCTURES,
+    ENV_DB,
+    ENV_OUT,
+    ENV_STANDARDS,
+    ENV_WORKBOOK,
+    load_config,
+)
 from asi_kletz.gui.theme import ENV_THEME
 from asi_kletz.locks import ENV_LOCK_DIR
 from asi_kletz.prefs import ENV_PREFS
@@ -17,6 +25,9 @@ FIXTURES = REPO_ROOT / "tests" / "fixtures"
 # a small 0.8.4 database (three plan rows, one sprint; no ``uid`` column): what 0.9.0 opens and stamps.
 # Never opened in place: a test copies it, because opening it would stamp the committed file.
 DB_0_8_4 = FIXTURES / "kletz-0.8.4.db"
+# a small schema-10 database made with the 0.23.0 code (three plan rows, one parameter): what 0.24.0 opens and adds the
+# thirteen STPA tables to. Copied, never opened in place.
+DB_0_23_0 = FIXTURES / "kletz-0.23.0.db"
 # the real workbook, if kletz.toml in the repo names one; the seeding test skips otherwise
 WORKBOOK = Path(load_config(REPO_ROOT / "kletz.toml").get("workbook") or REPO_ROOT / "kletz.xlsx")
 
@@ -25,10 +36,25 @@ SEED_WEIGHTS = REPO_ROOT / "data" / "deliverable-points.json"  # the estimation 
 
 PLAN = "safety_plan_row"
 # every registered entity, in registration order (the list is the design, not a cap), and its table
-ENTITIES = [PLAN, "sprint", "sprint_item", "week", "holiday", "parameter"]
-TABLES = {"safety_plan", "sprint", "sprint_item", "week", "holiday", "parameter"}
-TABLES_0_8_4 = TABLES - {"holiday", "parameter"}  # what the 0.8.4 fixture database holds
-SHEETS = ["Safety Plan", "Sprints", "Sprint Items", "Weekly Status", "Holidays", "Parameters"]
+# 0.24.0: the seven control-structure entities and the six STPA entities follow the six of 0.14.0
+CS_ENTITIES = [
+    "control_structure", "cs_controller", "cs_algorithm", "cs_process_model_entry", "cs_edge", "cs_signal", "cs_note",
+]
+STPA_ENTITIES = ["stpa_analysis", "stpa_loss", "stpa_hazard", "stpa_uca", "stpa_scenario", "stpa_constraint"]
+ENTITIES = [PLAN, "sprint", "sprint_item", "week", "holiday", "parameter", *CS_ENTITIES, *STPA_ENTITIES]
+CS_TABLES = [
+    "control_structures", "cs_controllers", "cs_algorithms", "cs_process_model_entries", "cs_edges", "cs_signals",
+    "cs_notes",
+]
+STPA_TABLES = ["stpa_analyses", "stpa_losses", "stpa_hazards", "stpa_ucas", "stpa_scenarios", "stpa_constraints"]
+TABLES = {"safety_plan", "sprint", "sprint_item", "week", "holiday", "parameter", *CS_TABLES, *STPA_TABLES}
+TABLES_0_8_4 = TABLES - {"holiday", "parameter", *CS_TABLES, *STPA_TABLES}  # what the 0.8.4 fixture database holds
+EMPTY_COUNTS = dict.fromkeys(ENTITIES, 0)  # every entity empty: what `status` and `dump` report on a fresh database
+SHEETS = [
+    "Safety Plan", "Sprints", "Sprint Items", "Weekly Status", "Holidays", "Parameters",
+    "CS structures", "CS controllers", "CS algorithms", "CS process model", "CS edges", "CS signals", "CS notes",
+    "STPA analyses", "STPA losses", "STPA hazards", "STPA UCAs", "STPA scenarios", "STPA constraints",
+]
 # the real session probe (0.23.0), kept here because the autouse fixture below replaces it on the class; the one
 # test of the probe itself puts it back with a stub Hopper
 REAL_HAS_SESSION = ConfluenceService.has_session
@@ -54,6 +80,9 @@ def _isolated_config(monkeypatch, tmp_path):
     monkeypatch.delenv(ENV_AUTOMATION, raising=False)
     # the standards folder is per test too: never the sibling repo (a test that wants one writes it)
     monkeypatch.setenv(ENV_STANDARDS, str(tmp_path / "standards"))
+    # the template builder never finds the private control-structure shelf beside the repo by accident (0.24.0): a
+    # test that wants it (the local-only smoke test) points the variable at it on purpose
+    monkeypatch.setenv(ENV_CONTROL_STRUCTURES, str(tmp_path / "no-control-structures"))
     # the Find page button's session probe (0.23.0) reads the developer's keyring through asi_hopper: never
     # in a test (the Confluence GUI tests set it to True themselves)
     monkeypatch.setattr(ConfluenceService, "has_session", lambda self: False)
