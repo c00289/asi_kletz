@@ -81,6 +81,11 @@ class MainWindow(tk.Tk):
         warning = self._prefs_warning()
         self.theme = theme if isinstance(theme, Theme) else ThemeFactory.create(ThemeFactory.resolve(theme))
         self.theme.apply(self)
+        # Tk's class binding makes a ttk combobox (and spinbox) pick its next value on the mouse wheel, so
+        # scrolling a form with the pointer over one silently changed it (0.15.2: the owner's Safety Plan row
+        # moved to PDP phase 2 while attaching a Jira ticket); here the wheel only ever scrolls
+        for widget_class in ("TCombobox", "TSpinbox"):
+            self.unbind_class(widget_class, "<MouseWheel>")
         self.theme_var = tk.StringVar(self, value=self.theme.title)
         self.online_var = tk.StringVar(self, value=ONLINE)
         self.badge_var = tk.StringVar(self, value=badge_text(self.theme.title))

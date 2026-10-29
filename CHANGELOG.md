@@ -12,6 +12,22 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.15.2] - 2026-10-29
+
+The owner, 2026-10-29: "we might have found a bug in the Jira ticketing system". The audit log: the Safety
+Plan row (order 1, PDP phase 1, Concept Development) was saved at 13:50 with PDP phase 2 and lifecycle
+phase "2. HARA / Risk Assessment", each exactly one step past its value, while a Jira ticket was being
+attached; the plan out of phase order is what 0.15.1 fixed the painting of. Schema version unchanged (8).
+
+### Fixed
+- **The mouse wheel over a combobox picked its next value** (`gui/main_window.py`): Tk 8.6 binds
+  `<MouseWheel>` on the `TCombobox` class to "select the next value", and the form scrolls on the same wheel
+  (`ScrollableFrame` binds it on every widget while the pointer is over the form), so scrolling the form with
+  the pointer passing over a PDP phase, lifecycle phase, status or Jira ticket box silently changed it, and
+  the next Save stored it. The window drops that class binding (and the spinbox's) once at start: the wheel
+  scrolls, a value changes only by a pick or a keystroke. A test wheels over the two phase boxes and the
+  Jira picker and reads the form back unchanged.
+
 ## [0.15.1] - 2026-10-29
 
 The owner, 2026-10-29, after attaching Jira tickets to several deliverables: "as I was flipping through

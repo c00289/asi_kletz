@@ -2014,6 +2014,39 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
     assert window.status_text() == "Select a deliverable with a standard to export"
 
 
+# -- the mouse wheel over a combobox (0.15.2) -----------------------------------------------------------------
+
+
+def test_mouse_wheel_over_a_combobox_never_picks_a_value(window, seeded):
+    """Owner, 2026-10-29: the Safety Plan row saved under PDP phase 2 / HARA, one step past its phase 1 /
+    Concept Development, while a Jira ticket was being attached: Tk's TCombobox class binding picks the next
+    value on the wheel, and the form scrolls on the same wheel. The window drops that binding."""
+    screen = window.show("safety_plan")
+    screen.select(1)
+    widgets = screen.widgets
+    phase, lifecycle, picker = widgets["pdp_phase"], widgets["lifecycle_phase"], widgets["jira_key"]
+    assert (phase.get(), lifecycle.get()) == ("1", "1. Concept Development")
+    window.jira_live = Result.success(SAMPLE, verb="jira")
+    screen.feed_pickers()
+    picker.set("HWL-10")
+    assert window.bind_class("TCombobox", "<MouseWheel>") == ""
+    for combo in (phase.combo, lifecycle.combo, picker.combo):
+        combo.focus_set()
+        combo.event_generate("<MouseWheel>", delta=-120)  # wheel down, the pointer over the box
+        combo.event_generate("<MouseWheel>", delta=-120)
+    assert (phase.get(), lifecycle.get(), picker.get()) == ("1", "1. Concept Development", "HWL-10")
+    data = screen.form_data()
+    assert (data["pdp_phase"], data["lifecycle_phase"], data["jira_key"]) == ("1", "1. Concept Development", "HWL-10")
+    # the same wheel with Tk's stock binding back on: the value moves, which is what the window prevents
+    window.bind_class("TCombobox", "<MouseWheel>", "ttk::combobox::Scroll %W [expr {-%D / 120}]")
+    try:
+        phase.combo.event_generate("<MouseWheel>", delta=-120)
+        assert phase.get() == "2"
+    finally:
+        window.unbind_class("TCombobox", "<MouseWheel>")
+    phase.set("1")
+
+
 # -- the Jira ticket picker on every work product (0.15.0) ----------------------------------------------------
 
 
