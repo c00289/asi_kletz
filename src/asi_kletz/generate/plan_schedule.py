@@ -26,6 +26,7 @@ SOURCE_POINTS, SOURCE_DEFAULT, SOURCE_FLOOR, SOURCE_DONE, SOURCE_EXCLUDED = (
 @dataclass
 class Schedule:
     assignments: dict[int, tuple[int | None, str | None]] = field(default_factory=dict)  # row id -> (sprint, deadline)
+    spans: dict[int, tuple[str | None, str | None]] = field(default_factory=dict)  # row id -> the sprint's (start, end)
     sources: dict[int, str] = field(default_factory=dict)  # row id -> where its weight came from
     weights: dict[int, int] = field(default_factory=dict)  # row id -> the weight used
     warnings: list[str] = field(default_factory=list)
@@ -95,6 +96,7 @@ def schedule(
             continue
         if status in EXCLUDED:
             out.assignments[row_id] = (None, None)
+            out.spans[row_id] = (None, None)
             out.sources[row_id] = SOURCE_EXCLUDED
             continue
         weight, source = weight_of(row, floor)
@@ -116,7 +118,9 @@ def schedule(
             reach = f"the sprint chain ends at Sprint {line[-1]['number']}" if line else "no Active or Planned sprint"
             out.warnings.append(f'row {row_id} "{title}" needs {remaining} more point(s): {reach}; run sprint plan')
             out.assignments[row_id] = (None, None)
+            out.spans[row_id] = (None, None)
             continue
         sprint = line[finished]
         out.assignments[row_id] = (int(sprint["number"]), sprint.get("end") or None)
+        out.spans[row_id] = (sprint.get("start") or None, sprint.get("end") or None)
     return out

@@ -217,7 +217,7 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
     with Brain(db) as brain:
         assert brain.migration["created"] == ["holiday"]  # the 0.10.0 table; the four of 0.8.4 are altered
         altered = {table: [UID] for table in TABLES_0_8_4}
-        altered["safety_plan"] = ["points", "default_points", "sprint", UID]  # 0.11.0's three, then the uid
+        altered["safety_plan"] = ["points", "default_points", "sprint", "sprint_start", "sprint_end", UID]
         assert brain.migration["altered"] == altered
         assert brain.migration["scheduled"] == 0  # Sprint 1 is Closed: no chain, nothing to write
         assert brain.migration["uids_stamped"] == {PLAN: 3, "sprint": 1, "sprint_item": 0, "week": 0, "holiday": 0}
@@ -235,7 +235,7 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
         for old, stamped_row in zip(before[table], after[table], strict=True):
             new = dict(stamped_row)
             uid = new.pop(UID)
-            for column in ("points", "default_points", "sprint"):  # 0.11.0's columns: added, still empty
+            for column in ("points", "default_points", "sprint", "sprint_start", "sprint_end"):  # 0.11.x, still empty
                 if table == "safety_plan":
                     assert new.pop(column) is None
             assert UID_PATTERN.fullmatch(uid) and new == old  # stamped, and nothing else changed (updated_at too)

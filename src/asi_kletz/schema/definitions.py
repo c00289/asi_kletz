@@ -63,7 +63,7 @@ REVIEWER_FLAGS = (
 # points switch to some default value enforced globally". The floor below is what a row with neither points nor
 # a default weighs; `default_points` in kletz.toml overrides it.
 DEFAULT_POINTS = 2
-CALCULATED_RULE = "deadline and sprint are calculated from points and the sprint chain"
+CALCULATED_RULE = "sprint, sprint start, sprint end and deadline are calculated from points and the sprint chain"
 DEFAULTS_RULE = "default_points is set by `plan weights load` (the estimation panel's record)"
 
 SAFETY_PLAN_ROW = register_entity(EntitySchema(
@@ -86,6 +86,11 @@ SAFETY_PLAN_ROW = register_entity(EntitySchema(
                   help="The estimation panel's consensus (docs/deliverable-points.md); set by `plan weights load`."),
         FieldSpec("sprint", N, "Sprint", source=False, calculated=True,
                   help="Calculated: the sprint in which the deliverable's last point lands."),
+        # 0.11.2, the owner: "add the beginning of sprint and end of sprint to the right of the sprint column"
+        FieldSpec("sprint_start", D, "Sprint start", source=False, calculated=True,
+                  help="Calculated: the first day of that sprint."),
+        FieldSpec("sprint_end", D, "Sprint end", source=False, calculated=True,
+                  help="Calculated: the last day of that sprint; the deadline is the same date."),
         FieldSpec("work_product_location", T, "Work Product Location"),
         *flag_fields("location", "loc", LOCATION_FLAGS),
         FieldSpec("work_product_reference", T, "Work Product Reference"),

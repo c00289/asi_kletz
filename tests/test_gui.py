@@ -174,7 +174,7 @@ def test_safety_plan_table_shows_every_column(window, seeded):
 
     screen = window.show("safety_plan")
     schema = seeded.registry.get(PLAN)
-    assert screen.columns == [f.name for f in schema.visible_fields if f.name != "order"] and len(screen.columns) == 65
+    assert screen.columns == [f.name for f in schema.visible_fields if f.name != "order"] and len(screen.columns) == 67
     assert list(screen.tree["columns"]) == [*screen.columns, "plan"]  # the stacked column rides along
     assert screen.columns[:3] == ["pdp_phase", "lifecycle_phase", "deliverable"] and "uid" not in screen.columns
     assert screen.tree.heading("loc_dms", "text") == "DMS"
@@ -208,19 +208,20 @@ def test_columns_selector_narrows_the_flags(window, seeded):
     assert list(screen.columns_box.cget("values")) == ["All", *groups]
     # since 0.7.2 the frozen identity columns live in the left tree: the right one never displays them
     unfrozen = tuple(c for c in screen.columns if c not in FROZEN_PLAN and c not in STACKED_PLAN)
-    assert screen.tree["displaycolumns"] == unfrozen and len(unfrozen) == 62  # 65 columns minus the three stacked
+    assert screen.tree["displaycolumns"] == unfrozen and len(unfrozen) == 64  # 67 columns minus the three stacked
 
     screen.set_columns("Location")
     assert list(screen.tree["displaycolumns"]) == [
-        "points", "default_points", "sprint", "work_product_location", "loc_dms", "loc_jama", "loc_sharepoint",
+        "points", "default_points", "sprint", "sprint_start", "sprint_end", "work_product_location", "loc_dms",
+        "loc_jama", "loc_sharepoint",
         "work_product_reference", "author", "gate_reviewer", "deadline", "status",
     ]
-    assert len(screen.tree["columns"]) == 66  # nothing rebuilt
+    assert len(screen.tree["columns"]) == 68  # nothing rebuilt
     assert screen.tree.set("1", "reviewer_pat") == ""  # still readable while hidden
 
     screen.set_columns("Reviewer")
     shown = list(screen.tree["displaycolumns"])
-    assert len(shown) == 16 and shown[-3:] == ["reviewer_technical_training_team", "deadline", "status"]
+    assert len(shown) == 18 and shown[-3:] == ["reviewer_technical_training_team", "deadline", "status"]
     assert not any(c.startswith("loc_") for c in shown)
 
     screen.select(2)
@@ -1488,7 +1489,7 @@ def test_safety_plan_freezes_the_identity_columns(window, seeded):
     assert right is pane.right and screen.ybar is pane.ybar and screen.xbar is pane.xbar
     assert list(right["columns"]) == [*screen.columns, "plan"]  # the right tree still owns every column
     hidden = (*FROZEN, *STACKED_PLAN)
-    assert not any(c in hidden for c in right["displaycolumns"]) and len(right["displaycolumns"]) == 62
+    assert not any(c in hidden for c in right["displaycolumns"]) and len(right["displaycolumns"]) == 64
     assert tuple(left["columns"]) == tuple(FROZEN_PLAN)
     assert _rows(left) == _rows(right) and [t for _, t in _rows(left)] == [
         ("pdp", "even"), ("phase", "odd"), ("even",), ("pdp", "odd"), ("phase", "even"), ("odd",),
@@ -1893,7 +1894,7 @@ def test_no_table_on_any_screen_has_an_id_order_or_uid_column(window, seeded):
     assert seen >= 9  # the dashboard's three, the two frozen pairs of the plan screens, the board's lanes, and more
     plan = window.show("safety_plan")
     assert plan.pane.frozen == ("plan",) and tuple(plan.pane.left["columns"]) == ("plan",)
-    assert len(plan.tree["displaycolumns"]) == 62 and "uid" not in plan.tree["columns"]
+    assert len(plan.tree["displaycolumns"]) == 64 and "uid" not in plan.tree["columns"]
     matrix = window.show("safety_plan_matrix")
     assert tuple(matrix.pane.left["columns"]) == ("plan",) and matrix.tree.set("1", "plan").strip() == "Safety Plan"
     matrix.search_var.set("2")  # a typed number still finds the row by its order
@@ -1976,10 +1977,10 @@ def test_points_entry_shows_the_default_and_names_it_when_the_value_differs(wind
     screen = window.show("safety_plan")
     points = screen.widgets["points"]
     assert isinstance(points, PointsWidget)
-    for name in ("default_points", "sprint", "deadline"):
+    for name in ("default_points", "sprint", "sprint_start", "sprint_end", "deadline"):
         widget = screen.widgets[name]
         assert isinstance(widget, ReadOnlyWidget) and str(widget.entry.cget("state")) == "readonly"
-    assert screen.columns[2:6] == ["deliverable", "points", "default_points", "sprint"]  # the table shows all four
+    assert screen.columns[2:8] == ["deliverable", "points", "default_points", "sprint", "sprint_start", "sprint_end"]
     screen.select(2)
     # no default yet: the floor (2) greyed as the placeholder; nothing is sent
     assert points.showing_placeholder and points.entry.get() == "2" and points.get() is None

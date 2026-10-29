@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.11.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.11.2**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,14 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.11.2
+
+Two more calculated columns on the Safety Plan, right of Sprint: **Sprint start** and **Sprint end**,
+the dates of the sprint in which the deliverable's last point lands, written by the same recompute as
+Sprint and the deadline (schema version 6; a database from 0.11.x gains the columns and a first
+recompute on open). Read-only in the form, carried by the workbook and the JSON, ignored by an import
+like the other calculated fields.
 
 ## What is in 0.11.1
 

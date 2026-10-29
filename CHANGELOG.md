@@ -12,6 +12,23 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.11.2] - 2026-10-28
+
+The owner, 2026-10-28: "add the beginning of sprint and end of sprint to the right of the sprint
+column." Schema version 5 → 6.
+
+### Added
+- **`sprint_start` and `sprint_end`** on `safety_plan_row`, DATE, calculated, right after `sprint`
+  (`schema/definitions.py`): the dates of the sprint the deliverable finishes in. `Schedule.spans`
+  carries them out of the pure scheduler; `PlanScheduleService.recompute` writes the four calculated
+  fields together (`CALCULATED`), the guard refuses them by hand (`CALCULATED_RULE` reworded), the
+  schedule table prints them, the form shows them read-only, the workbook and the JSON carry them
+  (69 headers, `uid` last), the import ignores them with the one warning.
+
+### Tests
+- `test_sprint_start_and_end_follow_the_sprint`; the field counts (69 / 68 visible / 63 source), the
+  table's columns, the read-only widgets.
+
 ## [0.11.1] - 2026-10-28
 
 The owner, 2026-10-28, on the JIRA Live Data screen's "could not connect" (a rejected Atlassian

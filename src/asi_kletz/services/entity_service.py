@@ -230,7 +230,8 @@ class EntityService:
                 differing += 1
         if not differing:
             return None
-        names = " or ".join(s.name for s in self.schema.calculated_fields)
+        words = [s.name.replace("_", " ") for s in self.schema.calculated_fields]
+        names = words[0] if len(words) == 1 else ", ".join(words[:-1]) + " or " + words[-1]
         return (
             f"{differing} row(s) carried a {names} that differs from the calculated value; "
             "the file's values were ignored"

@@ -56,6 +56,7 @@ def test_plan_order_fills_the_first_sprint_first():
 def test_a_deliverable_spans_sprints_and_ends_in_the_last_one():
     result = schedule([_row(1, points=10), _row(2, points=5)], SPRINTS, [], 2)
     assert result.assignments[1] == (3, "2027-01-03")  # 8 in Sprint 2, 2 in Sprint 3
+    assert result.spans[1][1] == result.assignments[1][1] == "2027-01-03"  # the sprint's own end is the deadline
     assert result.assignments[2] == (3, "2027-01-03")  # 5 of the 6 left in Sprint 3
 
 
@@ -115,6 +116,27 @@ def planned(seeded):
 def _plan(brain):
     return {r["id"]: (r.get("points"), r.get("default_points"), r.get("sprint"), r.get("deadline")) for r in
             brain.execute("list", entity=PLAN).data}
+
+
+def _spans(brain):
+    """``sprint_start`` and ``sprint_end`` beside ``sprint`` (0.11.2): the sprint's own dates, or Nones."""
+    return {r["id"]: (r.get("sprint"), r.get("sprint_start"), r.get("sprint_end")) for r in
+            brain.execute("list", entity=PLAN).data}
+
+
+def test_sprint_start_and_end_follow_the_sprint(planned):
+    sprints = {s["number"]: s for s in planned.execute("list", entity="sprint").data}
+    for row_id, (number, start, end) in _spans(planned).items():
+        if number is None:
+            assert (start, end) == (None, None)
+        else:
+            assert (start, end) == (sprints[number]["start"], sprints[number]["end"])
+            assert end == _plan(planned)[row_id][3]  # the deadline is the sprint's end
+    assert planned.execute("update", entity=PLAN, id=2, set=["points=7"]).ok  # row 3 moves to Sprint 3
+    assert _spans(planned)[3] == (3, sprints[3]["start"], sprints[3]["end"])
+    for field in ("sprint_start=2026-01-01", "sprint_end=2026-01-02"):
+        refused = planned.execute("update", entity=PLAN, id=2, set=[field])
+        assert not refused.ok and refused.errors == [CALCULATED_RULE]
 
 
 def test_every_write_recomputes_and_the_rows_carry_the_answer(planned):

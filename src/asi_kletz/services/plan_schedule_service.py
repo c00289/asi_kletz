@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from ..brain import Brain
 
 PLAN = pq.PLAN_ENTITY
-CALCULATED = ("sprint", "deadline")
+CALCULATED = ("sprint", "sprint_start", "sprint_end", "deadline")
 
 
 class PlanScheduleService:
@@ -91,8 +91,10 @@ class PlanScheduleService:
                     if row["id"] not in result.assignments:
                         continue
                     number, deadline = result.assignments[row["id"]]
-                    if (row.get("sprint"), row.get("deadline")) != (number, deadline):
-                        repo.update(row["id"], {"sprint": number, "deadline": deadline})
+                    start, end = result.spans.get(row["id"], (None, None))
+                    wanted = {"sprint": number, "sprint_start": start, "sprint_end": end, "deadline": deadline}
+                    if any(row.get(name) != value for name, value in wanted.items()):
+                        repo.update(row["id"], wanted)
                         changed += 1
                 if changed:
                     self.brain.storage.audit(
@@ -123,8 +125,8 @@ class PlanScheduleService:
                 "id": row["id"], "order": row.get("order"),
                 "deliverable": pq.one_line(row.get("deliverable") or "", 60),
                 "points": row.get("points"), "default_points": row.get("default_points"), "weight": weight,
-                "source": source, "sprint": row.get("sprint"), "deadline": row.get("deadline"),
-                "status": row.get("status"),
+                "source": source, "sprint": row.get("sprint"), "sprint_start": row.get("sprint_start"),
+                "sprint_end": row.get("sprint_end"), "deadline": row.get("deadline"), "status": row.get("status"),
             })
         return out
 
