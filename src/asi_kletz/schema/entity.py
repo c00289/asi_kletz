@@ -66,10 +66,6 @@ class EntitySchema:
         """The visible fields that are columns of the owner's source sheet."""
         return tuple(spec for spec in self.fields if not spec.hidden and spec.source)
 
-    @property
-    def all_columns(self) -> tuple[str, ...]:
-        return ("id", *self.field_names, "created_at", "updated_at")
-
     def field(self, name: str) -> FieldSpec:
         try:
             return self._by_name[name]

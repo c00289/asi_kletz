@@ -139,12 +139,3 @@ class SqlRepository:
     def delete_all(self) -> int:
         cur = self.storage.execute(f"DELETE FROM {self.table}")
         return cur.rowcount
-
-    def bulk_insert(self, rows: Sequence[Mapping[str, Any]], keep_ids: bool = False) -> list[int]:
-        ids: list[int] = []
-        with self.storage.transaction():
-            for row in rows:
-                row_id = row.get("id") if keep_ids else None
-                created = self.create({k: v for k, v in row.items() if k not in SYSTEM_FIELDS}, row_id)
-                ids.append(created["id"])
-        return ids
