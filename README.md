@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.17.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.18.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -13,7 +13,7 @@ through the same commands.
 ASI Kletz holds the **Safety Plan**: one row per deliverable, with its lifecycle phase, where the
 work product lives, which QMS documents it references, who authors, verifies, and reviews it, its
 deadline and its status. Since 0.8.0 it also holds the engineer's **Weekly Activity Tracker**: the
-sprints (ten points each), the sprint items and the weeks of the status text, and it writes that
+sprints (8 points, 14 days Tuesday to Monday), the sprint items and the weeks of the status text, and it writes that
 text back out, whole or for the current week (see [Weekly Activity Tracker](#weekly-activity-tracker)).
 Entities are registered in `schema/definitions.py`; the list is the design, not a cap.
 Since 0.2.0 it also draws that plan with asi_escher and prints it with asi_gutenberg, from the
@@ -22,6 +22,21 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.18.0
+
+**Sprints on the owner's law of 2026-10-29: Tuesday to Monday, 14 days, numbered from Sprint 31.** Roy:
+"what we know as sprint 3 is actually sprint 31, renumber appropriately, and then ensure that sprints always go Tuesday to Tuesday; this supersedes anything I said before; I also included a picture from systems engineering that is law for our sprints." The picture is the table in [Sprints](#sprints). So a sprint starts on a Tuesday and ends on the
+Monday 13 days later, the next starts the next day, a holiday is a day off inside a sprint and never a reason
+to move it, and capacity stays 8, fixed. The guard refuses a sprint created or edited off the cadence (from
+2026-10-27 on; older Closed sprints are history), `sprint plan` lays the chain in fortnights, and
+**`sprint align 31 --start 2026-10-27`** puts a database written under the old rule on the law: renumber
+(every number shifts by the same offset; what was Sprint 2 is Sprint 31), relabel, re-date every sprint that
+is not Closed, carry every reference (items, weeks, plan rows), recompute the plan's schedule; one audit
+entry, one event; `--check` prints the mapping and writes nothing; a second run changes nothing. `sprint_days`
+is no setting any more (ignored with a warning; `status` reports `sprint_length_days`, 14) and `--days` is
+gone from `sprint plan`. The rule of 2026-10-28 (10 business days, holidays stretching the dates) is
+superseded; the holiday table stays for the burndown and for the `Holidays:` line a planned sprint carries.
 
 ## What is in 0.15.0
 
@@ -153,7 +168,7 @@ columns; the import takes points and defaults and recalculates the rest, warning
 ## What is in 0.10.0
 
 **The sprint planner, holidays and the capacity rule** (`docs/sprint-planner-plan.md`, the owner's rule of
-2026-10-28, quoted in [Sprints](#sprints); schema version 4). A `holiday` entity (date, name, status
+2026-10-28, superseded on 2026-10-29 by the law quoted in [Sprints](#sprints); schema version 4). A `holiday` entity (date, name, status
 `assumed` / `confirmed`, note) with the CRUD verbs, a `Holidays` sheet, a **Holidays** screen after Weekly
 Status and `holiday load <file>`, which upserts a JSON list by date and name;
 `data/us-holidays-2026-2029.json` seeds it with 52 weekday holidays. `tracker/business_days.py` counts
@@ -568,8 +583,10 @@ asi-kletz sprint board                                          # points, days l
 asi-kletz sprint point --item 3 --points 3                      # 1 to the capacity; 0 clears
 asi-kletz sprint close                                          # Done counted, the rest carried, the next sprint opened
 asi-kletz holiday load data/us-holidays-2026-2029.json          # the calendar the planner skips (upsert by date + name)
-asi-kletz sprint plan                                           # the chain three years ahead, ten business days each
-asi-kletz sprint plan --replan --until 2028-12-31               # holidays became real: move the planned dates
+asi-kletz sprint plan                                           # the chain three years ahead, 14 days each, Tuesday to Monday
+asi-kletz sprint plan --replan --until 2028-12-31               # put the planned sprints back on the cadence
+asi-kletz sprint align 31 --start 2026-10-27 --check            # the law of 2026-10-29: what the alignment would do
+asi-kletz sprint align 31 --start 2026-10-27                    # Sprint 2 becomes Sprint 31, the chain follows
 asi-kletz list sprint_item --filter sprint=2                    # the generic CRUD covers the entities
 ```
 
@@ -596,47 +613,75 @@ replacement: a changed consensus is a new row in the record and a new load.
 
 ### Sprints
 
-The owner's sprint rule, decided 2026-10-28 (`docs/sprint-planner-plan.md`), verbatim:
+The owner's law, decided 2026-10-29, verbatim:
 
-> - A sprint spans 10 business days. Monday to Friday count; weekends and holidays do not, so a sprint that
->   contains a holiday ends one calendar day later per holiday. Dates move as holidays become real; the cadence
->   does not.
-> - Capacity is 8 points per sprint, company policy (8 productive days of the 10). Holidays never reduce points.
-> - Sprints are consecutive with no gaps, numbered across the programme (SPRINT n); the chain continues from
->   Sprint 2 (2026-10-27 to 2026-11-10). We do not know the work yet: future sprints are empty, Planned, with no
->   lifecycle phase, and will be adjusted as dates become real.
->
-> Every single sprint except the one in the past is 8 points; set this as a global value that is fixed.
+> what we know as sprint 3 is actually sprint 31, renumber appropriately, and then ensure that sprints always go Tuesday to Tuesday; this supersedes anything I said before; I also included a picture from systems engineering that is law for our sprints.
 
-So: a sprint is **8 points**, fixed (`SPRINT_CAPACITY` in `schema/definitions.py`; no setting and no
-option sets it; a sprint that is not Closed cannot be created or edited with another value, the tool
-sets 8 on every such sprint when it opens a database written before the rule, and a Closed sprint keeps
-its stored capacity as history), and **10 business days** long (`sprint_days` in `kletz.toml`; Monday to
-Friday, the `holiday` table skipped). Points are integers 1 to the capacity; an unpointed item is counted
-and named, never taken as zero. Over-commitment is a warning on `point` and on the board, never a
-refusal. `sprint start` opens a sprint on the day given (`--start`, else `--as-of`, else today) and
-ends it on its tenth business day. `sprint close` freezes the sprint's Jira section into its newest
-week, marks every open item Carried, copies it into the next sprint (the planned one, or a new one
-opened Active on the first business day after the closed one's end) with `carried_from` set, and
-records the close date; velocity is the mean of points done over the last three closed sprints. One
-sprint is Active at a time. The built text carries a generated `Sprint:` line under the sprint heading
-as soon as one item is pointed, and a `Points:` line under each pointed Jira item.
+The picture, a strip of seven sprints from systems engineering (2026 into 2027), which the chain follows
+exactly:
+
+| Sprint | Start (Tuesday) | End (Monday) |
+|---|---|---|
+| 31 | 2026-10-27 | 2026-11-09 |
+| 32 | 2026-11-10 | 2026-11-23 |
+| 33 | 2026-11-24 | 2026-12-07 |
+| 34 | 2026-12-08 | 2026-12-21 |
+| 35 | 2026-12-22 | 2027-01-04 |
+| 36 | 2027-01-05 | 2027-01-18 |
+| 37 | 2027-01-19 | 2027-02-01 |
+
+So: a sprint is **14 calendar days, Tuesday to the Monday 13 days later**, the next starting the next day
+(`SPRINT_LENGTH`, `SPRINT_WEEKDAY`, `CADENCE_NUMBER` and `CADENCE_START` in `schema/definitions.py`: Sprint 31
+starts 2026-10-27 and every other sprint is 14 days per number away from it); a holiday never moves,
+stretches or shortens a sprint (Sprint 35 runs straight through Christmas and New Year; the `holiday` table
+stays for the burndown's working days and for the `Holidays:` line a planned sprint carries). A sprint is
+**8 points**, fixed (`SPRINT_CAPACITY`; no setting and no option sets it; a sprint that is not Closed cannot
+be created or edited with another value, the tool sets 8 on every such sprint when it opens a database written
+before the rule, and a Closed sprint keeps its stored capacity as history). The guard refuses a sprint
+created or updated with a start that is not a Tuesday, an end that is not the start plus 13 days (an empty
+end is filled), or a start that is not the day after the previous sprint on the cadence ends (14 days more
+per number between them), with the law's text, for sprints starting on or after 2026-10-27; an older Closed
+sprint is history and keeps its dates. Points are integers 1 to the capacity; an unpointed item is counted
+and named, never taken as zero. Over-commitment is a warning on `point` and on the board, never a refusal.
+`sprint start` opens a sprint on `--start` (a Tuesday), else the day after the previous sprint ends, else
+`--as-of`, and ends it on the Monday 13 days later. `sprint close` freezes the sprint's Jira section into its
+newest week, marks every open item Carried, copies it into the next sprint (the planned one, or a new one
+opened Active the day after the closed one's end) with `carried_from` set, and records the close date;
+velocity is the mean of points done over the last three closed sprints. One sprint is Active at a time. The
+built text carries a generated `Sprint:` line under the sprint heading as soon as one item is pointed, and a
+`Points:` line under each pointed Jira item.
 
 **The planner.** `holiday load data/us-holidays-2026-2029.json` seeds the calendar (US federal holidays
 2026 to 2029 on their observed dates, plus the day after Thanksgiving and Christmas Eve marked
 `(company, assumed)`; every row `assumed` until the company confirms it: `update holiday <ref> --set
-status=confirmed`). `sprint plan [--until YYYY-MM-DD | --years 3] [--days 10]` continues the chain from
-the highest-numbered sprint: the next starts on the first business day after its end and ends on its
-tenth business day, `SPRINT n`, no lifecycle phase, capacity 8, Planned, the goal naming the holidays it
-contains (`Holidays: Christmas Eve (company, assumed) (12/24), Christmas Day (12/25)`); sprints are
-added while they start on or before the horizon; an existing sprint is never touched, so a second run
-adds only what is missing. `sprint plan --replan` recomputes the dates of every Planned sprint after the
-active one from the holiday table as it is now (run it after holidays become real), never a started or
-closed sprint, and rewrites only a goal the planner wrote. The report says how many were added and
-replanned, the first and last sprint, the horizon and the holidays honoured. The `TIMELINE` of the
-tracker text names the next planned sprint only (`- Phase to be assigned: planned. Sprint 3: ...`), and a
-planned sprint with no weeks and no items prints no `=====` block; the Sprint Board picker lists them
-all, the active one first.
+status=confirmed`). `sprint plan [--until YYYY-MM-DD | --years 3]` continues the chain from the
+highest-numbered sprint: the next starts the day after its end and ends 13 days later, `SPRINT n`, no
+lifecycle phase, capacity 8, Planned, the goal naming the holidays it contains (days off inside it:
+`Holidays: Christmas Eve (company, assumed) (12/24), Christmas Day (12/25), New Year's Day (1/1)`); sprints
+are added while they start on or before the horizon; an existing sprint is never touched, so a second run
+adds only what is missing. `sprint plan --replan` puts every Planned sprint after the active one back on the
+cadence (a chain loaded from a file under the old rule), never a started or closed sprint, and rewrites only
+a goal the planner wrote. The report says how many were added and replanned, the first and last sprint, the
+horizon and the holidays inside the span. The `TIMELINE` of the tracker text names the next planned sprint
+only (`- Phase to be assigned: planned. Sprint 32: 11/10 - 11/23.`), and a planned sprint with no weeks and
+no items prints no `=====` block; the Sprint Board picker lists them all, the active one first.
+
+**The alignment.** `sprint align <n> --start <YYYY-MM-DD>` puts a database written under the old rule on
+the law (`asi-kletz sprint align 31 --start 2026-10-27` for the programme's chain): the sprint that starts on
+that Tuesday becomes sprint `n` and every other sprint shifts by the same offset (the `SPRINT n` labels
+follow; a label without the number is kept), every sprint that is not Closed is re-dated onto the cadence
+(a Closed one keeps its dates as history), every reference follows (`sprint_item.sprint` and
+`carried_from`, `week.sprint`, the Safety Plan rows' `sprint`), and the plan's schedule is recomputed so
+`sprint_start`, `sprint_end` and the deadlines match the new dates. One transaction, one audit entry
+(`align`, with the mapping), one event (`sprint.aligned`); a second run finds the chain aligned and writes
+nothing. `--check` prints the mapping (every sprint's old and new number, label and dates) and changes
+nothing. Refused when the date is not a Tuesday, when no sprint (or more than one) starts on it, when two
+sprints share a number or when the shift would take a number below 1.
+
+**Superseded on 2026-10-29.** The rule of 2026-10-28 ("A sprint spans 10 business days. Monday to Friday
+count; weekends and holidays do not, so a sprint that contains a holiday ends one calendar day later per
+holiday ...") is history: `docs/sprint-planner-plan.md` and the `[0.10.0]` entry of the CHANGELOG still quote
+it, nothing in the code follows it, and `sprint_days` is no setting (the key is ignored with a warning).
 
 In the window, the **Dashboard** carries a sprint strip under the deliverable tiles (sprint,
 committed / capacity, done, to go, unpointed, days left, velocity; the frame names the sprint, its
@@ -922,8 +967,9 @@ for Refresh; both are optional (see JIRA Live Data).
 The export writes a workbook with one sheet per entity (`Safety Plan`, `Sprints`, `Sprint Items`,
 `Weekly Status`, `Holidays`, `Parameters`). Point `workbook` at a file of its own, never at a workbook that holds
 other sheets you want to keep. `tracker_title`, `tracker_byline`, `tracker_scope`,
-`tracker_jira_scope` (text) and `sprint_days` (an integer, business days) are the Weekly Activity
-Tracker's settings (see Weekly Activity Tracker); all are optional. `standards_dir` (a path, default
+`tracker_jira_scope` (text) are the Weekly Activity Tracker's settings (see Weekly Activity Tracker); all are
+optional. `sprint_days` is no setting since 0.18.0 (a sprint is 14 days, Tuesday to Monday, the owner's law
+of 2026-10-29): the key, when present, is ignored with a warning, like `sprint_capacity`. `standards_dir` (a path, default
 `../asi_standards` beside the file) is the folder of parametrised standards (see Standards and
 export). `default_points` (an integer,
 default 2) is the floor a Safety Plan row weighs when it has neither its own points nor the estimation

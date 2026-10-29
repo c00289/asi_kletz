@@ -12,6 +12,73 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.18.0] - 2026-10-29
+
+The owner, 2026-10-29: "what we know as sprint 3 is actually sprint 31, renumber appropriately, and then ensure that sprints always go Tuesday to Tuesday; this supersedes anything I said before; I also included a picture from systems engineering that is law for our sprints." The picture, a strip of seven sprints: 31 10/27 to 11/9, 32 11/10 to 11/23,
+33 11/24 to 12/7, 34 12/8 to 12/21, 35 12/22 to 1/4, 36 1/5 to 1/18, 37 1/19 to 2/1 (2026 into 2027). So a
+sprint is 14 calendar days from a Tuesday to the Monday 13 days later, the next starting the next day; a
+holiday never moves, stretches or shortens one (35 runs straight through Christmas and New Year); capacity
+stays 8, fixed. The sprint of 2026-10-27 to 2026-11-09 is the picture's Sprint 31, so every number in the
+chain shifts by 29 (the owner said "sprint 3 is actually sprint 31"; the dates in the picture decide: what
+was Sprint 2 is Sprint 31, what was Sprint 3 is Sprint 32). This replaces the rule of 2026-10-28 (10 business
+days, holidays stretching the dates) everywhere it was written. Schema version unchanged (8).
+
+### Added
+- **`sprint align <n> --start <YYYY-MM-DD>`** (`services/sprint_service.py:align`): the migration of an existing
+  chain onto the law. The sprint that starts on that Tuesday becomes sprint `n`, every other sprint shifts by
+  the same offset, `SPRINT n` labels follow (a label without the number is kept), every sprint that is not
+  Closed is re-dated onto the cadence (14 days per number from the anchor; a Closed sprint keeps its dates as
+  history), every reference follows (`sprint_item.sprint`, `sprint_item.carried_from`, `week.sprint`, the
+  Safety Plan rows' `sprint`), then the plan's schedule is recomputed (`sprint_start`, `sprint_end`, the
+  deadlines). One transaction, one audit entry (`align`, with the mapping), one event (`sprint.aligned`);
+  idempotent (a second run writes and audits nothing). `--check` returns the mapping and writes nothing.
+  Refused when the date is not a Tuesday, when no sprint or more than one starts on it, when two sprints share
+  a number or when a number would fall below 1. For the programme's database:
+  `asi-kletz sprint align 31 --start 2026-10-27`.
+- **The cadence guard** (`SprintService.guard`): a sprint created or updated with a start that is not a
+  Tuesday, an end that is not the start plus 13 days (an empty end is filled), or a start that is not the day
+  after the previous sprint on the cadence ends (14 days more per number between them) is refused with the
+  law's text (`CADENCE_RULE`), for sprints starting on or after 2026-10-27; an older sprint is history. Dates
+  are checked when they are written, so a database not yet aligned still opens, closes and edits.
+- `SPRINT_LENGTH` (14), `SPRINT_WEEKDAY` (Tuesday), `CADENCE_NUMBER` (31), `CADENCE_START` (2026-10-27) and
+  `CADENCE_RULE` in `schema/definitions.py`; `SPRINT_RULE` is the owner's words of 2026-10-29 and the picture,
+  quoted by the `sprint` verb's help, the README and the roadmap document.
+
+### Changed
+- **Every sprint date is cadence arithmetic**, not business days: `sprint start` ends a sprint on the Monday
+  13 days after its first day (`--start`, else the day after the previous sprint ends, else `--as-of`; a
+  Tuesday or refused); `sprint close` opens the next sprint the day after the closed one's end; `sprint plan`
+  adds sprints 14 days each from the last end and `--replan` puts the Planned sprints after the active one
+  back on the cadence; the `Holidays:` goal line still names the holidays a planned sprint contains, as days
+  off, never as a reason to move it. The plan's report says `length_days` (14) instead of `days`.
+- **`sprint_days` is no setting**: removed from the config loader's integer keys and from `status`
+  (`sprint_length_days`, 14, is reported instead); the key, when present in `kletz.toml`, is ignored with a
+  warning naming the law, like `sprint_capacity`. `--days` is gone from `sprint plan`. `SPRINT_DAYS` and
+  `Brain.sprint_days` are gone. `kletz.example.toml` says so.
+- `tracker/business_days.py` stays for the burndown's working days and `holidays_within`; its docstring no
+  longer describes a sprint. The sprint report says a holiday inside a sprint is a day off, not a stretch.
+- README: the Sprints subsection carries the owner's words and the picture's seven sprints as a table, the
+  alignment and the superseded rule; `sprint align` in the command list; the configuration keys.
+  `docs/sprint-planner-plan.md` and `docs/weekly-tracker-plan.md` carry a dated note that their cadence is
+  superseded (the history stands).
+
+### Tests
+- `test_sprint.py` re-aimed to the law: the cadence (`sprint plan` from the owner's chain produces exactly the
+  picture's seven sprints and 79 fortnights in three years), the guard (Tuesday, 13 days, gapless, numbers and
+  dates locked together, history before the anchor), holidays never moving a sprint, the config keys ignored,
+  `--replan` on an old-style chain, `sprint align` on a seeded database with items, weeks and plan rows (the
+  mapping, labels, dates, references, the audit entry and the event, idempotence, every refusal, the dry run),
+  the CLI. The schedule, GUI, transfer, generate and tracker tests pin the Monday end (`2026-11-09`); the
+  tracker's planner test aligns the imported file first. `test_business_days.py` keeps its arithmetic.
+
+### Rehearsal
+- On a copy of the programme's database (77 sprints, 1 to 77 under the old rule): `--check` reported the mapping
+  and wrote nothing; the alignment renumbered 77 sprints to 30 to 106 (Sprint 30 Closed keeps 2026-10-12 to
+  2026-10-27; 31 is 2026-10-27 to 2026-11-09; 32 to 37 are the picture), re-dated 75, carried 15 items, 5
+  weeks and 48 plan rows, and the recompute moved `sprint_end` on 46 of 48 plan rows; the second run changed
+  nothing. The fortnight chain is shorter than the business-day one it replaces: it now ends at Sprint 106
+  on 2029-09-24, so `sprint plan` adds the fortnights to three years ahead when wanted.
+
 ## [0.17.0] - 2026-10-29
 
 The owner, 2026-10-29, on the exported QF-17: "bring back the color formatting for parameters and make it

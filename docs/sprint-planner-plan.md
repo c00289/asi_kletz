@@ -1,6 +1,13 @@
 # ASI Kletz — Plan: the sprint planner, holidays and business days
 
-**Status:** Implemented 2026-10-28 (asi_kletz 0.10.0); deviations in the CHANGELOG entry
+**Status:** Implemented 2026-10-28 (asi_kletz 0.10.0); deviations in the CHANGELOG entry.
+**Superseded in part, 2026-10-29 (asi_kletz 0.18.0):** the owner's law replaces the cadence of section 1: "what we
+know as sprint 3 is actually sprint 31, renumber appropriately, and then ensure that sprints always go Tuesday to
+Tuesday; this supersedes anything I said before; I also included a picture from systems engineering that is law
+for our sprints." A sprint is 14 calendar days, Tuesday to Monday, holidays never moving it, numbered from Sprint
+31 (2026-10-27 to 2026-11-09); `sprint_days` and business-day sprint dates are gone; `sprint align` moves an
+existing chain onto the law. The capacity rule (8 points, fixed) and the holiday table stand. The text below is
+the plan as written and implemented; the README's Sprints section and the `[0.18.0]` CHANGELOG entry are current.
 **Written:** 2026-10-28
 **Owner:** FuSa engineer
 **Target version:** asi_kletz 0.10.0 (after 0.9.1; one new entity, `holiday`; Kletz only, nothing shared with
@@ -251,3 +258,5 @@ README.md, CHANGELOG.md, docs/plan.md, pyproject.toml, docs/sprint-planner-plan.
 - 2026-10-28: written, decided; the owner's capacity addition folded in the same day (section 3.4).
 - 2026-10-28: implemented as asi_kletz 0.10.0 in four commits (one per phase); every deviation and what the
   design got wrong once it met the code are in `CHANGELOG.md`, section `[0.10.0]`.
+- 2026-10-29: the cadence superseded by the owner's law (14 days, Tuesday to Monday, Sprint 31 on 2026-10-27;
+  holidays never move a sprint), asi_kletz 0.18.0; the note at the top, the README and the `[0.18.0]` entry.

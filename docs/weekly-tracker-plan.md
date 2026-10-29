@@ -6,6 +6,10 @@ and document beside them; charts are matplotlib figures in the diagram catalog, 
 only), phase 5's family tables carried by each release. Deviations recorded by the implementing agent in the
 CHANGELOG entries: weeks start on Monday; People and Questions stay inside the Issues text; `sprint close`
 always opens the next sprint; the burndown and velocity are charts, not Escher diagrams.
+**Superseded in part, 2026-10-29 (asi_kletz 0.18.0):** the sprint cadence (section 3.8's `sprint_capacity` and
+`sprint_days`, the ten business days of 0.10.0 after them) is replaced by the owner's law: a sprint is 14 calendar
+days, Tuesday to Monday, 8 points fixed, holidays never moving it, numbered from Sprint 31 (2026-10-27 to
+2026-11-09); neither key is a setting. The README's Sprints section and the `[0.18.0]` CHANGELOG entry are current.
 **Written:** 2026-10-28
 **Owner:** FuSa engineer
 **Target version:** asi_kletz 0.8.0 (after 0.7.4; schema version 1 → 2, two new entities; Kletz only, the
