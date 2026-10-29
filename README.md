@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.23.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.24.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -23,7 +23,34 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)). Since 0.23.0 it also reads
 Confluence, read only, through the same door, so a deliverable can name its page, prove what the page said and
-tell when it moved (see [Confluence (read only)](#confluence-read-only)).
+tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 0.24.0 it is the home of STPA
+next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
+step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
+tool by the owner's decision of 2026-10-29.
+
+## What is in 0.24.0
+
+**STPA moves to Kletz.** The owner, 2026-10-29: "control structures were supposed to go into Kletz and not
+Dewey"; asked where STPA should live: "move everything to Kletz". The control structures of asi_dewey 0.9.0 and
+0.10.0 (`asi_dewey/docs/control-structure-plan.md`, phases 2 and 3; here as `docs/control-structure-plan.md`) and
+the STPA step objects of asi_dewey 0.10.0 and 0.10.1 (phase D of `asi_hopper/docs/confluence-integration-plan.md`)
+are ported whole: the thirteen entities, the rules, the two factories, the draw.io and Confluence readers, the
+`cs` and `stpa` verbs with the names and `Result` shapes they had, the two screens, the Dashboard's STPA tiles,
+the `stpa_report` document and the `stpa_trace` diagram, the fixtures and the tests. The sister tool loses them in
+a later release. Schema version 10 to 11: thirteen tables added, nothing existing changed.
+
+*What was adapted to Kletz.* The rules of an entity are rule objects `Brain.service` attaches to the plain
+`EntityService` (`guard`, `on_load`, the new `before_delete` and `after_change` hooks, `delete --cascade` on
+the generic verb), not subclasses; the lists of a row (`control_actions`, `hazards`, `types` ...) are JSON
+arrays through `schema/lists.py`, typed one item per line and parsed by the entity's guard, so Kletz's
+`FieldType.JSON` of 0.19.0 stays what it was; `from_confluence` and `stpa refresh` snapshot a page through
+Kletz's own Confluence door (`ConfluenceService.snapshot_page`, the login hint as the Jira verbs show it),
+never a second Hopper facade; the worker-thread helper is Kletz's own `BackgroundFetch`
+(`gui/background.py`, the Jira fetches' pattern, now with `call` for the preview); `control_structures_dir`
+joins `kletz.toml` and `status` (`$ASI_KLETZ_CONTROL_STRUCTURES` overrides it); the preview and the exports land
+under Kletz's out folder (`figures/`, `control_structures/`, `stpa/`); `cs export` publishes `cs.exported`
+from its worker thread, which the window ignores as it does `jira.live`. See [Control
+structures](#control-structures) and [STPA analyses](#stpa-analyses).
 
 ## What is in 0.23.0
 
@@ -559,7 +586,8 @@ Everything of 0.1.0 plus diagrams and documents (see Diagrams and documents).
   fingerprint table, and an **audit log** that records who did what.
 - **One command path**: `list`, `get`, `create`, `update`, `delete`, `count`, `schema`,
   `status`, `dump`, `load`, `export`, `import`, `run`, `gui` (since 0.2.0 `diagram` and
-  `document`, since 0.3.0 `theme`, since 0.5.0 `jira`, since 0.7.0 `session`). Every command returns a structured
+  `document`, since 0.3.0 `theme`, since 0.5.0 `jira`, since 0.7.0 `session`, since 0.23.0 `confluence`, since
+  0.24.0 `cs` and `stpa`). Every command returns a structured
   `Result` (`ok`, `data`, `errors`, `warnings`) that serialises to JSON.
 - **JSON dump and load** with `replace`, `merge`, and `append` modes.
 - **Excel export** that regenerates the workbook (one sheet, bold headers, frozen row,
@@ -1083,6 +1111,248 @@ plan.
 Kletz imports from asi_hopper only `Hopper`, the records, `PageSource`, `page_id_of` and the error classes,
 inside the functions that need them, never `asi_hopper.gateway`; `import asi_kletz` never loads it.
 
+## Control structures
+
+STPA begins with a control structure: the controllers, what each is responsible for, the
+algorithms it runs, the process model it decides on, and the control actions down and the
+feedback up between them. Since 0.24.0 Kletz holds control structures as rows
+(docs/control-structure-plan.md, phase 2, moved here from the sister tool's 0.9.0), builds them through a
+factory, and draws them with [asi_escher](../asi_escher) 0.2.1's `control_structure` kind. Kletz never draws
+anything itself: "all image stuff is handled through escher", and every export runs escher's OCR gate on the
+PNG "so that the final diagrams are competent". The window has a screen for them, **Control structures**,
+described after the verbs.
+
+**Entities** (schema version 11). One `control_structure` (name, slug, system, description, source,
+status Draft / Reviewed / Baselined, revision) holds everything; every part names its structure by
+slug and its parent by key, so rows survive any export and import and an STPA step points at
+a controller by key and a signal by `CA-13`:
+
+| Entity | Sheet | Fields beyond `structure` and `order` |
+|---|---|---|
+| `cs_controller` | CS controllers | key, name, kind (controller, human_controller, controlled_process, environment, sensor, actuator, external_system), responsibility, process_model_title, note |
+| `cs_algorithm` | CS algorithms | controller, code (`V1`), name |
+| `cs_process_model_entry` | CS process model | controller, heading, control_actions, variables, updated_by, references (lists) |
+| `cs_edge` | CS edges | key (`e7`), kind (control_action, feedback), source, target (controller keys) |
+| `cs_signal` | CS signals | edge, signal_id (`CA-01`, `FB-12`), kind, name, placeholder |
+| `cs_note` | CS notes | text, attached_to (a controller key, or empty) |
+
+The lists are `FieldType.JSON` columns holding a JSON array (`schema/lists.py:list_of`: a list as it is, a
+JSON array parsed, any other text one item per line, blank the empty list), read back as a list, edited one
+item per line, carried as JSON text in the workbook. The service rules hold on every verb that writes a
+row (`services/control_structure_service.py`, one rule object per entity attached by `Brain.service`): a
+part names a structure and a parent that exist; a controller's key (from its name when not
+given) and an edge's key (the next free `eN`) are unique within the structure; a signal's kind
+defaults to its edge's and must match it; a signal id is unique within the structure (a refusal
+when typed, a warning when a file is loaded whole, repeated by `cs validate`), except on two edges
+that leave the same controller, one feedback to two receivers, which `cs validate` lists as `info`
+(the owner's structure has two such); a control action
+pointing up the hierarchy (by the controllers' `order`) or feedback pointing down is a warning,
+never a refusal; a structure with parts, a controller with dependants or an edge with signals is
+deleted with `--cascade` or not at all (the generic `delete` takes `--cascade` too); a note
+attached to a deleted controller stays, detached. Every change publishes `cs.changed` with the
+structure's slug; a dataset loaded whole publishes one.
+
+**The factory** (`asi_kletz.stpa.factory.ControlStructureFactory`, `brain.factory`) builds a
+structure from a plain dataset through the service, so every structure obeys the same rules
+whichever **builder** made it:
+
+| Builder | Reads | Options |
+|---|---|---|
+| `blank` | nothing | `--name`, `--system` |
+| `template:wheel_loader_master` | the owner's structure from `<control_structures_dir>/wheel-loader/datasets/` (private; listed as unavailable when absent) | `--name`, `--system` |
+| `from_drawio` | a draw.io file, escher's own or hand-drawn (`stpa/drawio_reader.py`, standard library only, the owner's parser ported) | `--from <file>` |
+| `from_datasets` | the six JSON files of a datasets folder (the Roy's Brain envelope) | `--from <folder>` |
+| `clone` | an existing structure | `--from <id-or-slug>`, `--name` |
+
+`to_diagram(structure)` is the one place that decides how rows become the drawing (a controller a
+box of its kind with its algorithms and its process model, an entry drawn as `- heading: variables;
+updated by ...`; an edge a control action or feedback carrying its signal lines `CA-01 Mission data`
+in order; a note attached to its controller), so an export and the window's preview can never
+disagree. The round trip holds: a file written by escher from `to_diagram` reads back to the same
+rows (keys, names, kinds, responsibilities, algorithms, process models, edges, signals, notes); only
+the controllers' `order` is the layout's, because the drawing ranks by hierarchy.
+
+**Verbs**:
+
+```powershell
+asi-kletz cs list                                   # every structure with its counts
+asi-kletz cs get wheel_loader                       # one structure and all its parts (id, uid or slug)
+asi-kletz cs builders                               # the builders, available or not and why
+asi-kletz cs new blank --name "Demo loader" --system "Demo loader"
+asi-kletz cs new template:wheel_loader_master       # the owner's structure, from the private shelf
+asi-kletz cs new from_drawio --from structure.drawio --name "Imported"
+asi-kletz cs import structure.drawio                # from_drawio or from_datasets by what the path is
+asi-kletz cs duplicate wheel_loader --name "Wheel loader rev B" [--slug wl_b]
+asi-kletz cs validate wheel_loader                  # every rule on the stored rows: errors, warnings, info
+asi-kletz cs export wheel_loader --out exports      # <out>/wheel_loader.drawio and .png
+asi-kletz cs export wheel_loader --out exports --format svg --format drawio --no-ocr
+asi-kletz cs export wheel_loader --out exports --all
+asi-kletz cs delete wheel_loader --cascade
+asi-kletz create cs_signal --set structure=wheel_loader --set edge=e3 --set signal_id=CA-11 --set name="Pause"
+asi-kletz delete cs_controller 12 --cascade         # its algorithms, entries and the edges touching it go with it
+```
+
+**Formats and the OCR verdict**. The format set is escher's (`drawio`, `png`, `svg`); the default
+is `drawio` and `png`, the file to edit (in draw.io or the VS Code draw.io extension, every box
+where escher put it) and the picture to look at. `export` calls `asi_escher.build` with
+`provenance=True` and, unless `--no-ocr`, `ocr=True`: escher reads the PNG back with the Windows
+OCR engine and checks every box title, algorithm code, process-model title and signal id. The
+`Result` carries `files`, `paths`, `primary`, `size`, `nodes`, `edges`, `issues`, `layout_issues`
+(the issues that are not OCR), `ocr` (escher's report: `verdict`, `competent`, `found`, `missing`,
+`line_count`) and `ocr_verdict`: `competent`, `unreadable: <labels>`, `ocr unavailable: <why>` (no
+engine, as on CI; never a failure), `ocr skipped` (`--no-ocr`) or `no png written`. Every issue is
+repeated as a warning; the export is audited as `cs.export` and published as `cs.exported`.
+Without `--out` the files go to `control_structures/` under the out folder.
+
+**The screen** (`gui/control_structure_screen.py`, navigation entry **Control
+structures**, the Dashboard's CS STRUCTURES tile, `/screen {"show": "control_structures"}`). Left,
+the structures, one row each with its system, status, revision and the six counts, and New from…
+(a small dialog listing the factory's builders with their availability and the options each takes:
+name, system, a file or folder for `from_drawio` / `from_datasets`, a source structure for `clone`),
+Duplicate, Delete (asks, then cascades), Import draw.io…, Validate (the errors, warnings and info in
+the status bar and the Validation panel under the list) and Export…. Middle, the selected
+structure's parts as a stacked tree, the `stack()` idea of the Safety Plan with unique iids (a
+controller row; under it its algorithms, its process-model entries and the arrows that leave it with
+their signals; the notes at the end), a search box that keeps the lines opening a match's groups, and
+a form for the selected row (controller / algorithm / process-model entry / edge / signal / note; the
+keys of controllers and edges offered in a list; lists edited one item per line) with Save, New child
+(the kind depends on the selection: under a controller an algorithm, an entry, an edge it sends or a
+note beside it; under an edge a signal) and Delete. Right, the preview: escher's PNG of the
+structure, rendered off the Tk thread when a structure is selected and after every save into
+`figures/` under the out folder (with its `.drawio`), scaled to fit, the OCR verdict and the
+layout-issue count under it, Re-render, and Open in VS Code on the `.drawio` when `code` is on the
+PATH. Every button calls a verb through the window; the two things that take seconds, `cs export`
+and the preview's render, run on a worker thread (`gui/background.py`, `BackgroundFetch`, the Jira
+fetches' pattern) and the Tk thread only polls.
+
+**The Export… dialog**: the destination folder (remembered in the preferences as `cs_export_dir`,
+the last one used; `control_structures/` under the out folder the first time), the three format
+check boxes (`drawio`, `png`, `svg`) with **Select all** and **Select none**, `drawio` and `png`
+checked by default, an OCR check box (on by default), a preview of the file names, Export. The work
+is the `cs export` verb, so an agent gets the same `Result` from `/execute`; the dialog says
+"Exporting…" meanwhile, then names every file written and the OCR verdict, as the status bar does
+(`Exported <name>: <files> (OCR: competent)`), with Open in VS Code on the written `.drawio`.
+
+**The real structure is private.** The owner's wheel loader master structure lives in
+asi_standards `control-structures/wheel-loader/` (the draw.io source, the parser, the six
+datasets, hashed) and in his database; `control_structures_dir` in `kletz.toml` (default
+`../asi_standards/control-structures` beside the file, `$ASI_KLETZ_CONTROL_STRUCTURES` overrides it) is where the
+template builder reads it. This repository holds none of it: the tests build a synthetic
+eight-box structure with invented names, and one local-only test on the private datasets asserts
+counts and files, never text, and is skipped where the shelf is absent.
+
+## STPA analyses
+
+The STPA pages on Confluence carry the later steps: the losses and hazards, the unsafe control
+actions in a context table, the loss scenarios and the safety constraints, each with a stable local
+code (`H2`, `UCA14`, `CSTR28`) that means something only within its page. Since 0.24.0 Kletz holds
+them as rows (asi_hopper/docs/confluence-integration-plan.md, Phase D, moved here from the sister tool's
+0.10.0 and 0.10.1), reads them from a page through [asi_hopper](../asi_hopper) 0.1.9's page anatomy, cites the
+page, version and section every object came from, and links the UCAs to a control structure. Confluence is
+read only, and stays the truth for the text; Kletz owns the links and the notes.
+
+**Entities** (schema version 11). One `stpa_analysis` (name, slug, system, status Draft / Reviewed /
+Baselined, `control_structure`, `source_kind` confluence / hand, `source_page_id`, `source_url`,
+`source_version`, `source_body_sha256`, `source_taken_at`, `source_bundle`, note) holds everything
+read from one page; every part names its analysis by slug, carries its `cite` and a `note`:
+
+| Entity | Sheet | Fields beyond `analysis`, `order`, `cite` and `note` |
+|---|---|---|
+| `stpa_loss` | STPA losses | code (`L1`), text |
+| `stpa_hazard` | STPA hazards | code (`H2`, `H4.3`), text, parent (the code before the last dot when listed), losses (list), retired |
+| `stpa_uca` | STPA UCAs | code (`UCA14`), controller, control_action, category (not_providing, providing, timing_order, duration), text, hazards (list), retired, duplicate_of, cs_controller, cs_signal |
+| `stpa_scenario` | STPA scenarios | row, uca, counterpart (`CA14`), types (1 to 4), causal_factors, beliefs, constraints (list), retired |
+| `stpa_constraint` | STPA constraints | code (`CSTR28`), text (empty when only referenced) |
+
+The rules hold on every verb that writes a row (`services/stpa_service.py`): a part names an
+analysis that exists; a code is unique within its analysis and immutable while other rows point at
+it; a hazard a UCA lists, a loss a hazard lists, a constraint or the UCA a scenario names must exist
+in the analysis as a **warning**, never a refusal (the pages cite `[H4]` where only `H4.3` to `H4.5`
+are listed, and a scenario row can have an empty UCA cell); a scenario type is 1 to 4; one analysis
+per (page id, version); the `source_*` of an analysis read from Confluence move only through
+`refresh`; an analysis with parts is deleted with `--cascade` or not at all. Every change publishes
+`stpa.changed`; a load and a refresh publish one.
+
+**The reader** (`stpa/confluence_reader.py`) is pure: it takes the Markdown body and the citation
+context and never sees raw Atlassian JSON. Losses and hazards are the `L1 - text` and `H2 - text`
+lines of the section whose heading contains "Losses and Hazards" (struck means retired); UCAs are
+the cells of the first table under "Context Table" (column 0 the controller, carried down when
+empty; column 1 the control action; columns 2 to 5 the four categories; a row whose controller cell
+was merged with the row above read from its first cell with UCA content), each cell cut at its bold
+runs, the hazards read from `[H1, H2.1]`, a code inside `~~` retired, `(duplicate of **UCA7**)`
+the previous UCA's twin (a note that stands alone a warning, never a UCA), an unbolded code after a
+hazard list a UCA of its own, a cell that is a link to another page a warning naming it, a code read
+twice a warning with the later one skipped; scenarios and constraints are the rows of the first table
+under "Loss Scenarios" (the UCA or its counterpart `CAn` at the start of the cell, the types from `Type
+(n)`, the `Belief:` runs, every `CSTRn` of the constraints cell with the text that follows it, lists
+`CSTR[1, 2]` and `duplicate CSTR61` as references, a broken escape a warning, the first row that spells
+a constraint out winning). The reader answers the dataset and its warnings; the factory loads it
+through the services.
+
+**The factory** (`asi_kletz.stpa.stpa_factory.StpaFactory`, `brain.stpa_factory`):
+
+| Builder | Reads | Options |
+|---|---|---|
+| `blank` | nothing | `--name`, `--system` |
+| `from_bundle` | a Hopper Confluence evidence bundle (`manifest.json`, `pages/<id>.md`); offline, hashed, replayable: **the primary builder** | `--from <folder>`, `--page <id>` when the bundle holds several, `--name` |
+| `from_confluence` | a snapshot of the page with its comments through Kletz's own Confluence door (`ConfluenceService.snapshot_page`, `hopper.evidence.snapshot_pages`) into `evidence_dir`, then `from_bundle`; needs an Atlassian session (`asi-hopper auth login`) | `--page <id>`, `--out <folder>`, `--name` |
+| `clone` | an existing analysis | `--from <id-or-slug>`, `--name` |
+
+**Verbs**:
+
+```powershell
+asi-kletz stpa list                                             # every analysis with its counts
+asi-kletz stpa builders
+asi-kletz stpa new from_bundle --from evidence/<bundle folder> --name "Locator"   # the acceptance form
+asi-kletz stpa new from_confluence --page 399343803 --name "Locator"             # snapshot, then read
+asi-kletz stpa get locator                                      # the analysis and every part (id, uid or slug)
+asi-kletz stpa refresh locator                                  # the report: new / changed / retired by code
+asi-kletz stpa refresh locator --apply                          # applied; notes, cs_controller, cs_signal, status kept
+asi-kletz stpa refresh locator --from <newer bundle> --apply    # against a bundle instead of a new snapshot
+asi-kletz stpa validate locator
+asi-kletz stpa link locator --structure wheel_loader            # cs_controller / cs_signal proposed by name
+asi-kletz stpa link locator --structure wheel_loader --apply    # the exact matches written
+asi-kletz stpa export locator --out exports                     # <out>/locator.xlsx, locator_report.md, locator_trace.png
+asi-kletz stpa export locator --out exports --all               # xlsx, md, docx, pdf, svg, png
+asi-kletz stpa delete locator --cascade
+asi-kletz update stpa_uca 14 --set cs_signal=CA-07 --set note="see the review of 10-29"
+```
+
+`refresh` reads the page again (a new snapshot through Hopper into `evidence_dir`, or the bundle
+`--from` names) and compares it to the stored objects by code (a scenario by its row): `new`,
+`changed` (the page fields that differ, before and after), `retired` (gone from the page, or now
+struck) and `removed` (a loss or a constraint gone). Without `--apply` it is a report and writes
+nothing; with it the page fields are written, every object's `cite` moves to the new version, the
+analysis's `source_*` move with it, and every Kletz-side field (`note`, `cs_controller`,
+`cs_signal`, `status`) is kept; one audit entry per object changed plus `stpa.refresh` with the
+counts. `validate` reports dangling codes, UCAs without a scenario, constraints only referenced,
+UCAs with the same text, a scenario without a UCA, and, when a structure is linked, UCAs naming a
+controller the structure does not have. `link --structure` matches a UCA's controller text to the
+structure's controller names and keys and its control action to the names of the signals leaving
+that controller, case-insensitively; exact matches are written with `--apply`, partial ones are
+reported with their candidates and never written.
+
+**Views.** The six sheets are in the workbook with every other entity; `stpa export` writes a
+workbook of one analysis. The `stpa_report` document (Gutenberg, `--param analysis=<slug>`): the
+source, the losses, the hazards, the UCAs by controller and category, the scenarios, the
+constraints with the rows that name them, the trace diagram, every object with its citation, and
+the page's review comments as an appendix when the analysis came from a bundle (no author is named).
+The `stpa_trace` diagram (Escher): hazards, UCAs, scenarios and constraints as four columns with the
+edges the page states, a retired UCA tinted, a duplicate a dashed edge; a swimlane per controller
+of the linked structure once the UCAs are linked, with lanes for the hazards and the constraints.
+Without `--out` the files go to `stpa/` under the out folder.
+
+**The screen.** *STPA analyses* in the navigation (`/screen {"show": "stpa"}`, the Dashboard's STPA
+ANALYSES tile): the analyses with their counts, the parts of the selected one as tabs (read-only tables; the
+generic verbs edit them), New from… (the builders), Validate, Link structure…, Export…, Delete, and
+**Refresh from Confluence**, which runs the report on a worker thread (Confluence is seconds away),
+shows it in the Report tab and asks before `--apply` runs on the Tk thread.
+
+**Nothing real in the repository.** The tests read a synthetic STPA page with neutral names
+(`tests/fixtures/conveyor-gate-stpa.md`, the exact Markdown shape the server renders, and the quirkier
+`conveyor-gate-stpa-quirks.md`) and a synthetic bundle built around it; asi_hopper's own Confluence fixtures
+are synthetic too. A run against the real page happens on the owner's machine and is recorded as counts.
+
 ## One at a time
 
 Decided 2026-10-27 and enforced from 0.6.0: **at most one primary tool runs at a time**, and the
@@ -1255,6 +1525,7 @@ project = "WA485 Autonomous Wheel Loader"
 jira_live_jql = "project = HWL AND (assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) ORDER BY updated DESC"
 jira_live_autofetch = false
 evidence_dir = "evidence"
+control_structures_dir = "../asi_standards/control-structures"
 
 [[revision]]
 rev = "0.1"
@@ -1281,7 +1552,7 @@ and `jira live` fetch when no `--jql` is given, and `jira_live_autofetch` (a TOM
 for Refresh; both are optional (see JIRA Live Data).
 
 The export writes a workbook with one sheet per entity (`Safety Plan`, `Sprints`, `Sprint Items`,
-`Weekly Status`, `Holidays`, `Parameters`). Point `workbook` at a file of its own, never at a workbook that holds
+`Weekly Status`, `Holidays`, `Parameters`, and since 0.24.0 the seven `CS ...` and six `STPA ...` sheets). Point `workbook` at a file of its own, never at a workbook that holds
 other sheets you want to keep. `tracker_title`, `tracker_byline`, `tracker_scope`,
 `tracker_jira_scope` (text) are the Weekly Activity Tracker's settings (see Weekly Activity Tracker); all are
 optional. `sprint_days` is no setting since 0.18.0 (a sprint is 14 days, Tuesday to Monday, the owner's law
@@ -1298,7 +1569,10 @@ neither is ignored with a warning. The kinds label the export's Work product cel
 `plan urls --audit` (see Standards and export). `evidence_dir` (0.23.0; a path, default `evidence/` beside the
 database) is where `confluence evidence` writes its Hopper page bundles, and `[confluence] space` (a space key,
 default `STPA`; another value is ignored with a warning) the space `confluence search` and the Find page window
-look in when none is named (see Confluence (read only)).
+look in when none is named (see Confluence (read only)). `control_structures_dir` (0.24.0; a path, default
+`../asi_standards/control-structures` beside the file; `$ASI_KLETZ_CONTROL_STRUCTURES` overrides it) is the private
+shelf the `template:wheel_loader_master` builder reads the owner's control structure from; absent, the builder is
+listed as unavailable and every other builder still works (see Control structures).
 
 ## Quick start
 
@@ -1320,6 +1594,9 @@ asi-kletz confluence search "Locator"                           # the pages of t
 asi-kletz confluence link 3 399343803                           # the page's URL onto row 3, through the guard
 asi-kletz confluence evidence --rows 3                          # a Hopper bundle of its pages under evidence/, audited once
 asi-kletz confluence check                                      # every linked page: still there, which version, moved?
+asi-kletz cs new template:wheel_loader_master                   # the owner's control structure from the private shelf (0.24.0)
+asi-kletz cs export wheel_loader_master_control_structure --out exports   # drawio and png through the OCR gate
+asi-kletz stpa new from_bundle --from evidence/<bundle> --name "Locator"  # the STPA step objects of a page
 asi-kletz export excel --out "kletz.xlsx"
 asi-kletz dump --out kletz.json
 asi-kletz document safety_plan --out out
@@ -1474,7 +1751,13 @@ workbook. One test seeds a database from the workbook named in the repo's `kletz
 is skipped when there is none. `tests/fixtures/kletz-0.8.4.db` is a small database made with the
 0.8.4 code (three plan rows, one sprint, no `uid` column); the open-and-stamp test copies it to a
 temporary folder, never opens it in place, and checks that 0.9.0 adds the column and the index,
-stamps every row, audits the counts and changes nothing else. The GUI tests drive real tkinter widgets with the window
+stamps every row, audits the counts and changes nothing else. `tests/fixtures/kletz-0.23.0.db` is a schema-10 database made with the 0.23.0 code (three plan rows, one
+parameter); the 0.24.0 migration test copies it and checks that the thirteen STPA tables are added and nothing
+else changes. The control-structure and STPA tests (0.24.0, ported from the sister tool) build a synthetic
+eight-box structure and read a synthetic STPA page (`tests/fixtures/conveyor-gate-stpa.md` and the quirks
+page); the OCR gate is monkeypatched to "competent" throughout, one test runs the real Windows engine and is
+skipped where it is absent, and one local-only test loads the owner's private datasets from asi_standards
+(counts only, never text) and is skipped where the shelf is absent. The GUI tests drive real tkinter widgets with the window
 withdrawn and are skipped when no display is available. pytest runs with `--capture=sys`
 (see `pyproject.toml` for why). The generate tests run the real asi_escher and asi_gutenberg
 (no mocks), check that importing `asi_kletz` loads neither matplotlib, reportlab nor asi_hopper,
@@ -1500,9 +1783,11 @@ own file, so a developer's open window never receives test traffic.
 ## Adding an entity
 
 The schema machinery is generic: an entity registered with `register_entity` gets a table,
-commands, JSON, and a workbook sheet; `ALL_ENTITIES` in `schema/definitions.py` lists the six of
-0.14.0 in order (the four of 0.8.0, `holiday` since 0.10.0, `parameter` since 0.14.0) and the test suite
-asserts that list, never a count. End the fields with
+commands, JSON, and a workbook sheet; `ALL_ENTITIES` in `schema/definitions.py` lists the nineteen of
+0.24.0 in order (the four of 0.8.0, `holiday` since 0.10.0, `parameter` since 0.14.0, the seven control-structure
+and six STPA entities since 0.24.0) and the test suite asserts that list, never a count. An entity whose rows
+obey rules of their own gets a rule object `Brain.service` attaches (`services/control_structure_service.py`,
+`EntityRules`: `guard`, `on_load`, `before_delete`, `after_change`). End the fields with
 `uid_field()` so the entity carries the hidden identity like the others (a test checks that every
 registered entity does). It does not get a screen by
 itself: screens are registered in `gui/screens.py`, asserted the same way. The list is the design,
