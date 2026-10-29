@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.15.3**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.16.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -436,9 +436,19 @@ asi-kletz plan export --row 1 --out out --standard qf-17-safety-plan
 
 The export builds every standard the row has (or the one named) with `asi_gutenberg.build` (the source's own page orientations, the
 parameters filled, a blank left as `{{ name }}` and reported as `unfilled parameter: name`, every filled
-value highlighted in mint in the PDF and the Word file and written `==value==` in the Markdown); the
-result lists the files, the pages, the filled count and the unfilled names, also as warnings; one audit entry
-`export`; the event `plan.exported`. The default output folder is the configuration's `out`.
+value written `==value==` in the Markdown); the result lists the files, the pages, the filled count and the
+unfilled names, also as warnings; one audit entry `export`; the event `plan.exported`. The default output
+folder is the configuration's `out`.
+
+**The template exactly** (0.16.0; the owner, 2026-10-29: "match the template exactly"): when the standard's
+folder holds exactly one `.docx` under `source/` (the controlled original, preserved byte for byte in
+asi_standards), the Word file written is that original filled in place by asi_gutenberg 0.7.0's `fill_docx`:
+every style, header, footer, table, column width and page orientation the template's, every table's first
+row repeating at the top of each page, the text changed only where the source changed it, no marks. The PDF
+is Word's own print of that file (Windows with Word installed); when Word cannot print, the PDF stays
+Gutenberg's rendering and a warning says so. Without an original the PDF and the Word file are Gutenberg's
+renderings, their filled values highlighted in mint. Each export entry says which it was (`exact`:
+`docx`, `pdf`) and names the `template`; `standards` lists it.
 
 In the window, the Safety Plan's details pane starts with the standards pane (owner, 2026-10-29): **Export
 document…** (enabled when the selected row has a standard; it asks for a folder, then runs `plan export`;

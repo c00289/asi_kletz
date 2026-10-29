@@ -51,6 +51,11 @@ class StubHopper:
 @pytest.fixture
 def standards(tmp_path, monkeypatch):
     """A standards directory with one standard, ``qf-17-test``, and a folder that is not one."""
+    return standards_dir(tmp_path, monkeypatch)
+
+
+def standards_dir(tmp_path, monkeypatch) -> Path:
+    """The fixture's body, for the test modules that build on it (``test_standards_template.py``)."""
     root = tmp_path / "standards"
     (root / "qf-17-test").mkdir(parents=True)
     (root / "qf-17-test" / "qf-17-test.md").write_text(SOURCE, encoding="utf-8")

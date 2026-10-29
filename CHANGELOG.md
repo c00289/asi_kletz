@@ -12,6 +12,30 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.16.0] - 2026-10-29
+
+The owner, 2026-10-29, on the exported QF-17: "can we make it exactly like the template? I still want all the
+columns to pop up in every page but otherwise we need to match the template exactly." Schema version
+unchanged (8). The lock takes asi_gutenberg 0.7.0 (`fill_docx`) and asi_hopper 0.1.7.
+
+### Changed
+- **The export writes the Word original filled in place** (`services/standards_service.py:export`,
+  `Standard.template`): a standard whose folder holds exactly one `.docx` under `source/` (the asi_standards
+  layout: the controlled document preserved byte for byte) names it as its template, and `plan export`
+  writes `<folder>.docx` as that original with the source's text put into its own runs by asi_gutenberg
+  0.7.0's `fill_docx`: every style, header, footer, table, column width and page orientation the
+  template's, every table's first row repeating at the top of each page it spans, a value changed only where
+  the source changed it, no marks in the Word file (the Markdown keeps its `==marks==`, as before). The PDF
+  is Word's own print of that file (`pdf_with_word`, Windows with Word); when Word cannot print, the PDF
+  stays Gutenberg's rendering and a warning says so (`<folder>: pdf through Word failed: ...; the PDF is
+  Gutenberg's rendering, not the template`). A folder without an original, or with more than one, exports
+  as before. Each export entry carries `template` and `exact` (`{"docx": bool, "pdf": bool}`); `standards
+  list` and `plan parameters` show the template path.
+- The Safety Plan pane's export status says what was exact: `Exported ... (docx and pdf the template
+  exactly); N parameter(s) still unfilled`.
+- An export with an original takes longer (the 3.4 MB QF-17 reads twice and Word prints: about 15 s on the
+  owner's machine) and runs on the Tk thread like the rest of the export; the window waits.
+
 ## [0.15.3] - 2026-10-29
 
 A broken-windows sweep of the repository after the 0.15.x patches; no behaviour changes. Schema version
@@ -1461,7 +1485,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://example.invalid/asi-kletz/compare/v0.15.3...HEAD
+[Unreleased]: https://example.invalid/asi-kletz/compare/v0.16.0...HEAD
+[0.16.0]: https://example.invalid/asi-kletz/compare/v0.15.3...v0.16.0
 [0.15.3]: https://example.invalid/asi-kletz/compare/v0.15.2...v0.15.3
 [0.15.2]: https://example.invalid/asi-kletz/compare/v0.15.1...v0.15.2
 [0.15.1]: https://example.invalid/asi-kletz/compare/v0.15.0...v0.15.1

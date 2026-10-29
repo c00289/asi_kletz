@@ -367,7 +367,9 @@ class EntityScreen(Screen):
         self.jira_statuses.update(result.data.get("statuses") or {})
         files = [Path(p).name for e in result.data["exports"] for p in e["files"].values()]
         unfilled = sum(len(e["unfilled"]) for e in result.data["exports"])
-        self.window.set_status(f"Exported {', '.join(files)} to {folder}; {unfilled} parameter(s) still unfilled")
+        exact = [fmt for e in result.data["exports"] for fmt, yes in (e.get("exact") or {}).items() if yes]
+        how = f" ({' and '.join(sorted(set(exact)))} the template exactly)" if exact else ""
+        self.window.set_status(f"Exported {', '.join(files)} to {folder}{how}; {unfilled} parameter(s) still unfilled")
         row = self.by_id.get(self.selected_id)
         self.row_values_var.set(self._row_values_text(row))
 

@@ -42,6 +42,7 @@ class Standard:
     path: Path
     title: str
     parameters: list[str] = field(default_factory=list)
+    template: Path | None = None  # the Word original under source/, when the folder holds exactly one (0.16.0)
 
     @property
     def document_parameters(self) -> list[str]:
@@ -56,6 +57,7 @@ class Standard:
     def to_dict(self) -> dict[str, Any]:
         return {
             "folder": self.folder, "path": str(self.path), "title": self.title,
+            "template": str(self.template) if self.template else None,
             "parameters": len(self.parameters), "document_parameters": self.document_parameters,
             "row_parameters": len(self.row_parameters),
         }
@@ -102,7 +104,9 @@ class StandardsService:
         from asi_gutenberg import from_markdown, parameters
 
         doc = from_markdown(source.read_text(encoding="utf-8"))
-        return Standard(folder, source, str(doc.title or folder), parameters(doc))
+        originals = sorted((source.parent / "source").glob("*.docx")) if (source.parent / "source").is_dir() else []
+        template = originals[0] if len(originals) == 1 else None
+        return Standard(folder, source, str(doc.title or folder), parameters(doc), template)
 
     def for_row(self, row: dict[str, Any]) -> list[Standard]:
         """The standards a plan row has: those whose folder a set QMS reference flag of the row names."""
@@ -207,10 +211,15 @@ class StandardsService:
     def export(
         self, row_id: int, out_dir: str | Path | None = None, standard: str | None = None, actor: str = "python"
     ) -> dict[str, Any]:
-        """Build each standard of the row (or the one named) with asi_gutenberg, in the source's own page
-        orientations, the parameters
-        filled from the ``parameter`` table, the plan and Jira, the rest left and reported; audited once."""
-        from asi_gutenberg import build, from_markdown
+        """Build each standard of the row (or the one named) with asi_gutenberg, the parameters filled from
+        the ``parameter`` table, the plan and Jira, the rest left and reported; audited once.
+
+        The Markdown is always written (the filled source, its values marked). When the standard's folder
+        holds the Word original under ``source/`` (0.16.0, the owner: "match the template exactly"), the
+        Word file is that original filled in place, every table's first row repeating per page, and the
+        PDF is Word's own print of it; without an original, or when Word cannot print, the PDF and Word
+        file are Gutenberg's renderings of the source, as before, and a warning says so for the PDF."""
+        from asi_gutenberg import build, fill_docx, from_markdown
 
         plan = self.value_set(row_id, standard)
         target = Path(out_dir) if out_dir else Path(self.brain.out_dir)
@@ -218,9 +227,9 @@ class StandardsService:
         warnings = list(plan["warnings"])
         built = []
         for std in plan["standards"]:
-            doc = from_markdown(Path(std["path"]).read_text(encoding="utf-8"))
+            source = Path(std["path"]).read_text(encoding="utf-8")
             paths = build(
-                doc, str(target), name=std["folder"],
+                from_markdown(source), str(target), name=std["folder"],
                 params=std["values"], strict_params=False, mark_params=True,
             )
             issues = [str(i) for i in paths.pop("issues", [])]
@@ -228,9 +237,23 @@ class StandardsService:
             for name in unfilled:
                 warnings.append(f"{std['folder']}: unfilled parameter {name}")
             files = {fmt: paths[fmt] for fmt in ("md", "pdf", "docx") if fmt in paths}
+            exact = {"docx": False, "pdf": False}
+            if std.get("template"):
+                filled = fill_docx(
+                    std["template"], source, std["values"], str(target / f"{std['folder']}.docx"),
+                    strict=False, mark=False, pdf=True,
+                )
+                files["docx"] = filled.docx
+                exact["docx"] = True
+                if filled.pdf:
+                    files["pdf"] = filled.pdf
+                    exact["pdf"] = True
+                for issue in filled.issues:
+                    warnings.append(f"{std['folder']}: {issue}; the PDF is Gutenberg's rendering, not the template")
             built.append({
                 "standard": std["folder"], "title": std["title"], "files": files, "primary": files.get("pdf"),
                 "pages": paths.get("pages"), "filled": std["filled"], "unfilled": unfilled,
+                "template": std.get("template"), "exact": exact,
                 "issues": [i for i in issues if not i.startswith(UNFILLED)],
             })
         data = {
