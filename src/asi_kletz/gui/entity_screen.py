@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..generate.plan_schedule import SOURCE_DEFAULT, SOURCE_POINTS, weight_of
 from ..schema import EntitySchema, FieldSpec, FieldType
+from ..schema.people import is_role, people_lines, people_of, people_text
 from .screens import (
     INDENT,
     PDP_TAG,
@@ -25,7 +26,7 @@ from .screens import (
     stack,
     style_group_rows,
 )
-from .widgets import FieldWidget, JiraPickerWidget, PointsWidget, WidgetFactory
+from .widgets import FieldWidget, JiraPickerWidget, PeopleWidget, PointsWidget, WidgetFactory
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
@@ -40,6 +41,13 @@ HANDLES = ("id", "order")  # the handles have no column anywhere (0.9.0): the st
 EXPORT_BUTTON = "Export document…"
 SAVE_PARAMETERS = "Save parameters"
 SELECT_A_ROW = "Select a deliverable to see its standards"
+# 0.19.0: a role in the Document parameters box is a small text box, one person per line as ``Name <email>``,
+# with a caption saying how many people it holds, or that its value is a legacy name with no email yet, or that
+# it holds no one; Save parameters writes the lines through `create` / `update parameter` (`people`), whose guard
+# names the role and the line of anything wrong, in the status bar.
+PEOPLE_CAPTION = "one per line: Name <email>"
+LEGACY_CAPTION = "no email yet: complete each line as Name <email>"
+EMPTY_CAPTION = "no one yet; " + PEOPLE_CAPTION
 # 0.11.3, the owner: the Safety Plan screen is one table, no frozen split and no flag columns; the flags are the
 # Safety Plan Matrix's business. The table shows the plan stacked (PDP phase > lifecycle phase > deliverable) in
 # one column and every other non-flag visible field beside it; the form below still edits everything.
@@ -50,8 +58,20 @@ def cell_text(spec: FieldSpec | None, value: Any) -> str:
         return ""
     if spec is not None and spec.type is FieldType.BOOL:
         return "✓" if value else ""
+    if isinstance(value, (list, tuple)):  # the people of a role: ``Ann Lee <ann@...>; Ben Ray <ben@...>``
+        value = people_text(value)
     text = str(value).replace("\n", " ")
     return text if len(text) <= TRUNCATE else text[: TRUNCATE - 1] + "…"
+
+
+def role_caption(row: dict[str, Any] | None) -> str:
+    """What the caption beside a role's box says for its stored row: the count, the legacy state, or no one."""
+    people = people_of(row.get("people")) if row and row.get("people") else []
+    if people:
+        return f"{len(people)} {'person' if len(people) == 1 else 'people'}; {PEOPLE_CAPTION}"
+    if row and row.get("value") not in (None, ""):
+        return LEGACY_CAPTION
+    return EMPTY_CAPTION
 
 
 class EntityScreen(Screen):
@@ -66,7 +86,9 @@ class EntityScreen(Screen):
         self.standards: list[dict[str, Any]] = []  # the selected row's standards (0.14.0), from `standards for`
         self.standards_dir = ""
         self.param_vars: dict[str, tk.StringVar] = {}  # the document-level parameters of those standards
-        self.param_entries: dict[str, ttk.Entry] = {}
+        self.param_entries: dict[str, ttk.Entry] = {}  # the plain ones (vehicle_type): one entry each
+        self.param_texts: dict[str, tk.Text] = {}  # the roles (0.19.0): one small box each, a person per line
+        self.param_initial: dict[str, str] = {}  # what each role's box showed when built: unchanged is not saved
         self.jira_statuses: dict[str, str | None] = {}  # the statuses the last export of this session fetched
         self.ticket_loader: Any = None  # the Load tickets fetch in flight, made on the first press (0.15.0)
         super().__init__(master, window)
@@ -162,6 +184,9 @@ class EntityScreen(Screen):
             widget.grid(row=row, column=1, sticky="ew", pady=3)
             self.widgets[spec.name] = widget
             row += 1
+        if self.is_parameters:  # the Parameters screen: the name decides which of Value and People is live
+            self.widgets["name"].var.trace_add("write", lambda *_: self._sync_parameter_widgets())
+            self._sync_parameter_widgets()
         for group, specs in self.schema.groups().items():
             if not group:
                 continue
@@ -187,6 +212,23 @@ class EntityScreen(Screen):
                     grid_row += 1
                 self.widgets[spec.name] = widget
             row += 1
+
+    # -- the Parameters screen (0.19.0) ---------------------------------------------------------------
+    @property
+    def is_parameters(self) -> bool:
+        """The Parameters screen: an entity with a ``name``, a ``value`` and a ``people`` editor."""
+        return (
+            self.schema.name == "parameter"
+            and isinstance(self.widgets.get("people"), PeopleWidget)
+            and "name" in self.widgets and "value" in self.widgets
+        )
+
+    def _sync_parameter_widgets(self) -> None:
+        """A role row edits its people and shows its value read-only (a legacy name, or nothing); any other
+        row edits its value and its people box is greyed."""
+        role = is_role((self.widgets["name"].get() or "").strip())
+        self.widgets["value"].entry.configure(state="readonly" if role else "normal")
+        self.widgets["people"].set_enabled(role)
 
     # -- the Jira pickers (0.15.0) ---------------------------------------------------------------------
     def pickers(self) -> list[JiraPickerWidget]:
@@ -268,34 +310,52 @@ class EntityScreen(Screen):
                 child.destroy()
         self.save_params_button.grid_forget()
         self.params_note.grid_forget()
-        self.param_vars, self.param_entries = {}, {}
+        self.param_vars, self.param_entries, self.param_texts, self.param_initial = {}, {}, {}, {}
         names: list[str] = []
         for standard in self.standards:
             names.extend(n for n in standard.get("document_parameters", ()) if n not in names)
-        stored = self._stored_parameters()
+        stored = self._stored_rows()
         for index, name in enumerate(names):
-            ttk.Label(self.params_box, text=name).grid(row=index, column=0, sticky="w", padx=4, pady=1)
-            var = tk.StringVar(value=stored.get(name, ""))
+            ttk.Label(self.params_box, text=name).grid(row=index, column=0, sticky="nw", padx=4, pady=1)
+            row = stored.get(name)
+            if is_role(name):  # a small box, one person per line; a legacy name prefilled so it can be completed
+                if row and row.get("people"):
+                    initial = people_lines(row["people"])
+                else:
+                    initial = str((row or {}).get("value") or "")
+                lines = initial.count("\n") + 1
+                box = tk.Text(self.params_box, height=max(2, min(lines + 1, 5)), width=48, wrap="none")
+                box.insert("1.0", initial)
+                box.grid(row=index, column=1, sticky="ew", padx=(0, 4), pady=1)
+                ttk.Label(self.params_box, text=role_caption(row), style="Muted.TLabel").grid(
+                    row=index, column=2, sticky="nw", padx=(0, 4), pady=1
+                )
+                self.param_texts[name], self.param_initial[name] = box, initial
+                continue
+            var = tk.StringVar(value=str((row or {}).get("value") or ""))
             entry = ttk.Entry(self.params_box, textvariable=var, width=40)
             entry.grid(row=index, column=1, sticky="ew", padx=(0, 4), pady=1)
             self.param_vars[name], self.param_entries[name] = var, entry
         if names:
-            self.save_params_button.grid(row=len(names), column=0, columnspan=2, sticky="w", padx=4, pady=(4, 2))
+            self.save_params_button.grid(row=len(names), column=0, columnspan=3, sticky="w", padx=4, pady=(4, 2))
         else:
             text = "No document parameters: the selected deliverable has no standard" if self.standards == [] else ""
             self.params_note.configure(text=text)
-            self.params_note.grid(row=0, column=0, columnspan=2, sticky="w", padx=4, pady=2)
+            self.params_note.grid(row=0, column=0, columnspan=3, sticky="w", padx=4, pady=2)
 
-    def _stored_parameters(self) -> dict[str, str]:
-        """``{name: value}`` from the ``parameter`` table: the global value, a selected standard's own winning."""
+    def _stored_rows(self) -> dict[str, dict[str, Any]]:
+        """``{name: row}`` from the ``parameter`` table: the global row, a selected standard's own winning."""
         result = self.window.run_quiet("list", entity="parameter", order_by="standard,name,id")
         folders = {s["folder"] for s in self.standards}
-        values: dict[str, str] = {}
+        rows: dict[str, dict[str, Any]] = {}
         for row in result.data or []:
-            standard = row.get("standard") or ""
-            if standard in ("", *folders) and row.get("value") not in (None, ""):
-                values[row["name"]] = str(row["value"])  # "" sorts first, so a standard's own row overwrites it
-        return values
+            if (row.get("standard") or "") in ("", *folders):
+                rows[row["name"]] = row  # "" sorts first, so a standard's own row overwrites the global one
+        return rows
+
+    def people_text_of(self, name: str) -> str:
+        """What a role's box holds now, as typed (one person per line)."""
+        return self.param_texts[name].get("1.0", "end-1c").strip()
 
     def _row_values_text(self, row: dict[str, Any] | None) -> str:
         if row is None:
@@ -320,8 +380,11 @@ class EntityScreen(Screen):
         return head + " · ".join((points, sprint_end, jira))
 
     def save_parameters(self) -> None:
-        """Upsert the pane's values as ``parameter`` rows through the verbs, so an agent can do the same."""
-        if self.selected_id is None or not self.param_vars:
+        """Upsert the pane's values as ``parameter`` rows through the verbs, so an agent can do the same: a plain
+        parameter's entry as ``value``, a role's lines as ``people`` (the guard sorts them; its errors, naming
+        the role and the line, reach the status bar through ``window.run``). A role's box left as it was built
+        (a legacy name included) is not saved."""
+        if self.selected_id is None or not (self.param_vars or self.param_texts):
             self.window.set_status("Select a deliverable with a standard to save its parameters")
             return
         existing = self.window.run_quiet("list", entity="parameter")
@@ -345,6 +408,20 @@ class EntityScreen(Screen):
             if not result.ok:
                 return
             saved += 1
+        for name in self.param_texts:
+            text = self.people_text_of(name)
+            current = by_name.get(name)
+            if text == self.param_initial[name] or (current is None and not text):
+                continue
+            if current is None:
+                result = self.window.run("create", entity="parameter", data={"name": name, "people": text})
+            else:
+                result = self.window.run("update", entity="parameter", id=current["id"], data={"people": text})
+            if not result.ok:
+                return
+            saved += 1
+        if saved:
+            self._refresh_standards(self.by_id.get(self.selected_id))  # the captions and the sorted lines
         self.window.set_status(f"Saved {saved} parameter(s)" if saved else "Parameters unchanged")
 
     def export_document(self) -> None:
@@ -399,6 +476,8 @@ class EntityScreen(Screen):
                 v = r.get(key)
                 if v is None:
                     return (1, 0)
+                if isinstance(v, (list, tuple)):  # the people column sorts by its text
+                    v = people_text(v)
                 return (0, v.casefold() if isinstance(v, str) else v)
 
             rows = sorted(rows, key=sort_value, reverse=self.sort_desc)
@@ -494,6 +573,8 @@ class EntityScreen(Screen):
         self._hand_defaults(row)
         for name, widget in self.widgets.items():
             widget.set(row.get(name))
+        if self.is_parameters:
+            self._sync_parameter_widgets()
         self._refresh_standards(row)
         self.window.set_status(f"{self.schema.label} {row_id} selected")
 

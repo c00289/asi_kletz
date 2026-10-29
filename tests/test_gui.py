@@ -1948,10 +1948,24 @@ def test_scrollbar_thumb_is_the_primary(window):
 # -- the standards pane at the top of the Safety Plan's details (0.14.0) ---------------------------------------
 
 
+def _type_people(screen, role: str, text: str) -> None:
+    """Type ``text`` into a role's box of the Document parameters pane (one person per line)."""
+    box = screen.param_texts[role]
+    box.delete("1.0", "end")
+    box.insert("1.0", text)
+
+
+def _captions(screen) -> list[str]:
+    """The muted captions beside the pane's boxes."""
+    from tkinter import ttk
+
+    return [str(w.cget("text")) for w in screen.params_box.winfo_children() if isinstance(w, ttk.Label)]
+
+
 def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, monkeypatch):
     from pathlib import Path
 
-    from asi_kletz.gui.entity_screen import EXPORT_BUTTON, SELECT_A_ROW
+    from asi_kletz.gui.entity_screen import EMPTY_CAPTION, EXPORT_BUTTON, PEOPLE_CAPTION, SELECT_A_ROW
     from tests.test_standards import SOURCE, StubHopper
 
     root = tmp_path / "standards"
@@ -1975,17 +1989,29 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
     screen.select(1)  # ref_qf_17 is set: the standard, its two document parameters, the row's own values
     assert str(screen.export_button.cget("state")) == "normal"
     assert screen.standard_var.get() == "Standard: {{ vehicle_type }} Safety Plan (test) (qf-17-test)"
-    assert list(screen.param_entries) == ["fusa_engineer", "vehicle_type"]
+    assert list(screen.param_entries) == ["vehicle_type"]  # a plain parameter: one entry
+    assert list(screen.param_texts) == ["fusa_engineer"]  # a role (0.19.0): a box, one person per line
+    assert screen.people_text_of("fusa_engineer") == "" and EMPTY_CAPTION in _captions(screen)
     assert screen.row_values_var.get() == (
         "This row (row_1_*): 5 points · sprint end 2026-11-09 · Jira HWL-2554: status fetched on export"
     )
     # Save parameters creates parameter rows through the verbs; a second save with the same values changes nothing
     screen.param_vars["vehicle_type"].set("Wheel Loader")
-    screen.param_vars["fusa_engineer"].set("the FuSa engineer")
+    _type_people(screen, "fusa_engineer", "the FuSa engineer")  # a name with no email: refused, named in the bar
     screen.save_parameters()
-    assert window.status_text() == "Saved 2 parameter(s)"
+    assert window.status_text() == "Error: fusa_engineer, line 1 ('the FuSa engineer'): no email; write Name <email>"
     rows = {r["name"]: r for r in seeded.execute("list", entity="parameter").data}
     assert rows["vehicle_type"]["value"] == "Wheel Loader" and rows["vehicle_type"]["standard"] in ("", None)
+    assert "fusa_engineer" not in rows
+    _type_people(screen, "fusa_engineer", "Zed Young <zed@asirobots.com>\nAnn Lee <ann.lee@asirobots.com>")
+    screen.save_parameters()
+    assert window.status_text() == "Saved 1 parameter(s)"
+    rows = {r["name"]: r for r in seeded.execute("list", entity="parameter").data}
+    assert rows["fusa_engineer"]["people"] == [  # sorted by the guard, through the same verb an agent uses
+        {"name": "Ann Lee", "email": "ann.lee@asirobots.com"}, {"name": "Zed Young", "email": "zed@asirobots.com"},
+    ] and rows["fusa_engineer"]["value"] is None
+    assert screen.people_text_of("fusa_engineer") == "Ann Lee <ann.lee@asirobots.com>\nZed Young <zed@asirobots.com>"
+    assert "2 people; " + PEOPLE_CAPTION in _captions(screen)
     screen.save_parameters()
     assert window.status_text() == "Parameters unchanged"
     screen.param_vars["vehicle_type"].set("Dozer")
@@ -1999,10 +2025,12 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
     screen.export_document()
     status = window.status_text()
     assert status.startswith("Exported qf-17-test.md, qf-17-test.pdf, qf-17-test.docx to ")
-    assert status.endswith("; 2 parameter(s) still unfilled") and seeded.out_dir in status
+    # row 2 has no key, no points and no default (nothing loaded them): its key, points and status stay unfilled
+    assert status.endswith("; 3 parameter(s) still unfilled") and seeded.out_dir in status
     assert (Path(seeded.out_dir) / "qf-17-test.pdf").is_file()
     text = (Path(seeded.out_dir) / "qf-17-test.md").read_text(encoding="utf-8")
     assert "==Dozer==" in text and "==5== points" in text and "==In Progress==" in text
+    assert "Author: ==Ann Lee (ann.lee@asirobots.com), Zed Young (zed@asirobots.com)==" in text  # inline, sorted
     assert "Jira HWL-2554: In Progress (as of the last export)" in screen.row_values_var.get()
     assert stub.calls == ["HWL-2554"] and seeded.storage.audit_tail(1)[0]["action"] == "export"
     # the form below is as it was: the same widgets, the same data sent on Save
@@ -2123,3 +2151,55 @@ def test_load_tickets_signs_in_on_a_rejected_session_like_refresh(window, live, 
     assert not result.ok and live.calls == {"live": 4, "login": 2, "comments": 0}
     assert window.status_text().startswith("Error: no Atlassian session")
     assert len(screen.widgets["jira_key"].combo["values"]) == 5  # the earlier rows stay
+
+
+# -- the Parameters screen edits a role's people (0.19.0) ------------------------------------------------------
+
+
+def test_parameters_screen_edits_people_for_a_role(window, seeded):
+    from asi_kletz.gui.widgets import NOT_A_ROLE, PEOPLE_HINT, PeopleWidget
+
+    assert seeded.execute("create", entity="parameter", data={"name": "vehicle_type", "value": "Wheel Loader"}).ok
+    legacy = seeded.execute("create", entity="parameter", data={"name": "robot_chief", "value": "Rod DeMay"})
+    assert legacy.ok and legacy.warnings
+    screen = window.show("parameters")
+    assert screen.is_parameters and isinstance(screen.widgets["people"], PeopleWidget)
+    assert screen.columns == ["name", "standard", "value", "people", "note"]
+    # a new row: no name yet, so the Value entry is live and the people box greyed
+    screen.new()
+    assert str(screen.widgets["value"].entry.cget("state")) == "normal"
+    assert str(screen.widgets["people"].text.cget("state")) == "disabled"
+    assert screen.widgets["people"].hint_var.get() == NOT_A_ROLE
+    # typing a role's name flips them: the Value entry read-only, the people box live
+    screen.widgets["name"].set("fusa_engineer")
+    assert str(screen.widgets["value"].entry.cget("state")) == "readonly"
+    assert str(screen.widgets["people"].text.cget("state")) == "normal"
+    assert screen.widgets["people"].hint_var.get() == PEOPLE_HINT
+    screen.widgets["people"].set("Zed Young <zed@asirobots.com>\nAnn Lee <ann.lee@asirobots.com>")
+    screen.save()
+    assert window.status_text().startswith("Saved parameter")
+    row = seeded.execute("get", entity="parameter", id=screen.selected_id).data
+    assert [p["name"] for p in row["people"]] == ["Ann Lee", "Zed Young"] and row["value"] is None
+    # the form shows the stored array one person per line, sorted; the table cell shows the `;` form
+    assert screen.widgets["people"].get() == "Ann Lee <ann.lee@asirobots.com>\nZed Young <zed@asirobots.com>"
+    cells = dict(zip(screen.columns, screen.tree.item(str(screen.selected_id))["values"], strict=True))
+    assert cells["people"] == "Ann Lee <ann.lee@asirobots.com>; Zed Young <zed@asirobots.com>" and cells["value"] == ""
+    # a bad line is refused by the verb and named in the status bar; nothing changes
+    screen.widgets["people"].set("Ann Lee <ann.lee@asirobots.com>\nBen Ray")
+    screen.save()
+    assert window.status_text() == "Error: fusa_engineer, line 2 ('Ben Ray'): no email; write Name <email>"
+    assert len(seeded.execute("get", entity="parameter", id=screen.selected_id).data["people"]) == 2
+    # a legacy role row: the name read-only in Value, the box live and empty; a plain row: the other way round
+    screen.select(legacy.data["id"])
+    assert screen.widgets["value"].get() == "Rod DeMay" and screen.widgets["people"].get() is None
+    assert str(screen.widgets["value"].entry.cget("state")) == "readonly"
+    screen.widgets["people"].set("Rod DeMay <rod.demay@asirobots.com>")
+    screen.save()
+    row = seeded.execute("get", entity="parameter", id=legacy.data["id"]).data
+    assert row["people"] == [{"name": "Rod DeMay", "email": "rod.demay@asirobots.com"}] and row["value"] is None
+    screen.select(1)  # vehicle_type
+    assert str(screen.widgets["value"].entry.cget("state")) == "normal"
+    assert str(screen.widgets["people"].text.cget("state")) == "disabled"
+    screen.sort_by("people")  # a list column sorts by its text, never compares lists
+    assert len(screen.tree.get_children()) == 3
+

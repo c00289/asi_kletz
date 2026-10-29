@@ -271,6 +271,40 @@ class JiraPickerWidget(FieldWidget):
         self.combo.focus_set()
 
 
+PEOPLE_HINT = "one per line: Name <email>"
+NOT_A_ROLE = "not a role: the Value holds the text"
+
+
+class PeopleWidget(MultilineWidget):
+    """The people of a role (0.19.0, the owner: "an array of human names sorted alphabetically ... must include
+    email alongside name"): a small text box, one person per line as ``Name <email>``, with the hint beside it.
+    ``get()`` is the typed text (the verb's guard parses, validates and sorts it; an error names the role and
+    the line); ``set()`` takes the stored array and shows it one line per person. ``set_enabled(False)`` greys
+    the box for a parameter that is not a role (the Parameters screen: the Value entry holds its text)."""
+
+    def build(self) -> None:
+        self.options.setdefault("height", 3)
+        self.options.setdefault("width", 48)
+        super().build()
+        self.hint_var = tk.StringVar(value=PEOPLE_HINT)
+        self.hint = ttk.Label(self, textvariable=self.hint_var, style="Muted.TLabel")
+        self.hint.pack(side="left", anchor="n", padx=(6, 0))
+        self.enabled = True
+
+    def set(self, value: Any) -> None:
+        from ..schema.people import people_lines
+
+        enabled = self.enabled
+        self.set_enabled(True)
+        super().set(people_lines(value) if isinstance(value, (list, tuple)) else value)
+        self.set_enabled(enabled)
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.text.configure(state="normal" if enabled else "disabled")
+        self.hint_var.set(PEOPLE_HINT if enabled else NOT_A_ROLE)
+
+
 class EnumWidget(FieldWidget):
     def build(self) -> None:
         self.var = tk.StringVar()
@@ -300,6 +334,7 @@ class WidgetFactory:
         FieldType.DATE: DateWidget,
         FieldType.URL: UrlWidget,
         FieldType.ENUM: EnumWidget,
+        FieldType.JSON: MultilineWidget,  # the JSON text as typed; a field with picker="people" gets PeopleWidget
     }
 
     def __init__(self, lookups: LookupRegistry) -> None:
@@ -319,6 +354,8 @@ class WidgetFactory:
             return PointsWidget(master, spec, self.lookups, **options)
         if spec.picker == "jira":  # a ticket picked from the last live fetch; `load` runs the fetch
             return JiraPickerWidget(master, spec, self.lookups, **options)
+        if spec.picker == "people":  # a role's people, one per line (0.19.0)
+            return PeopleWidget(master, spec, self.lookups, **options)
         if spec.type is FieldType.INT:
             options.setdefault("width", 10)
         return self._registry[spec.type](master, spec, self.lookups, **options)
