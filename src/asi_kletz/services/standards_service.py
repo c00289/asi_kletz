@@ -202,7 +202,7 @@ class StandardsService:
         for std in plan["standards"]:
             doc = from_markdown(Path(std["path"]).read_text(encoding="utf-8"))
             paths = build(
-                doc, str(target), name=std["folder"], 
+                doc, str(target), name=std["folder"],
                 params=std["values"], strict_params=False, mark_params=True,
             )
             issues = [str(i) for i in paths.pop("issues", [])]
