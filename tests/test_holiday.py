@@ -14,7 +14,7 @@ HOLIDAY = "holiday"
 
 def test_holiday_is_the_fifth_entity():
     schema = default_registry.get(HOLIDAY)
-    assert ENTITIES[-1] == HOLIDAY and default_registry.names()[-1] == HOLIDAY
+    assert ENTITIES[4] == HOLIDAY and default_registry.names()[4] == HOLIDAY  # fifth; parameter came sixth (0.14.0)
     assert [f.name for f in schema.fields] == ["date", "name", "status", "note", "uid"]
     assert schema.field("date").type is FieldType.DATE and schema.field("date").required
     assert schema.field("name").required and schema.field("status").lookup == "holiday_status"

@@ -25,6 +25,7 @@ from .services import (
     JiraService,
     PlanScheduleService,
     SprintService,
+    StandardsService,
     TrackerService,
     TransferService,
 )
@@ -40,8 +41,10 @@ ENV_DB = "ASI_KLETZ_DB"
 ENV_WORKBOOK = "ASI_KLETZ_WORKBOOK"
 ENV_OUT = "ASI_KLETZ_OUT"
 ENV_CONFIG = "ASI_KLETZ_CONFIG"
+ENV_STANDARDS = "ASI_KLETZ_STANDARDS"
 CONFIG_NAME = "kletz.toml"
-CONFIG_KEYS = ("db", "workbook", "out")  # file paths, resolved against the config file
+DEFAULT_STANDARDS = "../asi_standards"  # the sibling repo of parametrised standards, beside this one
+CONFIG_KEYS = ("db", "workbook", "out", "standards_dir")  # file paths, resolved against the config file
 CONFIG_TEXT_KEYS = (  # document metadata, the live JQL and the tracker's header lines, kept verbatim
     "doc_id", "project", "jira_live_jql", "tracker_title", "tracker_byline", "tracker_scope", "tracker_jira_scope",
 )
@@ -67,7 +70,8 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     TOML integer; anything else is ignored so the default applies). ``sprint_capacity`` is ignored since
     0.10.0 (capacity is the rule, 8, fixed): when present, ``warnings`` carries one line naming the rule.
     ``default_points`` (default 2) is the floor a Safety Plan row weighs when it has neither points nor the
-    panel's default. Missing file: ``{}``.
+    panel's default. ``standards_dir`` is the folder of parametrised standards (default ``../asi_standards``
+    beside the config file). Missing file: ``{}``.
     """
     import tomllib
 
@@ -139,6 +143,7 @@ class Brain:
         workbook_path: str | Path | None = None,
         out_dir: str | Path | None = None,
         wait: float = 0.0,
+        standards_dir: str | Path | None = None,
     ) -> None:
         """Open the database at ``db_path`` after taking the family lock.
 
@@ -169,6 +174,8 @@ class Brain:
         self._services: dict[str, EntityService] = {}
         self.sprints = SprintService(self)  # the agile rules: eight points a sprint, close and carry, the planner
         self.schedule = PlanScheduleService(self)  # the plan's calculated sprint and deadline, kept current
+        self.standards = StandardsService(self)  # the parametrised standards a plan row is exported into
+        self._standards_dir = str(standards_dir) if standards_dir is not None else None
         self.transfer = TransferService(self)
         self.jira = JiraService(self)  # read only; asi_hopper is imported when a jira verb runs, never here
         self.tracker = TrackerService(self)  # the Weekly Activity Tracker text, in and out
@@ -206,6 +213,20 @@ class Brain:
         self.sprint_capacity: int = SPRINT_CAPACITY
         self.sprint_days: int = int(self.config.get("sprint_days") or SPRINT_DAYS)
 
+    @property
+    def standards_dir(self) -> str:
+        """The folder of parametrised standards: the argument, else ``$ASI_KLETZ_STANDARDS``, else
+        ``standards_dir`` in kletz.toml, else ``../asi_standards`` beside the config file (or the working
+        directory when there is none). Read when asked, so a test can point it elsewhere after opening."""
+        if self._standards_dir is not None:
+            return self._standards_dir
+        if os.environ.get(ENV_STANDARDS):
+            return os.environ[ENV_STANDARDS]
+        if self.config.get("standards_dir"):
+            return str(self.config["standards_dir"])
+        base = Path(self.config["path"]).parent if self.config.get("path") else Path.cwd()
+        return str((base / DEFAULT_STANDARDS).resolve())
+
     # -- access ---------------------------------------------------------
     def service(self, entity: str) -> EntityService:
         schema = self.registry.get(entity)
@@ -217,6 +238,8 @@ class Brain:
                 service.guard = self.sprints.guard  # the capacity rule on every create and update of a sprint
             if schema.name == "safety_plan_row":
                 service.guard = self.schedule.guard  # the calculated fields and the panel's default stay out
+            if schema.name == "parameter":
+                service.guard = self.standards.parameter_guard  # a name once per standard
             if schema.name == "sprint_item":
                 service.guard = self.sprints.link_item  # plan_row and plan_uid name the same row; the uid wins
                 service.on_load = self.sprints.link_loaded  # a file's plan_uid re-resolves plan_row
@@ -254,6 +277,7 @@ class Brain:
             "sprint_capacity": self.sprint_capacity,
             "sprint_days": self.sprint_days,
             "default_points": self.default_points,
+            "standards_dir": self.standards_dir,
             "config_warnings": list(self.config_warnings),
             "tracker": {"title": self.tracker.title, "byline": self.tracker.byline, "scope": self.tracker.scope},
             "config_path": self.config.get("path"),

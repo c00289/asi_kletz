@@ -6,7 +6,7 @@ import pytest
 
 from asi_kletz import Brain
 from asi_kletz.automation.session import ENV_AUTOMATION, ENV_SESSION
-from asi_kletz.brain import ENV_CONFIG, ENV_DB, ENV_OUT, ENV_WORKBOOK, load_config
+from asi_kletz.brain import ENV_CONFIG, ENV_DB, ENV_OUT, ENV_STANDARDS, ENV_WORKBOOK, load_config
 from asi_kletz.gui.theme import ENV_THEME
 from asi_kletz.locks import ENV_LOCK_DIR
 from asi_kletz.prefs import ENV_PREFS
@@ -24,10 +24,10 @@ SEED_WEIGHTS = REPO_ROOT / "data" / "deliverable-points.json"  # the estimation 
 
 PLAN = "safety_plan_row"
 # every registered entity, in registration order (the list is the design, not a cap), and its table
-ENTITIES = [PLAN, "sprint", "sprint_item", "week", "holiday"]
-TABLES = {"safety_plan", "sprint", "sprint_item", "week", "holiday"}
-TABLES_0_8_4 = TABLES - {"holiday"}  # what the 0.8.4 fixture database holds
-SHEETS = ["Safety Plan", "Sprints", "Sprint Items", "Weekly Status", "Holidays"]
+ENTITIES = [PLAN, "sprint", "sprint_item", "week", "holiday", "parameter"]
+TABLES = {"safety_plan", "sprint", "sprint_item", "week", "holiday", "parameter"}
+TABLES_0_8_4 = TABLES - {"holiday", "parameter"}  # what the 0.8.4 fixture database holds
+SHEETS = ["Safety Plan", "Sprints", "Sprint Items", "Weekly Status", "Holidays", "Parameters"]
 
 
 @pytest.fixture(autouse=True)
@@ -48,6 +48,8 @@ def _isolated_config(monkeypatch, tmp_path):
     # never receives test traffic, and no test reads or writes a real session
     monkeypatch.setenv(ENV_SESSION, str(tmp_path / "session.json"))
     monkeypatch.delenv(ENV_AUTOMATION, raising=False)
+    # the standards folder is per test too: never the sibling repo (a test that wants one writes it)
+    monkeypatch.setenv(ENV_STANDARDS, str(tmp_path / "standards"))
 
 
 @pytest.fixture

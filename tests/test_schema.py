@@ -71,7 +71,7 @@ def test_registry_aliases_and_fingerprint():
     with pytest.raises(NotFound):
         default_registry.get("unicorns")
     assert default_registry.fingerprint() == default_registry.fingerprint()
-    assert default_registry.names() == [PLAN, "sprint", "sprint_item", "week", "holiday"]
+    assert default_registry.names() == [PLAN, "sprint", "sprint_item", "week", "holiday", "parameter"]
     assert set(default_lookups) == {
         "pdp_phase", "lifecycle_phase", "plan_status", "sprint_status", "item_status", "item_kind", "week_section",
         "holiday_status",
@@ -81,15 +81,16 @@ def test_registry_aliases_and_fingerprint():
 def test_safety_plan_matrix_fields_are_unique_and_grouped():
     schema = default_registry.get(PLAN)
     names = schema.field_names
-    assert len(names) == len(set(names)) == 69 and names[-1] == UID  # 63 of the sheet, 3 (0.11.0), 2 (0.11.2), uid
-    assert len(schema.visible_fields) == 68 and len(schema.source_fields) == 63
+    assert len(names) == len(set(names)) == 70 and names[-1] == UID  # 63 of the sheet, 3 + 2 calculated, jira_key, uid
+    assert len(schema.visible_fields) == 69 and len(schema.source_fields) == 63
+    assert names[-3:] == ("status", "jira_key", UID) and schema.field("jira_key").editable
     assert names[3:7] == ("deliverable", "points", "default_points", "sprint")
     assert [f.name for f in schema.calculated_fields] == ["sprint", "sprint_start", "sprint_end", "deadline"]
     assert not schema.field("default_points").editable and schema.field("points").default_from == "default_points"
     assert [f.name for f in schema.visible_fields if not f.editable] == [
         "default_points", "sprint", "sprint_start", "sprint_end", "deadline",
     ]
-    assert len(schema.editable_fields) == 63 and schema.field("deadline").header == "Expected Duration/Deadline"
+    assert len(schema.editable_fields) == 64 and schema.field("deadline").header == "Expected Duration/Deadline"
     groups = schema.groups()
     assert len(groups["reference"]) == 23 and len(groups["author"]) == 18 and len(groups["reviewer"]) == 8
     assert "author_tech_lead_functional_safety" in names and "reviewer_tech_lead_functional_safety" in names

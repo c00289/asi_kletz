@@ -104,6 +104,10 @@ SAFETY_PLAN_ROW = register_entity(EntitySchema(
                   help="Calculated: the end date of the sprint in which the deliverable's last point lands."),
         FieldSpec("status", E, "Status (Pending/ Ongoing/ Blocked/ Alternative/Out-of-Scope/ Done)",
                   lookup="plan_status"),
+        # 0.14.0, the owner: "this company ties deliverables to Jira tickets"; the ticket's live status is the
+        # Status column of an exported standard (docs: README, Standards and export)
+        FieldSpec("jira_key", T, "Jira key", source=False,
+                  help="The Jira ticket that tracks the deliverable; its live status fills an exported standard."),
         uid_field(),
     ),
 ))
@@ -239,4 +243,24 @@ HOLIDAY = register_entity(EntitySchema(
     ),
 ))
 
-ALL_ENTITIES = (SAFETY_PLAN_ROW, SPRINT, SPRINT_ITEM, WEEK, HOLIDAY)
+# -- the parameters of the standards (0.14.0) ---------------------------------------------------------------
+# A parametrised standard (asi_standards) has blanks a person fills once: the vehicle type, the people in the
+# roles. One row per name; ``standard`` is the folder the value belongs to, empty for every standard. The
+# row-level parameters (points, sprint end, Jira status per plan row) are never stored: Kletz fills them.
+PARAMETER = register_entity(EntitySchema(
+    name="parameter", table="parameter", label="Parameter", sheet="Parameters",
+    description=(
+        "One document-level parameter of the parametrised standards: its name (as the standard's source "
+        "names it), the standard it belongs to (empty for every standard), its value and a note."
+    ),
+    order_by=("standard", "name", "id"),
+    fields=(
+        FieldSpec("name", T, "Name", required=True),
+        FieldSpec("standard", T, "Standard"),
+        FieldSpec("value", T, "Value"),
+        FieldSpec("note", M, "Note"),
+        uid_field(),
+    ),
+))
+
+ALL_ENTITIES = (SAFETY_PLAN_ROW, SPRINT, SPRINT_ITEM, WEEK, HOLIDAY, PARAMETER)

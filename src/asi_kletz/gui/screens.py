@@ -392,7 +392,7 @@ class ScreenFactory:
 
 def build_default_screens(brain: Brain) -> ScreenFactory:
     """The screens of the window, in navigation order: Dashboard, JIRA Live Data, Safety Plan,
-    Safety Plan Matrix, Sprint Board, Weekly Status, Holidays, Export / Import.
+    Safety Plan Matrix, Sprint Board, Weekly Status, Holidays, Parameters, Export / Import.
 
     A screen is added by registration here; the list is the design, not a cap. Registering
     another entity still gives it a table, commands, JSON and a workbook sheet, never a screen
@@ -408,6 +408,7 @@ def build_default_screens(brain: Brain) -> ScreenFactory:
 
     plan = brain.registry.get(PLAN_ENTITY)
     holiday = brain.registry.get("holiday")  # the generic table and form: no stack, so no frozen column
+    parameter = brain.registry.get("parameter")  # the standards' document-level parameters (0.14.0)
     factory = ScreenFactory()
     factory.register("dashboard", "Dashboard", DashboardScreen)
     factory.register("jira_live", "JIRA Live Data", JiraLiveScreen)
@@ -416,5 +417,6 @@ def build_default_screens(brain: Brain) -> ScreenFactory:
     factory.register("sprint_board", "Sprint Board", SprintBoardScreen)
     factory.register("tracker", "Weekly Status", TrackerScreen)
     factory.register("holidays", "Holidays", lambda master, window: EntityScreen(master, window, holiday))
+    factory.register("parameters", "Parameters", lambda master, window: EntityScreen(master, window, parameter))
     factory.register("transfer", "Export / Import", TransferScreen)
     return factory

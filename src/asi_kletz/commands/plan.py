@@ -22,16 +22,34 @@ class PlanCommand(Command):
     help = (
         "The Safety Plan's points: schedule recomputes every row's sprint (where its last point lands, 8 points "
         "a sprint, committed items first) and deadline (that sprint's end) and prints the table; "
-        "weights load <file> sets each row's default points from the estimation panel's record."
+        "weights load <file> sets each row's default points from the estimation panel's record; "
+        "export --row <id> [--out <dir>] [--standard <folder>] builds the row's standards with asi_gutenberg, "
+        "the parameters filled (the chosen points, never the default; the sprint's end; the Jira ticket's "
+        "status); parameters --row <id> prints that value set without building."
     )
     arguments = (
-        Argument("action", "schedule | weights", required=True, choices=("schedule", "weights")),
+        Argument("action", "schedule | weights | export | parameters", required=True,
+                 choices=("schedule", "weights", "export", "parameters")),
         Argument("what", "weights: load"),
         Argument("file", "weights load: the JSON list of {id, order, deliverable, points[, uid]}", type="path"),
+        Argument("row", "export / parameters: the Safety Plan row (id or uid)", flag=True, type="ref"),
+        Argument("out", "export: the output folder (default: $ASI_KLETZ_OUT, `out` in kletz.toml, or out/ next to "
+                 "the database)", flag=True, type="path"),
+        Argument("standard", "export / parameters: one standard's folder (default: every standard the row has)",
+                 flag=True),
     )
 
     def run(self, ctx: Context, args: dict[str, Any]) -> Result:
         service = ctx.brain.schedule
+        if args["action"] in ("export", "parameters"):
+            if args.get("row") is None:
+                return Result.failure(f"plan {args['action']} needs --row <id>")
+            row_id = ctx.brain.service("safety_plan_row").resolve(args["row"])
+            if args["action"] == "parameters":
+                data = ctx.brain.standards.value_set(row_id, args.get("standard"))
+                return Result.success(data, data.pop("warnings"))
+            data = ctx.brain.standards.export(row_id, args.get("out"), args.get("standard"), ctx.actor)
+            return Result.success(data, data.pop("warnings"))
         if args["action"] == "schedule":
             data = service.recompute(ctx.actor)
             table = service.table()

@@ -5,10 +5,11 @@ from .holiday_service import HolidayService
 from .jira_service import JiraService
 from .plan_schedule_service import PlanScheduleService
 from .sprint_service import SprintService
+from .standards_service import StandardsService
 from .tracker_service import TrackerService
 from .transfer_service import TransferService
 
 __all__ = [
     "LOAD_MODES", "EntityService", "HolidayService", "JiraService", "PlanScheduleService", "SprintService",
-    "TrackerService", "TransferService",
+    "StandardsService", "TrackerService", "TransferService",
 ]

@@ -72,7 +72,7 @@ def test_audit_log_and_events(brain):
 def test_schema_and_status_commands(seeded):
     status = seeded.execute("status").data
     assert status["app_version"] == __version__
-    assert status["entities"] == {PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0, "holiday": 0}
+    assert status["entities"] == {PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0, "holiday": 0, "parameter": 0}
     assert "create" in status["commands"]
     full = seeded.execute("schema").data
     assert [e["name"] for e in full["entities"]] == ENTITIES
@@ -215,14 +215,16 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
     assert len(before["schema_migrations"]) == 1 and not any(n.startswith("ix_") for n in _indexes(db))
 
     with Brain(db) as brain:
-        assert brain.migration["created"] == ["holiday"]  # the 0.10.0 table; the four of 0.8.4 are altered
+        assert brain.migration["created"] == ["holiday", "parameter"]  # 0.10.0 and 0.14.0; the four of 0.8.4 altered
         altered = {table: [UID] for table in TABLES_0_8_4}
-        altered["safety_plan"] = ["points", "default_points", "sprint", "sprint_start", "sprint_end", UID]
+        altered["safety_plan"] = ["points", "default_points", "sprint", "sprint_start", "sprint_end", "jira_key", UID]
         altered["sprint_item"] = ["plan_uid", UID]  # 0.13.0: the plan row's uid beside its id
         assert brain.migration["plan_uids_filled"] == 0  # the fixture has no item
         assert brain.migration["altered"] == altered
         assert brain.migration["scheduled"] == 0  # Sprint 1 is Closed: no chain, nothing to write
-        assert brain.migration["uids_stamped"] == {PLAN: 3, "sprint": 1, "sprint_item": 0, "week": 0, "holiday": 0}
+        assert brain.migration["uids_stamped"] == {
+            PLAN: 3, "sprint": 1, "sprint_item": 0, "week": 0, "holiday": 0, "parameter": 0,
+        }
         assert brain.execute("count", entity=PLAN).data["count"] == 3
         stamped = brain.storage.audit_tail(10)
         assert [(t["action"], t["actor"], t["entity"], t["payload"]) for t in stamped[:2]] == [
@@ -237,7 +239,8 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
         for old, stamped_row in zip(before[table], after[table], strict=True):
             new = dict(stamped_row)
             uid = new.pop(UID)
-            for column in ("points", "default_points", "sprint", "sprint_start", "sprint_end"):  # 0.11.x, still empty
+            added = ("points", "default_points", "sprint", "sprint_start", "sprint_end", "jira_key")  # 0.11+, empty
+            for column in added:
                 if table == "safety_plan":
                     assert new.pop(column) is None
             assert UID_PATTERN.fullmatch(uid) and new == old  # stamped, and nothing else changed (updated_at too)

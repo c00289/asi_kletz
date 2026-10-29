@@ -130,6 +130,25 @@ class JiraService:
             "fetched_at": _now(), "count": len(items), "comments": items,
         }
 
+    def statuses(self, keys: list[str], *, hopper: Any = None) -> dict[str, str | None]:
+        """The live status of each key, one ``get`` per distinct key through one non-interactive Hopper
+        (0.14.0: the Status column of an exported standard). A failed session or read raises the
+        ``CommandError`` the caller turns into one warning; nothing is stored."""
+        wanted = sorted({(k or "").strip().upper() for k in keys if (k or "").strip()})
+        if not wanted:
+            return {}
+        own = hopper is None
+        hopper = hopper or self.open_hopper()
+        out: dict[str, str | None] = {}
+        try:
+            for key in wanted:
+                record = self._guard(lambda key=key: hopper.get(key))
+                out[key] = getattr(record, "status", None)
+        finally:
+            if own:
+                hopper.close()
+        return out
+
     def login(self) -> dict[str, Any]:
         """Sign in to Atlassian in the browser, once, because a person asked (Refresh on a rejected
         session, or ``jira login``): the window never connects on its own.

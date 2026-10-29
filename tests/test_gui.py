@@ -15,9 +15,9 @@ from tests.conftest import PLAN, REPO_ROOT
 
 # the registered screens, in navigation order: the list is the design, not a cap
 SCREENS = ["dashboard", "jira_live", "safety_plan", "safety_plan_matrix", "sprint_board", "tracker", "holidays",
-           "transfer"]
+           "parameters", "transfer"]
 TITLES = ["Dashboard", "JIRA Live Data", "Safety Plan", "Safety Plan Matrix", "Sprint Board", "Weekly Status",
-          "Holidays", "Export / Import"]
+          "Holidays", "Parameters", "Export / Import"]
 # the identity column of the Safety Plan table: frozen on the left since 0.7.2; since 0.8.4 the three identity
 # fields are one stacked column; since 0.9.0 ``id`` and ``order`` are no columns at all (docs/hidden-identity-plan.md)
 FROZEN_PLAN = ["plan"]
@@ -180,7 +180,7 @@ def test_safety_plan_table_shows_the_plan_and_the_non_flag_columns(window, seede
     ]
     assert screen.columns == expected == [
         "points", "default_points", "sprint", "sprint_start", "sprint_end", "work_product_location",
-        "work_product_reference", "author", "gate_reviewer", "deadline", "status",
+        "work_product_reference", "author", "gate_reviewer", "deadline", "status", "jira_key",
     ]
     assert list(screen.tree["columns"]) == ["plan", *screen.columns] and "uid" not in screen.tree["columns"]
     assert screen.tree.heading("status", "text") == schema.field("status").header

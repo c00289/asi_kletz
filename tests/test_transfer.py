@@ -13,9 +13,11 @@ from tests.conftest import ENTITIES, PLAN, SHEETS, WORKBOOK
 def test_json_dump_and_load_modes(seeded, tmp_path):
     out = tmp_path / "dump.json"
     dumped = seeded.execute("dump", out=str(out))
-    assert dumped.ok and dumped.data["entities"] == {PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0, "holiday": 0}
+    assert dumped.ok and dumped.data["entities"] == {
+        PLAN: 3, "sprint": 0, "sprint_item": 0, "week": 0, "holiday": 0, "parameter": 0,
+    }
     payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 7 and list(payload["entities"]) == ENTITIES
+    assert payload["schema_version"] == 8 and list(payload["entities"]) == ENTITIES
 
     uids = {r["id"]: r["uid"] for r in payload["entities"][PLAN]}
     assert len(uids) == 3 and all(uids.values())  # the dump carries the hidden identity like any field
@@ -84,16 +86,18 @@ def test_excel_export_and_reimport(seeded, tmp_path):
     ws = wb["Safety Plan"]
     headers = [c.value for c in ws[1]]
     assert headers[:4] == ["order", "PDP Phases", "Safety Lifecycle Phase", "Safety Deliverables"]
-    assert headers.count("Tech Lead - Functional Safety") == 2 and len(headers) == 69 and headers[-1] == "uid"
+    assert headers.count("Tech Lead - Functional Safety") == 2 and len(headers) == 70 and headers[-1] == "uid"
+    assert headers[-3:] == ["Status (Pending/ Ongoing/ Blocked/ Alternative/Out-of-Scope/ Done)", "Jira key", "uid"]
     assert headers[3:7] == ["Safety Deliverables", "Points", "Default points", "Sprint"]  # 0.11.0, after deliverable
     assert ws.freeze_panes == "A2"
     assert ws["D2"].value == "Safety Plan" and ws["K2"].value == 1  # deliverable, DMS flag (K since 0.11.2)
     assert ws.data_validations.dataValidation  # dropdowns from the lookups
     # the uid is the last column of every sheet, hidden, present in the data (3.1 of the hidden-identity plan)
     uids = {r["id"]: r["uid"] for r in seeded.execute("list", entity=PLAN).data}
-    assert ws.column_dimensions["BQ"].hidden is True and not ws.column_dimensions["BP"].hidden  # uid, 69th
-    assert [ws.cell(row=r, column=69).value for r in (2, 3, 4)] == [uids[1], uids[2], uids[3]]
-    for name, width in (("Sprints", 10), ("Sprint Items", 17), ("Weekly Status", 6), ("Holidays", 5)):
+    assert ws.column_dimensions["BR"].hidden is True and not ws.column_dimensions["BQ"].hidden  # uid, 70th
+    assert [ws.cell(row=r, column=70).value for r in (2, 3, 4)] == [uids[1], uids[2], uids[3]]
+    for name, width in (("Sprints", 10), ("Sprint Items", 17), ("Weekly Status", 6), ("Holidays", 5),
+                        ("Parameters", 5)):
         sheet = wb[name]
         assert sheet.cell(row=1, column=width).value == "uid" and sheet.cell(row=1, column=width + 1).value is None
         assert sheet.column_dimensions[get_column_letter(width)].hidden is True
@@ -111,7 +115,7 @@ def test_excel_export_and_reimport(seeded, tmp_path):
         assert {r["id"]: r["uid"] for r in rows} == uids  # export then import on a fresh database keeps every uid
         # a workbook saved by 0.8.x has no uid column: it still imports, and the new rows are stamped
         wb_old = load_workbook(path)
-        wb_old["Safety Plan"].delete_cols(69)  # the uid column, last (69th since 0.11.2)
+        wb_old["Safety Plan"].delete_cols(70)  # the uid column, last (70th since 0.14.0)
         old = tmp_path / "plan-0.8.xlsx"
         wb_old.save(old)
         with Brain(tmp_path / "old.db") as third:

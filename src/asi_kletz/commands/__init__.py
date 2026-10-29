@@ -9,6 +9,7 @@ from . import (  # noqa: F401  (registers the built-in commands)
     plan,
     session,
     sprint,
+    standards,
     theme,
     tracker,
     transfer,
