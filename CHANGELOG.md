@@ -12,6 +12,64 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.15.0] - 2026-10-29
+
+The owner, 2026-10-29, on the exported QF-17: "the expected duration value has to change: right now we have
+`{{ row_11_points }} points` / `2027-02-10` but it should be `11 points` / `2027-02-10`; and for status we are
+getting `{{ row_11_status }}` but really we should be able to add a Jira ticket for each deliverable; every
+work product needs to be linked to some Jira ticket, so for every work product allow the user to select a
+Jira ticket." Schema version unchanged (8).
+
+### Changed
+- **The points the export prints** (`services/standards_service.py:row_values`, `plan parameters`): the
+  owner's revision of the 2026-10-29 rule. `row_N_points` is the weight the schedule actually used for the
+  row, as `generate/plan_schedule.py:weight_of` resolves it: the chosen `points` when set, else the row's
+  `default_points`; only a row with neither (the scheduler fell back to the global floor) stays unfilled,
+  with one warning naming the rows (`row(s) 4 have neither points nor a default: their points stay
+  unfilled`). Before, a row without chosen points left the placeholder while the sprint end under it came
+  from the scheduler weighing the row at its default; the two lines now agree. The Safety Plan pane's own
+  line says which it is (`3 points (the panel's default, no points chosen)`).
+
+### Added
+- **A Jira ticket picker on every work product** (`gui/widgets.py:JiraPickerWidget`, `FieldSpec.picker`
+  (`"jira"` on `jira_key`), `WidgetFactory.create` picking it, `gui/entity_screen.py`): a combobox whose list
+  is the issues of the window's last JIRA Live Data fetch (`window.jira_live`), shown as `HWL-2554  Perform
+  Platform Safety Plan`; typing filters the list on key or summary, case-insensitively; a pick stores the key
+  alone; the entry stays free text, so a key not in the list can still be typed; a cleared box clears the
+  key; the picked ticket's status shows beside the box, read from the fetched rows, nothing stored. The
+  screen feeds every picker on build and on every refresh, so a fetch made on the live screen reaches it.
+- **Load tickets** (`gui/ticket_loader.py:TicketLoader`): beside the picker; because a person pressed it,
+  one `jira live` on the worker thread through the existing `BackgroundFetch` / `execute_quiet` path; a
+  rejected session becomes one `jira login` (the browser opens) and the fetch runs again, once per press, as
+  the live screen's Refresh does since 0.11.1; the Result lands on `window.jira_live`, so the live screen
+  paints the same rows without a second fetch; a second press while one runs is ignored.
+- **`plan tickets`** (`commands/plan.py`): every work product in plan order with its `jira_key`, and
+  `missing`, the orders of the ones still without one; `plan export`'s warning keeps naming them.
+
+### Deviations from the brief, and what it got wrong once it met the code
+- **The fetch flow is a second instance, not the live screen's object.** The brief said "the same code path":
+  the loader runs the same `BackgroundFetch` with the same `execute_quiet`, the same `jira live` and `jira
+  login` verbs, the same one-sign-in rule and the same `window.jira_live`; the state machine itself (the
+  fetch in flight, the poll, the login flag) is the loader's own, as the comments window already has its own,
+  because the live screen's one is bound to its toolbar and its tests pin its attributes.
+- **A list fed after a key was typed shows every issue**, not the issues matching the typed key: a key the
+  fetch does not know would otherwise hide the whole list the person just loaded; typing narrows it again.
+- **A Done row's points are printed too** (its own chosen points or default): the scheduler leaves a Done row
+  alone, but the document is a plan table, and the owner's "11 points" is the deliverable's weight, finished
+  or not.
+- The brief's example said row 11 "has no chosen points" and a default of 8; the rule implemented reads any
+  row the same way, the figures are the owner's database's.
+- `uv lock` took asi_gutenberg 0.5.0 → 0.6.0, the sibling's current version (the one 0.14.1 already builds
+  the standards with); the lock says 0.15.0 for the project.
+
+### Tests
+- 320 → 324: the printed points equal the schedule's weight column (chosen, default, neither
+  with the warning; a Done row's own); `plan tickets`; the picker (an empty list before any fetch, the
+  labels, filtering by summary and by key, a pick storing the key alone with its status, a free key, a
+  cleared box, saving through the form and the table column); Load tickets running one `jira live` on the
+  worker through the stubbed `execute_quiet`, a second press ignored, the list filled and shared with the live
+  screen; a rejected session signing in once like Refresh, a second rejection offline with the rows kept.
+
 ## [0.14.1] - 2026-10-29
 
 The owner, 2026-10-29: "the report was portrait; we should strive to make the Word product as close as

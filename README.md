@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.14.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.15.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -22,6 +22,22 @@ Since 0.5.0 it also shows Jira, live and read only, without storing any of it (s
 [JIRA Live Data](#jira-live-data)). Since 0.6.0 only one primary tool runs at a time (see
 [One at a time](#one-at-a-time)). Since 0.7.0 a running window can be driven by an agent, or by
 the CLI, through its local automation server (see [Automation](#automation)).
+
+## What is in 0.15.0
+
+**The exported points are the weight the schedule used, and every work product picks its Jira ticket**
+(the owner's revision of 2026-10-29 on the exported QF-17). `row_N_points` is no longer "the chosen points,
+never the default": the sprint end printed under it came from the scheduler, which weighed the row at its
+panel default, so the two lines disagreed. It is now the weight the schedule actually used, exactly as
+`generate/plan_schedule.py`'s `weight_of` resolves it: the chosen `points` when set, else the row's
+`default_points`; only a row with neither (the scheduler fell back to the floor) stays unfilled, with one
+warning naming the rows. And `row_N_status` wants a ticket on every row: the Safety Plan form's **Jira key**
+is a picker whose list is the issues of the window's last JIRA Live Data fetch (`HWL-2554  Perform Platform
+Safety Plan`; typing filters on key or summary; picking stores the key alone; a key not in the list can still
+be typed; a cleared box clears the key; the picked ticket's status shows beside it, nothing stored), with a
+**Load tickets** button that runs the live screen's own fetch (worker thread, one sign-in on a rejected
+session, the Result shared with the live screen). `plan tickets` lists every work product with its key and
+the ones still without one. No schema change.
 
 ## What is in 0.14.0
 
@@ -332,7 +348,11 @@ Everything of 0.1.0 plus diagrams and documents (see Diagrams and documents).
     empty, a `default n` caption the moment the value differs, clearing returns to the default),
     **Default points** (the estimation panel's, read-only), **Sprint** and **Expected
     Duration/Deadline** (calculated, read-only: where the deliverable's last point lands and that
-    sprint's end). Since 0.9.0 no
+    sprint's end), and since 0.15.0 **Jira key** as a ticket picker: the list is the window's last JIRA
+    Live Data fetch (`Load tickets` beside it runs that fetch, on the worker thread, signing in once on a
+    rejected session as the live screen's Refresh does), typing filters on key or summary, a pick stores the
+    key alone, a key not in the list can still be typed, and the picked ticket's status shows beside the box.
+    Since 0.9.0 no
     table shows `id`, `order` or the hidden `uid`: the id is in the details frame's title
     (`Safety Plan Row details · row 2`) and the status bar, `order` is a field of the form and the
     default sort. Since 0.7.2 the identity column stays put while the rest scrolls sideways (since
@@ -395,7 +415,10 @@ file; `$ASI_KLETZ_STANDARDS` overrides it; `status` reports it). Two kinds of pa
   --set name=vehicle_type --set value="Wheel Loader"`): a row whose `standard` is empty holds for every
   standard, a row naming a folder wins for that one. A name is unique per standard.
 - **Row-level**, Kletz supplies them for every deliverable, N being the row's `order`: `row_N_points`, the
-  chosen points (`points`), never the default; `row_N_sprint_end`, the date the owning sprint concludes;
+  weight the schedule used for the row (the owner's revision of 2026-10-29, asi_kletz 0.15.0: the chosen
+  `points` when set, else the row's `default_points`, exactly as the scheduler's `weight_of` resolves it,
+  so the points and the sprint end under them agree; a row with neither stays unfilled, with one warning
+  naming the rows); `row_N_sprint_end`, the date the owning sprint concludes;
   `row_N_status`, the live status of the deliverable's Jira ticket (`jira_key`), read once per distinct key
   through asi_hopper, non-interactively; a row without a key, or no session, leaves the blank with one
   warning naming what was skipped.
