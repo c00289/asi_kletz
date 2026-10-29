@@ -12,6 +12,27 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.15.3] - 2026-10-29
+
+A broken-windows sweep of the repository after the 0.15.x patches; no behaviour changes. Schema version
+unchanged (8).
+
+### Removed
+- `EntitySchema.all_columns` and `SqlRepository.bulk_insert`: no caller in the source or the tests
+  (the importers write through `EntityService.create`, one row at a time; the exporters read the
+  schema's field names).
+
+### Fixed
+- README: the Configuration section listed five workbook sheets and left out `Parameters` (0.14.0);
+  the layout tree lacked the `tracker/` package and the five services added since 0.8.0, and its
+  `tests/` line named eleven of the seventeen test modules; "Adding an entity" still said
+  `ALL_ENTITIES` lists "the four of 0.8.0" (six since 0.14.0).
+- `docs/plan.md` said "0.7.3 delivered" while its section 8 recorded every release to 0.15.0.
+- CHANGELOG: no compare links for 0.8.0 to 0.15.2, and `[Unreleased]` compared against 0.7.4.
+- `uv.lock` recorded this package as 0.15.0 and the siblings as asi_hopper 0.1.5 and asi_escher
+  0.1.1; it now takes 0.15.3, asi_hopper 0.1.6 and asi_escher 0.1.2 (what the siblings' `main`
+  branches declare, which is what CI checks out). asi_gutenberg stays 0.6.0, its committed version.
+
 ## [0.15.2] - 2026-10-29
 
 The owner, 2026-10-29: "we might have found a bug in the Jira ticketing system". The audit log: the Safety
@@ -1440,7 +1461,29 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://example.invalid/asi-kletz/compare/v0.7.4...HEAD
+[Unreleased]: https://example.invalid/asi-kletz/compare/v0.15.3...HEAD
+[0.15.3]: https://example.invalid/asi-kletz/compare/v0.15.2...v0.15.3
+[0.15.2]: https://example.invalid/asi-kletz/compare/v0.15.1...v0.15.2
+[0.15.1]: https://example.invalid/asi-kletz/compare/v0.15.0...v0.15.1
+[0.15.0]: https://example.invalid/asi-kletz/compare/v0.14.1...v0.15.0
+[0.14.1]: https://example.invalid/asi-kletz/compare/v0.14.0...v0.14.1
+[0.14.0]: https://example.invalid/asi-kletz/compare/v0.13.1...v0.14.0
+[0.13.1]: https://example.invalid/asi-kletz/compare/v0.13.0...v0.13.1
+[0.13.0]: https://example.invalid/asi-kletz/compare/v0.12.0...v0.13.0
+[0.12.0]: https://example.invalid/asi-kletz/compare/v0.11.4...v0.12.0
+[0.11.4]: https://example.invalid/asi-kletz/compare/v0.11.3...v0.11.4
+[0.11.3]: https://example.invalid/asi-kletz/compare/v0.11.2...v0.11.3
+[0.11.2]: https://example.invalid/asi-kletz/compare/v0.11.1...v0.11.2
+[0.11.1]: https://example.invalid/asi-kletz/compare/v0.11.0...v0.11.1
+[0.11.0]: https://example.invalid/asi-kletz/compare/v0.10.0...v0.11.0
+[0.10.0]: https://example.invalid/asi-kletz/compare/v0.9.1...v0.10.0
+[0.9.1]: https://example.invalid/asi-kletz/compare/v0.9.0...v0.9.1
+[0.9.0]: https://example.invalid/asi-kletz/compare/v0.8.4...v0.9.0
+[0.8.4]: https://example.invalid/asi-kletz/compare/v0.8.3...v0.8.4
+[0.8.3]: https://example.invalid/asi-kletz/compare/v0.8.2...v0.8.3
+[0.8.2]: https://example.invalid/asi-kletz/compare/v0.8.1...v0.8.2
+[0.8.1]: https://example.invalid/asi-kletz/compare/v0.8.0...v0.8.1
+[0.8.0]: https://example.invalid/asi-kletz/compare/v0.7.4...v0.8.0
 [0.7.4]: https://example.invalid/asi-kletz/compare/v0.7.3...v0.7.4
 [0.7.3]: https://example.invalid/asi-kletz/compare/v0.7.2...v0.7.3
 [0.7.2]: https://example.invalid/asi-kletz/compare/v0.7.1...v0.7.2

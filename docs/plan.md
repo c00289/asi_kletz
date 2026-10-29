@@ -1,6 +1,6 @@
 # ASI Kletz — Plan
 
-**Status:** 0.7.3 delivered
+**Status:** 0.15.3 delivered
 **Started:** 2026-10-27
 **Owner:** FuSa engineer
 
@@ -193,6 +193,7 @@ implementation produced by a factory.
 - 2026-10-28 0.13.0: the section 8 row for plan_uid and continuous integration.
 - 2026-10-29 0.14.0: the section 8 row for the standards and the export.
 - 2026-10-29 0.15.0: the section 8 row for the points rule and the Jira ticket picker.
+- 2026-10-29 0.15.3: the status line, which had said "0.7.3 delivered" since the 0.7.3 sweep while section 8 went on to 0.15.0.
 - 2026-10-28 0.8.0: the section 8 row for the Weekly Activity Tracker and sprints (phases 1 to 3); section 4's "one table" is history as of this version, the registered list is the design.
 - 2026-10-28 0.7.3: status line and the section 8 row for the three patch releases (fitted columns, frozen identity columns, the draggable split, the sweep).
 - 2026-10-27 0.7: section 3 (the automation server lives in the GUI front end), section 7 (the server, the session file, forwarding, the `session` verb delivered) and section 8 row for the automation server (0.7.0); approval mode and form puppeting are the next row.

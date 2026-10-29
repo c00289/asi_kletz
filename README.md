@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.15.2**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.15.3**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -906,7 +906,7 @@ and `jira live` fetch when no `--jql` is given, and `jira_live_autofetch` (a TOM
 for Refresh; both are optional (see JIRA Live Data).
 
 The export writes a workbook with one sheet per entity (`Safety Plan`, `Sprints`, `Sprint Items`,
-`Weekly Status`, `Holidays`). Point `workbook` at a file of its own, never at a workbook that holds
+`Weekly Status`, `Holidays`, `Parameters`). Point `workbook` at a file of its own, never at a workbook that holds
 other sheets you want to keep. `tracker_title`, `tracker_byline`, `tracker_scope`,
 `tracker_jira_scope` (text) and `sprint_days` (an integer, business days) are the Weekly Activity
 Tracker's settings (see Weekly Activity Tracker); all are optional. `standards_dir` (a path, default
@@ -1054,13 +1054,16 @@ src/asi_kletz/
   models/             ModelFactory (dataclasses from schemas)
   storage/            Storage interface, SQLite backend, migrations, audit log, StorageFactory
   repositories/       SqlRepository, RepositoryFactory
-  services/           EntityService (validated CRUD), TransferService (dump/load/export/import), JiraService (read only)
+  services/           EntityService (validated CRUD), TransferService (dump/load/export/import), JiraService (read only),
+                      HolidayService, SprintService, PlanScheduleService, TrackerService, StandardsService
   commands/           Result, Command, CommandFactory, Dispatcher, built-in verbs
   io/                 JSON and Excel exporters and importers behind factories
   generate/           DiagramFactory, DocumentFactory, Spec, Param, the catalogs, plan_queries, figures
+  tracker/            the Weekly Activity Tracker's grammar (format: parse and render) and business-day arithmetic (business_days)
   automation/         CLI (with forwarding), EventBus, script runner, the local server (server.py), the session file (session.py)
   gui/                tkinter: MainWindow (owns the server), ScreenFactory, WidgetFactory, themes, the family palette, the screens, the comments window
-tests/                pytest suite (schema, core, transfer, CLI, generate, theme, jira, locks, GUI, server, session)
+tests/                pytest suite (schema, core, transfer, CLI, generate, theme, jira, locks, GUI, server, session,
+                      business days, holiday, schedule, sprint, standards, tracker)
 ```
 
 ## Tests
@@ -1100,8 +1103,9 @@ own file, so a developer's open window never receives test traffic.
 ## Adding an entity
 
 The schema machinery is generic: an entity registered with `register_entity` gets a table,
-commands, JSON, and a workbook sheet; `ALL_ENTITIES` in `schema/definitions.py` lists the four of
-0.8.0 in order and the test suite asserts that list, never a count. End the fields with
+commands, JSON, and a workbook sheet; `ALL_ENTITIES` in `schema/definitions.py` lists the six of
+0.14.0 in order (the four of 0.8.0, `holiday` since 0.10.0, `parameter` since 0.14.0) and the test suite
+asserts that list, never a count. End the fields with
 `uid_field()` so the entity carries the hidden identity like the others (a test checks that every
 registered entity does). It does not get a screen by
 itself: screens are registered in `gui/screens.py`, asserted the same way. The list is the design,
