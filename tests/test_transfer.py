@@ -137,8 +137,9 @@ def test_locked_workbook_falls_back_to_sibling(seeded, tmp_path, monkeypatch):
             raise PermissionError("locked")
         path.write_bytes(b"ok")
 
-    path, warning = ex._save_with_fallback(fake_save, tmp_path / "view.xlsx", ".xlsx")
+    path, warning = ex._save_with_fallback(fake_save, tmp_path / "view.xlsx")
     assert path != tmp_path / "view.xlsx" and path.suffix == ".xlsx" and "locked" in warning
+    assert calls[0].name != "view.xlsx" and path.stem == calls[0].stem + "-2"  # stamped first, then the sibling
 
 
 def test_run_script(seeded, tmp_path):
@@ -249,3 +250,33 @@ def test_the_files_carry_points_and_the_import_recalculates_sprint_and_deadline(
         assert same.ok and same.warnings == []
         with_sheet = other.execute("import", format="excel", path=workbook, mode="merge", entity=PLAN)
         assert with_sheet.ok and with_sheet.warnings == []  # one sheet of the same workbook: still agrees
+
+
+def test_excel_export_marks_the_gaps(seeded, tmp_path):
+    """0.27.0, the owner's "bug when exporting safety plan excel": the placeholder link and the missing URL or
+    ticket are shaded pinkish red like the Word export, a real link stays Excel's blue."""
+    seeded.execute("update", entity=PLAN, id=1, data={"urls": ["https://www.microsoft.com/"], "jira_key": "HWL-1"})
+    seeded.execute("update", entity=PLAN, id=2, data={"urls": None, "jira_key": None})
+    seeded.execute("update", entity=PLAN, id=3, data={"urls": ["https://asirobots.atlassian.net/wiki/spaces/S/pages/1"]})
+    result = seeded.execute("export", format="excel", out=str(tmp_path / "gaps.xlsx"))
+    assert result.ok, result.errors
+    assert result.data["gaps"] == {"placeholder": 1, "no_url": 1, "no_ticket": 2}  # rows 2 and 3 have no ticket
+    ws = load_workbook(result.data["path"])["Safety Plan"]
+    heads = [c.value for c in ws[1]]
+    name, product, key = (heads.index("Safety Deliverables") + 1, heads.index("Work product") + 1,
+                          heads.index("Jira key") + 1)
+    pink, dark = "FFF4C2C2", "FFB71C1C"  # as openpyxl stores an ARGB fill and font colour
+    placeholder = ws.cell(row=2, column=name)
+    assert placeholder.hyperlink.target == "https://www.microsoft.com/"
+    assert placeholder.fill.fgColor.rgb == pink and placeholder.font.color.rgb == dark
+    assert ws.cell(row=2, column=product).value == "placeholder"
+    assert ws.cell(row=2, column=product).fill.fgColor.rgb == pink
+    nothing = ws.cell(row=3, column=name)
+    assert nothing.hyperlink is None and nothing.fill.fgColor.rgb == pink
+    assert ws.cell(row=3, column=product).value is None and ws.cell(row=3, column=product).fill.fgColor.rgb == pink
+    assert ws.cell(row=3, column=key).value == "no ticket attached"
+    assert ws.cell(row=3, column=key).fill.fgColor.rgb == pink
+    real = ws.cell(row=4, column=name)
+    assert real.hyperlink.target.startswith("https://asirobots.atlassian.net/") and real.style == "Hyperlink"
+    assert real.fill.fgColor.rgb != pink and ws.cell(row=4, column=product).value.startswith("Confluence")
+    assert ws.cell(row=2, column=key).value == "HWL-1" and ws.cell(row=2, column=key).fill.fgColor.rgb != pink

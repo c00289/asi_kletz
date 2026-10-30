@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from ..errors import CommandError
 from ..generate import plan_queries as pq
 from ..generate import sprint_queries as q
+from ..io.stamp import next_sibling, stamped_stem
 from ..tracker import format as fmt
 from ..tracker.format import Item, Sprint, Tracker, Week
 
@@ -247,18 +248,19 @@ class TrackerService:
     def build(
         self, kind: str, out_dir: str | Path | None = None, as_of: Any = None, jira: bool = False, actor: str = "python"
     ) -> dict[str, Any]:
-        """Write ``<out>/tracker_<kind>.txt`` and return its path, the numbers and any warnings."""
+        """Write ``<out>/tracker_<kind>_<stamp>.txt`` (0.27.0: the timestamp suffix of every exported file) and
+        return its path, the numbers and any warnings."""
         warnings: list[str] = []
         if jira:
             warnings.extend(self.refresh_jira(actor=actor))
         text, info = self.render(kind, as_of)
         folder = Path(out_dir or self.brain.out_dir)
         folder.mkdir(parents=True, exist_ok=True)
-        target = folder / f"{STEMS[kind]}.txt"
+        target = folder / f"{stamped_stem(STEMS[kind])}.txt"
         try:
             target.write_text(text, encoding="utf-8", newline="\n")
         except PermissionError:
-            alt = folder / f"{STEMS[kind]}_{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}.txt"
+            alt = next_sibling(target)
             alt.write_text(text, encoding="utf-8", newline="\n")
             warnings.append(f"{target.name} is locked (open in another program); wrote {alt.name} instead")
             target = alt

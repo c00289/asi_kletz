@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 from ..errors import CommandError, NotFound, ValidationError
 from ..generate import plan_queries as pq
 from ..generate.plan_schedule import SOURCE_FLOOR, weight_of
+from ..io.stamp import stamped_stem
 from ..schema.definitions import NO_TICKET, ROLE_SLUGS
 from ..schema.people import PeopleError, is_role, parse_people, people_json, people_of, render_people
 from ..schema.urls import url_kind, urls_of
@@ -429,9 +430,10 @@ class StandardsService:
         warnings = list(plan["warnings"])
         built = []
         for std in plan["standards"]:
+            stem = stamped_stem(std["folder"])  # 0.27.0: every exported file carries the timestamp suffix
             source = Path(std["path"]).read_text(encoding="utf-8")
             paths = build(
-                from_markdown(source), str(target), name=std["folder"],
+                from_markdown(source), str(target), name=stem,
                 params=std["values"], strict_params=False, mark_params=True,
                 warn=std["warn"], warn_urls=std["warn_urls"],
             )
@@ -447,7 +449,7 @@ class StandardsService:
                 if std.get("abridged_headers"):
                     mapping = json.loads(Path(std["abridged_headers"]).read_text(encoding="utf-8"))
                 filled = fill_docx(
-                    std["template"], source, std["values"], str(target / f"{std['folder']}.docx"),
+                    std["template"], source, std["values"], str(target / f"{stem}.docx"),
                     strict=False, mark=True, pdf=True, abridged_headers=mapping,
                     warn=std["warn"], warn_urls=std["warn_urls"],
                 )

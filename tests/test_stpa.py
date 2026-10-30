@@ -794,8 +794,9 @@ def test_dump_load_and_the_workbook_carry_the_six_entities(loaded, tmp_path):
     assert brain.execute("stpa", action="list").data[0]["counts"] == COUNTS
     back = next(u for u in brain.service("stpa_uca").list() if u["code"] == "UCA1")
     assert back["hazards"] == ["H2", "H2.1"] and back["uid"]
-    wb_path = tmp_path / "view.xlsx"
-    assert brain.execute("export", format="excel", out=str(wb_path)).ok
+    exported = brain.execute("export", format="excel", out=str(tmp_path / "view.xlsx"))
+    wb_path = Path(exported.data["path"])  # 0.27.0: the workbook is written under its stamped name
+    assert exported.ok and wb_path.name.startswith("view_")
     assert "STPA UCAs" in load_workbook(wb_path).sheetnames
     assert brain.execute("import", format="excel", path=str(wb_path), mode="replace").ok
     assert brain.execute("stpa", action="list").data[0]["counts"] == COUNTS

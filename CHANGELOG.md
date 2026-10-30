@@ -12,6 +12,40 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.27.0] - 2026-10-30
+
+The owner, 2026-10-30, two asks in one breath: "bug when exporting safety plan excel", and "ensure that files we
+export like the safety plan include a timestamp suffix". The bug: the Excel export still linked every
+deliverable name and every Work product cell to the placeholder `https://www.microsoft.com/` in hyperlink blue,
+the gap 0.26.0 had painted pinkish red in the Word export but not on the sheet. Schema version unchanged (11).
+
+### Added
+- **A timestamp suffix on every exported file** (`io/stamp.py`: `stamp`, `stamped_stem`, `stamped`,
+  `next_sibling`): `kletz.xlsx` is written as `kletz_20261030-083512.xlsx`, the local time to the second, so no
+  export overwrites the one before and a folder sorts into the order they were made; a stem already stamped is
+  stamped afresh, never twice; a locked stamped file falls back to its `-2` sibling (`-3`, …). Stamped: the
+  workbook (`export excel`), the standards a plan row is exported into (`plan export`), the catalog documents
+  (`document`) and the tracker texts (`tracker build`): what a person opens. The JSON dump (`dump`) keeps the
+  exact name it is given, a machine artefact that `load` and the scripts read back by that path; diagrams and
+  control-structure bundles stay views regenerated in place. Every Result carries the written `path`; the
+  Export / Import screen's workbook field takes the path just written, so Import workbook reads that file by
+  default.
+- The Excel export's `gaps` (`placeholder`, `no_url`, `no_ticket` counts) in its summary; the Export / Import
+  screen's log prints them.
+- Tests: `test_stamp.py`; `test_excel_export_marks_the_gaps`; the transfer round trip asserts the remembered
+  path and the gap line; the tests that pinned fixed export names read the written path instead.
+
+### Fixed
+- **The Excel export marks the gaps the way the Word export does** (`io/exporters.py`): a deliverable whose
+  first URL is the placeholder is still a link to it but dark red `#B71C1C` over pinkish red `#F4C2C2`, as is
+  its Work product cell (`placeholder`); a deliverable with no URL is shaded pinkish red in both cells, no link;
+  `no ticket attached` is shaded pinkish red; a real link stays Excel's hyperlink blue.
+
+### Changed
+- `_save_with_fallback(save, out, stamp=True)` lost its `suffix` parameter (the stamp keeps the file's own
+  suffix) and gained `stamp`, off for the JSON dump; the locked-file sibling is `-2` instead of a second stamp.
+- README: *What is in 0.27.0*. `docs/plan.md`: the status line and the row.
+
 ## [0.26.1] - 2026-10-30
 
 The lock follows the sibling, no code change: `uv.lock` takes asi_escher 0.4.0, the version that draws gantt
@@ -2145,7 +2179,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.26.1...HEAD
+[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/c00289/asi_kletz/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/c00289/asi_kletz/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/c00289/asi_kletz/compare/v0.25.1...v0.26.0
 [0.25.1]: https://github.com/c00289/asi_kletz/compare/v0.25.0...v0.25.1

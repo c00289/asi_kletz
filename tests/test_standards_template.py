@@ -5,6 +5,7 @@ but otherwise we need to match the template exactly."""
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,14 @@ GREEN = "A0D8A0"  # asi_gutenberg 0.7.2 THEME["mark_bg"], the owner's "nice gree
 PINK = "F4C2C2"  # asi_gutenberg 0.10.0 THEME["warn_bg"], the owner's "pinkish red" for a gap
 DARK_RED = "B71C1C"  # asi_gutenberg 0.10.0 THEME["warn_fg"], the text of a link to the placeholder
 
+
+
+def _stamped(path, folder, stem, suffix):
+    """0.27.0: an exported file is ``<stem>_<YYYYMMDD-HHMMSS>.<suffix>`` in ``folder`` (any folder when None)."""
+    path = Path(path)
+    return (folder is None or path.parent == Path(folder)) and bool(
+        re.fullmatch(stem + r"_\d{8}-\d{6}\." + suffix, path.name)
+    )
 
 def _fill_of(run) -> str | None:
     from docx.oxml.ns import qn
@@ -75,7 +84,7 @@ def test_export_fills_the_word_original_when_the_standard_has_one(seeded, standa
     assert result.ok, result.errors
     [built] = result.data["exports"]
     assert built["template"] == str(original) and built["exact"]["docx"] is True
-    assert Path(built["files"]["docx"]) == out / "qf-17-test.docx" and Path(built["files"]["md"]).is_file()
+    assert _stamped(built["files"]["docx"], out, "qf-17-test", "docx") and Path(built["files"]["md"]).is_file()
     word = docx.Document(built["files"]["docx"])
     assert word.paragraphs[0].text == "Wheel Loader Safety Plan (test)" and word.paragraphs[0].style.name == "Title"
     assert word.core_properties.title == "Wheel Loader Safety Plan (test)"
@@ -101,7 +110,7 @@ def test_export_fills_the_word_original_when_the_standard_has_one(seeded, standa
     assert not any(_fill_of(r) == green for r in author.runs[:1])  # the template's own text is not
     assert "==Wheel Loader==" in Path(built["files"]["md"]).read_text(encoding="utf-8")  # the source keeps them
     if WINWORD.is_file():
-        assert built["exact"]["pdf"] is True and Path(built["files"]["pdf"]) == out / "qf-17-test.pdf"
+        assert built["exact"]["pdf"] is True and _stamped(built["files"]["pdf"], out, "qf-17-test", "pdf")
         assert Path(built["files"]["pdf"]).stat().st_size > 1000
         assert not any("pdf through Word" in w for w in result.warnings)
     else:
@@ -128,7 +137,7 @@ def test_a_failed_print_keeps_gutenbergs_pdf(seeded, standards, tmp_path, monkey
     assert result.ok, result.errors
     [built] = result.data["exports"]
     assert built["exact"] == {"docx": True, "pdf": False}
-    assert Path(built["files"]["pdf"]) == tmp_path / "out" / "qf-17-test.pdf" and Path(built["primary"]).is_file()
+    assert _stamped(built["files"]["pdf"], tmp_path / "out", "qf-17-test", "pdf") and Path(built["primary"]).is_file()
     assert Path(built["primary"]).stat().st_size > 1000
     assert any("pdf through Word failed: no Word here; the PDF is Gutenberg's rendering" in w for w in result.warnings)
 
@@ -154,7 +163,7 @@ def test_the_pdf_is_words_print(seeded, standards, tmp_path, monkeypatch):
     result = seeded.execute("plan", action="export", row=1, out=str(tmp_path / "out"))
     assert result.ok, result.errors
     [built] = result.data["exports"]
-    assert built["exact"] == {"docx": True, "pdf": True} and Path(built["primary"]).name == "qf-17-test.pdf"
+    assert built["exact"] == {"docx": True, "pdf": True} and _stamped(built["primary"], None, "qf-17-test", "pdf")
 
 
 # -- 0.21.0: the deliverable's link and the abridged headers ----------------------------------------------
@@ -257,7 +266,7 @@ def test_export_links_the_deliverable_and_passes_the_abridged_headers(seeded, st
     assert result.ok, result.errors
     [built] = result.data["exports"]
     assert built["abridged"] == ["Deliverable"] and built["pages"] == 3 and built["abridged_headers"] == str(mapping)
-    assert built["exact"] == {"docx": True, "pdf": True} and Path(built["primary"]) == out / "qf-17-test.pdf"
+    assert built["exact"] == {"docx": True, "pdf": True} and _stamped(built["primary"], out, "qf-17-test", "pdf")
     [session] = sessions
     assert session["plan"] == [{"index": 1, "first": "Deliverable", "short": ["Del.", "Duration", "Status"]}]
     assert built["warn"] == ["row_1_jira_key", "row_1_url"]

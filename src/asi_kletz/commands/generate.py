@@ -9,11 +9,11 @@ carries the PNG as ``primary``.
 
 from __future__ import annotations
 
-import datetime as dt
 from pathlib import Path
 from typing import Any
 
 from ..errors import CommandError, NotFound
+from ..io.stamp import next_sibling, stamped_stem
 from .base import Argument, Command, Context, Result, parse_kv
 from .factory import register_command
 
@@ -113,13 +113,15 @@ class DocumentCommand(Command):
 
 
 def _build_with_fallback(doc: Any, out_dir: Path, stem: str) -> tuple[dict[str, Any], str | None]:
-    """Write the triplet as ``<stem>.{md,pdf,docx}``; if a file is locked, use a timestamped stem."""
+    """Write the triplet as ``<stem>_<stamp>.{md,pdf,docx}`` (0.27.0, :mod:`asi_kletz.io.stamp`); if a file is
+    locked, use the ``-2`` sibling of the stamped stem."""
     from asi_gutenberg import build
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    name = stamped_stem(stem)
     try:
-        return build(doc, str(out_dir), name=stem), None
+        return build(doc, str(out_dir), name=name), None
     except PermissionError:
-        alt = f"{stem}_{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        alt = next_sibling(out_dir / f"{name}.pdf").stem
         paths = build(doc, str(out_dir), name=alt)
-        return paths, f"{stem}.pdf or {stem}.docx is locked (open in another program); wrote {alt}.* instead"
+        return paths, f"{name}.pdf or {name}.docx is locked (open in another program); wrote {alt}.* instead"

@@ -16,6 +16,14 @@ column; the import reads its text as before.
 0.22.0 (Phase A of the Confluence integration plan): the Work product cell's text is the first URL's kind and
 host (``Confluence, asirobots.atlassian.net``; a placeholder row reads ``placeholder``), so a reviewer sees at a
 glance which deliverables still point nowhere; the hyperlink is the first URL as before.
+
+0.27.0, the owner: "bug when exporting safety plan excel". The sheet had linked every deliverable name and every
+Work product cell to the placeholder in hyperlink blue, the gap 0.26.0 paints pinkish red in the Word export. The
+sheet now marks the gaps the same way: a placeholder link stays a link but dark red ``#B71C1C`` over pinkish red
+``#F4C2C2`` (the name and the Work product cell both), a deliverable with no URL is shaded pinkish red without a
+link, ``no ticket attached`` is shaded too, a real link stays blue; the summary counts them under ``gaps``. And
+the workbook carries the timestamp suffix (:mod:`asi_kletz.io.stamp`); the JSON dump keeps the exact name it is
+given, a machine artefact that ``load`` and the scripts read back by that path.
 """
 
 from __future__ import annotations
@@ -31,8 +39,9 @@ from ..errors import NotFound
 from ..schema import EntitySchema, FieldType
 from ..schema.definitions import NO_TICKET, WORK_PRODUCT_HEADER
 from ..schema.fields import json_text
-from ..schema.urls import first_url, kind_label, urls_lines
+from ..schema.urls import first_url, kind_label, url_kind, urls_lines
 from ..version import SCHEMA_VERSION, __version__
+from .stamp import next_sibling, stamped
 
 if TYPE_CHECKING:
     from ..brain import Brain
@@ -88,17 +97,19 @@ def sheet_columns(schema: EntitySchema) -> list[tuple[str, Any]]:
     return columns
 
 
-def _save_with_fallback(save: Callable[[Path], None], out: Path, suffix: str) -> tuple[Path, str | None]:
-    """Save to ``out``; if it is locked (open in Excel), save to a timestamped sibling instead."""
+def _save_with_fallback(save: Callable[[Path], None], out: Path, stamp: bool = True) -> tuple[Path, str | None]:
+    """Save ``out`` under its timestamped name (:func:`~asi_kletz.io.stamp.stamped`; the exact name when ``stamp``
+    is off: the JSON dump is a machine artefact that scripts and tests read back by the path they gave); if that
+    is locked (open in another program), save to its ``-2`` sibling instead."""
     out.parent.mkdir(parents=True, exist_ok=True)
+    target = stamped(out) if stamp else out
     try:
-        save(out)
-        return out, None
+        save(target)
+        return target, None
     except PermissionError:
-        stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        alt = out.with_name(f"{out.stem}_{stamp}{suffix}")
+        alt = next_sibling(target)
         save(alt)
-        return alt, f"{out.name} is locked (open in another program); wrote {alt.name} instead"
+        return alt, f"{target.name} is locked (open in another program); wrote {alt.name} instead"
 
 
 @ExporterFactory.register
@@ -120,7 +131,7 @@ class JsonExporter(Exporter):
         def save(path: Path) -> None:
             path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-        path, warning = _save_with_fallback(save, target, self.suffix)
+        path, warning = _save_with_fallback(save, target, stamp=False)
         if entity:
             counts = {payload["entity"]: len(payload["rows"])}
         else:
@@ -133,6 +144,23 @@ class ExcelExporter(Exporter):
     format = "excel"
     suffix = ".xlsx"
     HEADER_FILL = "FFD9E1F2"
+    GAP_FILL = "FFF4C2C2"      # 0.27.0: pinkish red on a gap, asi_gutenberg's attention mark on the sheet
+    GAP_FONT = "FFB71C1C"      # dark red for a link that still points at the placeholder
+
+    def _gap(self, cell: Any) -> None:
+        from openpyxl.styles import PatternFill
+
+        cell.fill = PatternFill("solid", fgColor=self.GAP_FILL)
+
+    def _link(self, cell: Any, url: str, gap: bool = False) -> None:
+        """A hyperlink in Excel's blue; over the placeholder, dark red on pinkish red and still a link."""
+        from openpyxl.styles import Font
+
+        cell.hyperlink = url
+        cell.style = "Hyperlink"
+        if gap:
+            cell.font = Font(color=self.GAP_FONT, underline="single")
+            self._gap(cell)
 
     def export(self, brain: Brain, out: str | Path | None, entity: str | None = None) -> dict[str, Any]:
         from openpyxl import Workbook
@@ -143,6 +171,7 @@ class ExcelExporter(Exporter):
         wb = Workbook()
         wb.remove(wb.active)
         counts: dict[str, int] = {}
+        gaps = {"placeholder": 0, "no_url": 0, "no_ticket": 0}
         for schema in _schemas(brain, entity):
             ws = wb.create_sheet(schema.sheet[:31])
             rows = brain.service(schema.name).list()
@@ -155,22 +184,29 @@ class ExcelExporter(Exporter):
                 cell.fill = PatternFill("solid", fgColor=self.HEADER_FILL)
                 cell.alignment = Alignment(vertical="center", wrap_text=True)
                 widths.append(len(header))
+            has_urls = any(spec is None for _header, spec in columns)
             for r, row in enumerate(rows, start=2):
+                link = first_url(row.get("urls")) if has_urls else None
+                placeholder = bool(link) and url_kind(link, brain.url_hosts) == "placeholder"
                 for col, (_header, spec) in enumerate(columns, start=1):
                     cell = ws.cell(row=r, column=col)
                     if spec is None:  # the derived Work product column: the link to the first URL
-                        link = first_url(row.get("urls"))
                         if not link:
+                            self._gap(cell)  # 0.27.0: no URL at all is a gap, shaded, no link
+                            gaps["no_url"] += 1
                             continue
                         cell.value = kind_label(link, brain.url_hosts)  # 0.22.0: the kind and the host
-                        cell.hyperlink = link
-                        cell.style = "Hyperlink"
+                        self._link(cell, link, gap=placeholder)
+                        if placeholder:
+                            gaps["placeholder"] += 1
                         widths[col - 1] = max(widths[col - 1], min(len(str(cell.value)), 60))
                         continue
                     value = row.get(spec.name)
                     if value is None:
                         if spec.name == "jira_key":  # 0.20.0, the owner: say so instead of an empty cell
                             cell.value = NO_TICKET
+                            self._gap(cell)
+                            gaps["no_ticket"] += 1
                             widths[col - 1] = max(widths[col - 1], len(NO_TICKET))
                         continue
                     if spec.type is FieldType.BOOL:
@@ -189,10 +225,11 @@ class ExcelExporter(Exporter):
                         cell.value = value if isinstance(value, str) else json_text(value)
                     else:
                         cell.value = value
-                        link = first_url(row.get("urls")) if spec.name == DELIVERABLE else None
-                        if link:  # 0.21.0: the deliverable's name links to the first URL, the Hyperlink style
-                            cell.hyperlink = link
-                            cell.style = "Hyperlink"
+                        if spec.name == DELIVERABLE and has_urls:
+                            if link:  # 0.21.0: the deliverable's name links to the first URL, the Hyperlink style
+                                self._link(cell, link, gap=placeholder)
+                            else:     # 0.27.0: a deliverable that points nowhere is shaded, like the Word export
+                                self._gap(cell)
                         if spec.type is FieldType.MULTILINE:
                             cell.alignment = Alignment(wrap_text=True, vertical="top")
                     widths[col - 1] = max(widths[col - 1], min(len(str(value)), 60))
@@ -218,5 +255,6 @@ class ExcelExporter(Exporter):
             if rows:
                 ws.auto_filter.ref = ws.dimensions
         target = Path(out) if out else Path(brain.workbook_path)
-        path, warning = _save_with_fallback(wb.save, target, self.suffix)
-        return {"format": self.format, "path": str(path), "entities": counts, "warnings": [warning] if warning else []}
+        path, warning = _save_with_fallback(wb.save, target)
+        return {"format": self.format, "path": str(path), "entities": counts, "gaps": gaps,
+                "warnings": [warning] if warning else []}

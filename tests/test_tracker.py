@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -249,7 +250,7 @@ def test_week_build_is_the_current_week_of_the_active_sprint(imported):
     text = _read(result)
     assert text == "\n".join(FIXTURE.read_text(encoding="utf-8").splitlines()[:112]) + "\n"
     assert result.data["sprint"] == 2 and result.data["week"] == "2026-10-26"
-    assert result.data["path"].endswith("tracker_week.txt")
+    assert re.search(r"tracker_week_\d{8}-\d{6}\.txt$", result.data["path"])  # 0.27.0: the timestamp suffix
     assert text.count("WEEK OF") == 1 and "PHASE 2 - SPRINT 1" not in text.split("TIMELINE")[1].split(fmt.RULE)[1]
 
 

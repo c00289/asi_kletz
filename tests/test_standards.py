@@ -4,6 +4,7 @@ the Jira status through a stub Hopper) and the asi_gutenberg build with its mark
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -152,7 +153,7 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
     assert built["standard"] == "qf-17-test" and built["filled"] == 10
     assert built["unfilled"] == []
     assert set(built["files"]) == {"md", "pdf", "docx"} and all(Path(p).is_file() for p in built["files"].values())
-    assert Path(built["primary"]).name == "qf-17-test.pdf" and built["pages"]
+    assert re.fullmatch(r"qf-17-test_\d{8}-\d{6}\.pdf", Path(built["primary"]).name) and built["pages"]
     text = Path(built["files"]["md"]).read_text(encoding="utf-8")
     for mark in ("==Wheel Loader==", "==the contractor==", "==5== points", "==2026-11-09==", "==In Progress==",
                  "==HWL-2554==<br>",
@@ -226,7 +227,7 @@ def test_the_row_values_name_the_gaps(seeded, standards, monkeypatch):
 def test_export_default_out_is_the_config_out(seeded, standards):
     result = seeded.execute("plan", action="export", row=1)
     assert result.ok and result.data["out_dir"] == seeded.out_dir
-    assert Path(seeded.out_dir, "qf-17-test.pdf").is_file()
+    assert list(Path(seeded.out_dir).glob("qf-17-test_*.pdf"))  # 0.27.0: the timestamp suffix
     with pytest.raises(CommandError):
         seeded.standards.value_set(3)
 

@@ -1,6 +1,6 @@
 # ASI Kletz — Plan
 
-**Status:** 0.26.1 delivered
+**Status:** 0.27.0 delivered
 **Started:** 2026-10-27
 **Owner:** FuSa engineer
 
@@ -197,12 +197,14 @@ implementation produced by a factory.
 | 0.25.1 | The row parameters always read as prose: `no ticket attached`, `status not fetched (sign in to Jira)`; no placeholder left in an exported cell | done 2026-10-29 |
 | 0.26.0 | The gaps in pinkish red: `row_values` names them (`warn`, `warn_urls`), `plan parameters` lists them, the filled Word original and the PDF shade them `#F4C2C2`, a placeholder link dark red; asi_gutenberg 0.10.0 | done 2026-10-29 |
 | 0.26.1 | The lock follows the sibling: asi_escher 0.4.0 (the gantt kind, drawn by the Brain's sprint-dated work products); no code change | done 2026-10-30 |
+| 0.27.0 | A timestamp suffix on every file a person opens (`io/stamp.py`: workbook, plan export, document, tracker build; the JSON dump keeps its exact name); the Excel export marks the gaps pinkish red like the Word export (the placeholder link, no URL, no ticket) and counts them | done 2026-10-30 |
 | later | Approval mode, form puppeting, import diff preview, date picker | planned |
 
 ---
 
 ## 9. Change log
 
+- 2026-10-30 0.27.0: the status line and the section 8 row for 0.27.0, the stamps and the sheet's gaps.
 - 2026-10-30 0.26.1: the status line (0.24.3 to 0.26.1) and the section 8 rows for 0.25.0 to 0.26.1, which the day's releases had not added.
 - 2026-10-29 0.24.1: the status line (0.15.3 to 0.24.1) and the section 8 rows for 0.15.1 to 0.24.1, which the day's releases had not added.
 - 2026-10-29 0.24.2: the status line and the section 8 row for 0.24.2, the lock on the siblings.

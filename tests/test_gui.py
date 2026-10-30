@@ -5,6 +5,7 @@ import re
 import threading
 import time
 import tkinter as tk
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -246,11 +247,14 @@ def test_event_bus_refreshes_open_screen(window, seeded):
 def test_transfer_screen_round_trip(window, tmp_path, seeded):
     screen = window.show("transfer")
     exported = screen.export_workbook(tmp_path / "view.xlsx")
-    assert exported.ok and (tmp_path / "view.xlsx").is_file()
+    written = Path(exported.data["path"])
+    assert exported.ok and written.is_file() and re.fullmatch(r"view_\d{8}-\d{6}\.xlsx", written.name)
+    assert screen.workbook_var.get() == str(written)  # 0.27.0: the file just written is the import's default
+    assert "gaps shaded pinkish red" in screen.log.get("1.0", "end")  # the seeded rows point nowhere
     dumped = screen.dump_json(tmp_path / "dump.json")
-    assert dumped.ok
+    assert dumped.ok and (tmp_path / "dump.json").is_file()  # the JSON dump keeps its exact name
     assert screen.load_json(tmp_path / "dump.json", mode="merge").ok
-    assert screen.import_workbook(tmp_path / "view.xlsx", mode="replace").ok
+    assert screen.import_workbook(mode="replace").ok
     assert seeded.execute("count", entity=PLAN).data["count"] == 3
     assert "[ok] import" in screen.log.get("1.0", "end")
     assert not screen.dump_json().ok  # no dialog when not interactive
@@ -405,7 +409,8 @@ def test_transfer_screen_builds_diagrams_and_documents(window, tmp_path, seeded)
     assert not screen.phase_enabled()
     result = screen.build_document("phase_checklist", out=tmp_path / "views")
     assert result.ok, result.errors
-    assert result.data["primary"].endswith("phase_checklist.pdf") and screen.last_primary == result.data["primary"]
+    assert re.search(r"phase_checklist_\d{8}-\d{6}\.pdf$", result.data["primary"])
+    assert screen.last_primary == result.data["primary"]
     assert "[ok] document" in screen.log.get("1.0", "end")
     assert screen.open_primary() is False and "Would open" in window.status_text()  # never launches a program in tests
     assert screen.open_folder() is False
@@ -419,7 +424,7 @@ def test_file_menu_builds_the_safety_plan(window, tmp_path, seeded):
     result = window.build_safety_plan()
     assert result.ok, result.errors
     assert window.current_key == "transfer" and result.data["name"] == "safety_plan"
-    assert (tmp_path / "plan" / "safety_plan.pdf").is_file()
+    assert list((tmp_path / "plan").glob("safety_plan_*.pdf"))  # 0.27.0: the timestamp suffix
     assert (tmp_path / "plan" / "figures" / "lifecycle_overview.png").is_file()
     log = screen.log.get("1.0", "end")
     assert "[ok] document" in log and "kletz.toml has no doc_id" in log
@@ -1757,12 +1762,12 @@ def test_tracker_screen_loads_saves_and_builds(window, seeded, tmp_path):
     assert screen.pane_text("Outcomes").startswith("- Integrated into the Wheel Loader daily stand-up")
     # build both files into the Brain's out_dir; Open on a non-interactive window only says so
     built = screen.build_text("week")
-    assert built.ok and built.data["path"].endswith("tracker_week.txt")
-    assert (tmp_path / "out" / "tracker_week.txt").is_file()
+    assert built.ok and re.search(r"tracker_week_\d{8}-\d{6}\.txt$", built.data["path"])
+    assert Path(built.data["path"]).is_file()
     assert window.status_text().startswith("Written:") and screen.open_primary() is False
     assert "Would open" in window.status_text()
     assert window.build_tracker("history").ok and window.current_key == "tracker"
-    assert (tmp_path / "out" / "tracker_history.txt").read_text(encoding="utf-8").startswith("WHEEL LOADER")
+    assert next((tmp_path / "out").glob("tracker_history_*.txt")).read_text(encoding="utf-8").startswith("WHEEL LOADER")
 
 
 def test_tracker_screen_new_week_joins_the_active_sprint(window, seeded):
@@ -2034,11 +2039,11 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
     assert screen.last_export is fetch.result and fetch.result.ok
     assert str(screen.export_button.cget("state")) == "normal"
     status = window.status_text()
-    assert status.startswith("Exported qf-17-test.md, qf-17-test.pdf, qf-17-test.docx to ")
+    assert re.match(r"Exported qf-17-test_(\d{8}-\d{6})\.md, qf-17-test_\1\.pdf, qf-17-test_\1\.docx to ", status)
     # row 2 has no key, no points and no default (nothing loaded them): its key, points and status stay unfilled
     assert status.endswith("; 1 parameter(s) still unfilled") and seeded.out_dir in status
-    assert (Path(seeded.out_dir) / "qf-17-test.pdf").is_file()
-    text = (Path(seeded.out_dir) / "qf-17-test.md").read_text(encoding="utf-8")
+    assert list(Path(seeded.out_dir).glob("qf-17-test_*.pdf"))
+    text = next(Path(seeded.out_dir).glob("qf-17-test_*.md")).read_text(encoding="utf-8")
     assert "==Dozer==" in text and "==5== points" in text and "==In Progress==" in text
     assert "Author: ==Ann Lee (ann.lee@asirobots.com), Zed Young (zed@asirobots.com)==" in text  # inline, sorted
     assert "Jira HWL-2554: In Progress (as of the last export)" in screen.row_values_var.get()

@@ -350,7 +350,7 @@ def test_cli_exit_codes_for_generate_verbs(tmp_path, capsys):
     code, res = run("document")
     assert code == 0 and [d["key"] for d in res["data"]["documents"]] == DOCUMENTS
     code, res = run("document", "phase_checklist", "--out", str(tmp_path / "o"))
-    assert code == 0 and res["data"]["primary"].endswith("phase_checklist.pdf")
+    assert code == 0 and re.search(r"phase_checklist_\d{8}-\d{6}\.pdf$", res["data"]["primary"])
     assert (tmp_path / "o" / "figures" / "pdp_map.png").is_file()
     code, res = run("document", "phase_checklist", "--param", "x=1")
     assert code == 1 and "no parameters" in res["errors"][0]

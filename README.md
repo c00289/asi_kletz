@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.26.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.27.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,29 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.27.0
+
+The owner, 2026-10-30, two asks in one breath: "bug when exporting safety plan excel", and "ensure that files we
+export like the safety plan include a timestamp suffix".
+
+The bug: the Excel export still linked every deliverable name and every Work product cell to the placeholder
+`https://www.microsoft.com/` in hyperlink blue, the gap 0.26.0 had painted pinkish red in the Word export but
+not on the sheet. The sheet now marks the gaps the same way: a placeholder link stays a link but dark red
+`#B71C1C` over pinkish red `#F4C2C2`, the name and the Work product cell both; a deliverable with no URL is
+shaded pinkish red in both cells, no link; `no ticket attached` is shaded too; a real link stays blue. The
+export's Result counts them under `gaps`, and the Export / Import screen's log prints the counts.
+
+The suffix: every exported file is written under its name plus the local time to the second,
+`kletz_20261030-083512.xlsx`, so no export overwrites the one before and a folder sorts into the order they
+were made (`io/stamp.py`). Stamped: the workbook (`export excel`), the standards a plan row is exported into
+(`plan export`: `qf-17-safety-plan_<stamp>.docx`, `.pdf`, `.md`), the catalog documents (`document`) and the
+tracker texts (`tracker build`): what a person opens. The JSON dump (`dump`) keeps the exact name it is given, a
+machine artefact that `load` and the scripts read back by that path; diagrams and control-structure bundles are
+views regenerated in place under their catalog name and are not stamped either. A name already stamped is stamped afresh,
+never twice; a locked stamped file falls back to its `-2` sibling. Every Result carries the written `path`,
+and the Export / Import screen's workbook field takes the path just written, so Import workbook reads that
+file by default.
 
 ## What is in 0.26.1
 

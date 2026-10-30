@@ -288,7 +288,7 @@ def test_document_builds_through_the_server_on_the_tk_thread(window, seeded, tmp
         timeout=120,
     )
     assert status == 200 and body["ok"], body["errors"]
-    assert body["data"]["name"] == "safety_plan" and (out / "safety_plan.pdf").is_file()
+    assert body["data"]["name"] == "safety_plan" and list(out.glob("safety_plan_*.pdf"))  # 0.27.0: stamped
     assert seeded.storage.audit_tail(1)[0]["actor"] == "agent"
     assert seeded.events.last(1)[0]["topic"] == "generated"
 

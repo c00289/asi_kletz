@@ -129,6 +129,10 @@ class TransferScreen(Screen):
                 for k, v in (data.get("entities") or {}).items()
             )
             self._append(f"[ok] {result.verb} -> {data.get('path') or data.get('primary') or ''}  {counts}")
+            gaps = data.get("gaps") or {}
+            if any(gaps.values()):  # 0.27.0: the Safety Plan sheet's gaps, shaded pinkish red
+                self._append(f"     gaps shaded pinkish red: {gaps.get('placeholder', 0)} placeholder link(s), "
+                             f"{gaps.get('no_url', 0)} without a URL, {gaps.get('no_ticket', 0)} without a ticket")
             for warning in result.warnings:
                 self._append(f"     warning: {warning}")
         else:
@@ -199,7 +203,10 @@ class TransferScreen(Screen):
     # -- actions --------------------------------------------------------
     def export_workbook(self, path: str | Path | None = None) -> Result:
         target = str(path or self.workbook_var.get() or self.brain.workbook_path)
-        return self._report(self.window.run("export", format="excel", out=target))
+        result = self._report(self.window.run("export", format="excel", out=target))
+        if result.ok and result.data and result.data.get("path"):
+            self.workbook_var.set(result.data["path"])  # 0.27.0: the stamped file just written is the import's default
+        return result
 
     def import_workbook(self, path: str | Path | None = None, mode: str | None = None) -> Result:
         source = str(path or self.workbook_var.get())
