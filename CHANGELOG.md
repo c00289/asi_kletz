@@ -12,6 +12,27 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.27.1] - 2026-10-30
+
+The owner, 2026-10-30, a dialog titled "plan failed" on Export document…: `LayoutError: Flowable <Table 4
+rows x 10 cols> ... too large on page 20 in frame 'turned'`. The plan table's rows had grown taller than a
+landscape page once every row's people and reviewers were filled in and wrapped in ten narrow columns, and
+reportlab refuses a table whose row cannot be placed whole. Schema version unchanged (11).
+
+### Fixed
+- **A refused Gutenberg rendering no longer fails the export** (`services/standards_service.py`): `build` is
+  tried; when the renderer raises, `_markdown_only` writes what `build` would have written before rendering
+  (the filled, laid-out Markdown; the unfilled parameters as issues), the Word original is filled and printed
+  as before, and a warning names the refusal (`<folder>: asi_gutenberg could not render its own PDF and Word
+  file (<error>); the Markdown is written and the Word original is filled and printed as before`). A
+  standard without a Word original still gets Gutenberg's PDF and Word file when the renderer succeeds.
+  Test: `test_a_refused_gutenberg_rendering_still_fills_the_word_original`.
+
+### Changed
+- `uv.lock`: asi-gutenberg 0.10.1 (a table row taller than the page continues on the next page), so
+  Gutenberg's own PDF of the plan builds again too.
+- README: *What is in 0.27.1*. `docs/plan.md`: the status line and the row.
+
 ## [0.27.0] - 2026-10-30
 
 The owner, 2026-10-30, two asks in one breath: "bug when exporting safety plan excel", and "ensure that files we
@@ -2179,7 +2200,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.27.1...HEAD
+[0.27.1]: https://github.com/c00289/asi_kletz/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/c00289/asi_kletz/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/c00289/asi_kletz/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/c00289/asi_kletz/compare/v0.25.1...v0.26.0

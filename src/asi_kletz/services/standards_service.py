@@ -394,6 +394,19 @@ class StandardsService:
         return {"row": row_id, "order": row.get("order"), "standards": out, "statuses": statuses, "warnings": warnings}
 
     # -- the export ------------------------------------------------------------------------------------
+    @staticmethod
+    def _markdown_only(source: str, std: dict[str, Any], md_path: Path) -> dict[str, Any]:
+        """What ``build`` would have written before it rendered: the filled, laid-out Markdown, and the unfilled
+        parameters as issues (0.27.1, the fallback when asi_gutenberg's renderer refuses the source)."""
+        from asi_gutenberg import from_markdown, layout, to_markdown
+        from asi_gutenberg.params import fill, unfilled
+
+        doc = fill(from_markdown(source), std["values"], strict=False, mark=True, warn=std["warn"],
+                   warn_urls=std["warn_urls"])
+        layout(doc)
+        md_path.write_text(to_markdown(doc), encoding="utf-8", newline="\n")
+        return {"md": str(md_path), "issues": [f"unfilled parameter: {name}" for name in unfilled(doc)]}
+
     def export(
         self, row_id: int, out_dir: str | Path | None = None, standard: str | None = None, actor: str = "python"
     ) -> dict[str, Any]:
@@ -432,11 +445,22 @@ class StandardsService:
         for std in plan["standards"]:
             stem = stamped_stem(std["folder"])  # 0.27.0: every exported file carries the timestamp suffix
             source = Path(std["path"]).read_text(encoding="utf-8")
-            paths = build(
-                from_markdown(source), str(target), name=stem,
-                params=std["values"], strict_params=False, mark_params=True,
-                warn=std["warn"], warn_urls=std["warn_urls"],
-            )
+            try:
+                paths = build(
+                    from_markdown(source), str(target), name=stem,
+                    params=std["values"], strict_params=False, mark_params=True,
+                    warn=std["warn"], warn_urls=std["warn_urls"],
+                )
+            except Exception as exc:  # noqa: BLE001  (0.27.1: a renderer's refusal must not lose the Word print)
+                # The owner, 2026-10-30, a "plan failed" dialog: reportlab refused a plan table whose rows had
+                # grown taller than the page. Gutenberg's own PDF and Word file are the fallback when there is no
+                # Word original; the Markdown and the filled original are the deliverables, so they go on.
+                paths = self._markdown_only(source, std, target / f"{stem}.md")
+                warnings.append(
+                    f"{std['folder']}: asi_gutenberg could not render its own PDF and Word file "
+                    f"({type(exc).__name__}: {str(exc)[:160]}); the Markdown is written and the Word original is "
+                    "filled and printed as before"
+                )
             issues = [str(i) for i in paths.pop("issues", [])]
             unfilled = sorted(i[len(UNFILLED):] for i in issues if i.startswith(UNFILLED))
             for name in unfilled:

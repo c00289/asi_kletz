@@ -341,3 +341,28 @@ def test_word_prints_the_linked_deliverable_with_the_mapping(seeded, standards, 
     assert built["abridged"] == [] and built["pages"] == 1, (built, result.warnings)
     assert Path(built["primary"]).stat().st_size > 1000
     assert not any("abridged" in w or "pdf through Word" in w for w in result.warnings)
+
+
+def test_a_refused_gutenberg_rendering_still_fills_the_word_original(seeded, standards, tmp_path, monkeypatch):
+    """0.27.1, the owner's "plan failed" dialog: reportlab refused a plan table whose rows had grown taller than
+    the page and the whole export failed. Gutenberg's own rendering is a fallback, not the gate: the Markdown is
+    written, the Word original is filled (and printed where Word runs), and a warning names the refusal."""
+    import asi_gutenberg
+
+    _original(standards / "qf-17-test" / "source" / "QF-17 test.docx")
+
+    def refuse(*args, **kwargs):
+        raise RuntimeError("LayoutError: Flowable <Table 4 rows x 10 cols> too large on page 20 in frame 'turned'")
+
+    monkeypatch.setattr(asi_gutenberg, "build", refuse)
+    out = tmp_path / "out"
+    result = seeded.execute("plan", action="export", row=1, out=str(out))
+    assert result.ok, result.errors
+    [built] = result.data["exports"]
+    md = Path(built["files"]["md"]).read_text(encoding="utf-8")
+    assert _stamped(built["files"]["md"], out, "qf-17-test", "md") and "!!no ticket attached!!" in md  # filled, marked
+    assert "pdf" not in built["files"] or built["exact"]["pdf"] is True  # Gutenberg's own PDF is not there to fall back on
+    assert _stamped(built["files"]["docx"], out, "qf-17-test", "docx") and built["exact"]["docx"] is True
+    assert isinstance(built["unfilled"], list) and "vehicle_type" in built["unfilled"]  # nothing set it here
+    assert any("could not render its own PDF and Word file (RuntimeError: LayoutError" in w for w in result.warnings)
+    assert any("the Word original is filled and printed as before" in w for w in result.warnings)

@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.27.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.27.1**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,18 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.27.1
+
+The owner, 2026-10-30, a dialog titled "plan failed" on Export document…: `LayoutError: Flowable <Table 4
+rows x 10 cols> ... too large on page 20 in frame 'turned'`. The plan table's rows had grown taller than a
+landscape page once every row's people and reviewers were filled in and wrapped in ten narrow columns, and
+reportlab refuses a table whose row cannot be placed whole. Two fixes. asi_gutenberg 0.10.1 lets such a row
+continue on the next page (`splitInRow`), the header still repeating, so Gutenberg's own PDF builds again.
+And Kletz no longer lets Gutenberg's rendering gate the export: when the renderer refuses the source, the
+Markdown is still written, the Word original is still filled and printed, and a warning names the refusal
+(`StandardsService._markdown_only`). Gutenberg's own PDF and Word file are the fallback for a standard
+without a Word original, as before.
 
 ## What is in 0.27.0
 
