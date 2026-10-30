@@ -163,7 +163,11 @@ def test_run_outlook_turns_every_refusal_into_one_line(monkeypatch):
 
 @pytest.mark.skipif(not outlook_present(), reason="Outlook desktop is not installed here")
 def test_a_real_lookup_of_the_owners_name_finds_someone():
-    """Runs only where Outlook desktop is installed (the owner's machine, never CI): the owner's own name is in
-    the address book, so the lookup is non-empty; nothing about the matches is printed."""
-    data = lookup("Roy Mendoza")
+    """Runs only where Outlook desktop is installed (the owner's machine, never CI): the owner's own name, read
+    from the git identity so that no person is named here, is in the address book, so the lookup is non-empty;
+    nothing about the matches is printed."""
+    me = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True, check=False).stdout.strip()
+    if not me:
+        pytest.skip("no git identity to look up")
+    data = lookup(me)
     assert data["count"] >= 1 and all(m["name"] and "@" in m["email"] for m in data["matches"])

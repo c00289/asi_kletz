@@ -681,7 +681,7 @@ class FakeRun:
         if args["action"] == "login":
             if self.login_failure:
                 return Result.failure(self.login_failure, verb=verb)
-            return Result.success({"signed_in": True, "account": {"display_name": "Roy Mendoza"}}, verb=verb)
+            return Result.success({"signed_in": True, "account": {"display_name": "Ann Lee"}}, verb=verb)
         if args["action"] == "live":
             if self.live_failures:
                 return Result.failure(self.live_failures.pop(0), verb=verb)
@@ -2161,7 +2161,7 @@ def test_parameters_screen_edits_people_for_a_role(window, seeded):
     from asi_kletz.gui.widgets import NOT_A_ROLE, PEOPLE_HINT, PeopleWidget
 
     assert seeded.execute("create", entity="parameter", data={"name": "vehicle_type", "value": "Wheel Loader"}).ok
-    legacy = seeded.execute("create", entity="parameter", data={"name": "robot_chief", "value": "Rod DeMay"})
+    legacy = seeded.execute("create", entity="parameter", data={"name": "robot_chief", "value": "Max Stone"})
     assert legacy.ok and legacy.warnings
     screen = window.show("parameters")
     assert screen.is_parameters and isinstance(screen.widgets["people"], PeopleWidget)
@@ -2192,12 +2192,12 @@ def test_parameters_screen_edits_people_for_a_role(window, seeded):
     assert len(seeded.execute("get", entity="parameter", id=screen.selected_id).data["people"]) == 2
     # a legacy role row: the name read-only in Value, the box live and empty; a plain row: the other way round
     screen.select(legacy.data["id"])
-    assert screen.widgets["value"].get() == "Rod DeMay" and screen.widgets["people"].get() is None
+    assert screen.widgets["value"].get() == "Max Stone" and screen.widgets["people"].get() is None
     assert str(screen.widgets["value"].entry.cget("state")) == "readonly"
-    screen.widgets["people"].set("Rod DeMay <rod.demay@asirobots.com>")
+    screen.widgets["people"].set("Max Stone <max.stone@asirobots.com>")
     screen.save()
     row = seeded.execute("get", entity="parameter", id=legacy.data["id"]).data
-    assert row["people"] == [{"name": "Rod DeMay", "email": "rod.demay@asirobots.com"}] and row["value"] is None
+    assert row["people"] == [{"name": "Max Stone", "email": "max.stone@asirobots.com"}] and row["value"] is None
     screen.select(1)  # vehicle_type
     assert str(screen.widgets["value"].entry.cget("state")) == "normal"
     assert str(screen.widgets["people"].text.cget("state")) == "disabled"

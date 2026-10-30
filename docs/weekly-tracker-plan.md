@@ -140,7 +140,7 @@ Three registrations in `schema/definitions.py`, after `SAFETY_PLAN_ROW`, in this
 | `points` | int | 1–10 or empty (unpointed); `coerce` rejects 0 and anything above the sprint's capacity |
 | `target` | text | The file's `Sprint 1 target:` line |
 | `note` | multiline | The file's `Note:` line, the engineer's reading |
-| `jira_line` | text | `In Progress \| Un-Groomed \| Roy Mendoza`, written only by `tracker build --jira` or by the importer; see 3.6 |
+| `jira_line` | text | `In Progress \| Un-Groomed \| Ann Lee`, written only by `tracker build --jira` or by the importer; see 3.6 |
 | `status` | enum `item_status` | To Do, In Progress, Done, Carried |
 | `carried_from` | int | The sprint this item was carried out of |
 | `done_on` | date | Set when status becomes Done |
@@ -197,7 +197,7 @@ Miscellaneous issues                      section Issues: the deliverable sub-bl
 Jira issues (project HWL, open items I am assigned, reported or watching, as of 10/28)
                                           section Jira: built from sprint items of kind Jira, see 3.6
   HWL-2554  Story  Perform Platform Safety Plan                       item.jira_key, type, title
-            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza     item.jira_line
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Ann Lee     item.jira_line
             Note: In progress, will be ready before November 10.      item.note
             Sprint 1 target: dates added to every deliverable; plan baselined.   item.target
             Points: 3                                                 new in 0.8.0, omitted when unpointed
@@ -440,7 +440,7 @@ header lines and the TIMELINE scope line; a sprint heading with a phase outside 
 `CommandError` with its line number; a week outside its sprint's dates warns and imports.
 
 **Import of the real file.** On `tests/fixtures/tracker_2026-10-28.txt`: the counts of phase 2's
-"done when"; the four targeted deliverables matched to rows 1, 4, 6 and 7 by title; the Rod DeMay
+"done when"; the four targeted deliverables matched to rows 1, 4, 6 and 7 by title; the Max Stone
 meeting is a Meeting item; the two `Ask:` lines are Question items (`TOD/PRD document`, row 5, is
 one of them, not a Deliverable item, since it carries no target); `HWL-2620` and `HWL-2652`
 are Jira items with `Note: no FuSa impact`; a second import reports `unchanged` and the audit log

@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.24.2**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.24.3**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,12 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.24.3
+
+The people in the fixtures, the tests and the examples are invented, by the house rule that no real person's
+name enters a public repository (the owner's decision of 2026-10-29); the tracker fixture keeps its structure,
+keys and counts. No code change.
 
 ## What is in 0.24.2
 
@@ -773,7 +779,7 @@ asi-kletz plan parameters --row 1                        # the value set an expo
                                                          # per role: the people, the roles still legacy or empty
 asi-kletz create parameter --set name=vehicle_type --set "value=Wheel Loader"
 asi-kletz create parameter --set name=fusa_engineer --set "people=Ann Lee <ann.lee@asirobots.com>; Ben Ray <ben.ray@asirobots.com>"
-asi-kletz update parameter 6 --data "{\"people\": [{\"name\": \"Roy Mendoza\", \"email\": \"roy.mendoza@asirobots.com\"}]}"
+asi-kletz update parameter 6 --data "{\"people\": [{\"name\": \"Zed Young\", \"email\": \"zed.young@asirobots.com\"}]}"
 asi-kletz list parameter                                 # people as an array per role; value for the plain ones
 asi-kletz plan export --row 1 --out out                  # out/qf-17-safety-plan.{md,pdf,docx}
 asi-kletz plan export --row 1 --out out --standard qf-17-safety-plan

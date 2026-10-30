@@ -1,6 +1,6 @@
 [project]
 name = "asi_kletz"
-version = "0.24.2"
+version = "0.24.3"
 description = "Schema-driven functional-safety safety-plan API with a CLI, a tkinter desktop window, SQLite storage, and JSON/Excel views"
 readme = "README.md"
 authors = [

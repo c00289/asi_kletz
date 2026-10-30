@@ -24,8 +24,8 @@ Outcomes so far
   reported or watching is tracked with its status (Jira issues below). Eight are open today,
   six of them under the MVP3 / PDP Phase 3 Closeout epic.
 - Onboarding checklist closed except one item: daily stand-up integrated, mentor meeting with
-  Darsh Patel held, FSE introductions with Adolfo held, Jira board access in place, working-hour
-  availability and check-in cadence established. Waiting on Rod DeMay's availability for the
+  Ida Moss held, FSE introductions with Lou Park held, Jira board access in place, working-hour
+  availability and check-in cadence established. Waiting on Max Stone's availability for the
   introduction meeting; invitation sent.
 
 Miscellaneous issues
@@ -49,7 +49,7 @@ Miscellaneous issues
   - HARA report with MPLr/PLr assignments: draft, carried into Phase 3 for completion.
 
   People and cadence
-  - Introduction meeting with Rod DeMay: invitation sent 10/23; awaiting Rod's availability.
+  - Introduction meeting with Max Stone: invitation sent 10/23; awaiting Max's availability.
     Sprint 2 target: held.
   - Knowledge sharing on FSE best practices: format and cadence still to agree.
 
@@ -64,50 +64,50 @@ Miscellaneous issues
 
 Jira issues (project HWL, open items I am assigned, reported or watching, as of 10/28)
 
-  Epic HWL-1915 "MVP3 - PDP Phase 3 Closeout" (in progress; reporter of the six stories: Javier
-  Quintana)
+  Epic HWL-1915 "MVP3 - PDP Phase 3 Closeout" (in progress; reporter of the six stories: Zed
+  Young)
 
   HWL-2554  Story  Perform Platform Safety Plan
-            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Ann Lee
             Note: In progress, will be ready before November 10.
             Sprint 2 target: dates added to every deliverable; plan baselined.
 
   HWL-2553  Story  Perform Platform Activity Flow
-            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Ann Lee
             Note: In progress, will be ready before November 10.
             Sprint 2 target: draft reviewed and baselined.
 
   HWL-2572  Story  STPA Step 1 - Losses, Hazards and System Boundary - Peer Review
-            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Ann Lee
             Note: In progress, will be ready before November 10.
             Sprint 2 target: peer review closed.
 
   HWL-2573  Story  STPA Step 1 - Losses, Hazards and System Boundary - Approval
-            Jira status: In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Jira status: In Progress | Priority: Un-Groomed | Assignee: Ann Lee
             Note: In progress, will be ready before November 10.
             Sprint 2 target: approval obtained.
 
   HWL-2574  Story  STPA Step 3 - Unsafe Control Actions - Work
-            Jira status: To Do | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Jira status: To Do | Priority: Un-Groomed | Assignee: Ann Lee
             Note: In progress, will be ready before November 10.
             Sprint 2 target: work started.
 
   HWL-2575  Story  STPA Step 4 - Loss Scenarios - Work
-            Jira status: To Do | Priority: Un-Groomed | Assignee: Roy Mendoza
+            Jira status: To Do | Priority: Un-Groomed | Assignee: Ann Lee
             Note: In progress, will be ready before November 10.
             Sprint 2 target: scoped and scheduled.
 
-  Watched, assigned to Matt Whale
+  Watched, assigned to Ben Ray
 
   HWL-2620  Bug    Control room E-stop has no actuator guard; confirm guard requirement or update
                    test case (01-006 step 3, CONWLD-TSTRN-3788)
-            Jira status: To Do | Priority: High | Assignee: Matt Whale
+            Jira status: To Do | Priority: High | Assignee: Ben Ray
             Note: no FuSa impact
             Sprint 2 target: followed to closure.
 
   HWL-2652  Task   Review L0 test dependencies: define which test failures block which test
                    cases, and record it in the case preconditions
-            Jira status: To Do | Priority: Un-Groomed | Assignee: Matt Whale
+            Jira status: To Do | Priority: Un-Groomed | Assignee: Ben Ray
             Note: no FuSa impact
             Sprint 2 target: followed to closure.
 
@@ -119,9 +119,9 @@ WEEK OF 10/19 - 10/25
 
 Outcomes
 - Integrated into the Wheel Loader daily stand-up (by 10/21).
-- Mentor meeting with Darsh Patel held (by 10/21).
-- FSE introductions with Adolfo held (by 10/23).
-- Introduction meeting with Rod DeMay requested; invitation sent (10/23).
+- Mentor meeting with Ida Moss held (by 10/21).
+- FSE introductions with Lou Park held (by 10/23).
+- Introduction meeting with Max Stone requested; invitation sent (10/23).
 - Foundational FSE sprint planning drafted: the Phase 2 close-out and the Phase 3 Sprint 2
   content laid out against the safety lifecycle.
 - Phase 2 deliverables advanced to draft: STPA Step 2, HARA report with MPLr/PLr assignments,

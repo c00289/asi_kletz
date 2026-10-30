@@ -192,16 +192,16 @@ def test_import_the_real_file(imported):
     assert all(i["sprint"] == 2 and i["status"] == "To Do" and i["points"] is None for i in items)
     assert [i["jira_key"] for i in items if i["kind"] == "Jira"] == JIRA_KEYS
     assert [i["plan_row"] for i in items if i["kind"] == "Deliverable"] == [1, 4, 6, 7]
-    assert [i["title"] for i in items if i["kind"] == "Meeting"] == ["Introduction meeting with Rod DeMay"]
+    assert [i["title"] for i in items if i["kind"] == "Meeting"] == ["Introduction meeting with Max Stone"]
     assert [i["note"] for i in items if i["kind"] == "Question"] == [
         "System Functions, Functional Architecture and its Interfaces", "TOD/PRD document",
     ]
     bug = next(i for i in items if i["jira_key"] == "HWL-2620")
     assert bug["issue_type"] == "Bug" and bug["title"].count("\n") == 1 and bug["note"] == "no FuSa impact"
-    assert bug["heading"] == "Watched, assigned to Matt Whale" and bug["target"] == "followed to closure."
+    assert bug["heading"] == "Watched, assigned to Ben Ray" and bug["target"] == "followed to closure."
     first = next(i for i in items if i["jira_key"] == "HWL-2554")
     assert first["heading"].startswith('Epic HWL-1915 "MVP3 - PDP Phase 3 Closeout"') and "\n" in first["heading"]
-    assert first["jira_line"] == "In Progress | Priority: Un-Groomed | Assignee: Roy Mendoza"
+    assert first["jira_line"] == "In Progress | Priority: Un-Groomed | Assignee: Ann Lee"
     weeks = brain.execute("list", entity="week").data
     assert [(w["start"], w["sprint"], w["section"]) for w in weeks] == [
         ("2026-10-12", 1, "Outcomes"), ("2026-10-19", 1, "Outcomes"),

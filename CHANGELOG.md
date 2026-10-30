@@ -12,6 +12,24 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.24.3] - 2026-10-29
+
+The house rule: no real person's name enters a public repository. The owner's decision of 2026-10-29,
+"synthesise all": the people in the fixtures, the tests and the examples are invented. History is not
+rewritten. No code change; schema version unchanged (11).
+
+### Changed
+- `tests/fixtures/tracker_2026-10-28.txt`: every person in the tracker (the assignee of the six stories, the
+  reporter of the epic, the assignee of the watched tickets, the mentor, the manager, the colleague of the
+  introductions) is an invented one; the structure, the keys, the counts and the headings the importer parses
+  are what they were. `test_tracker.py` asserts the invented names.
+- `test_gui.py`, `test_jira.py`, `test_people.py`: the signed-in account, the legacy role values and the person
+  typed into a role are invented people. `test_outlook.py`'s one real lookup (the owner's machine, never CI)
+  reads the name it looks up from the git identity instead of naming anyone.
+- README: the person in the `update parameter` example is invented. `docs/weekly-tracker-plan.md`: the example
+  Jira line and the meeting item name the fixture's invented people; the quoted byline of the owner's own file
+  stays, the owner being its author.
+
 ## [0.24.2] - 2026-10-29
 
 The lock follows the siblings: the family's pass-two sweep of 2026-10-29 relocks every consumer to what its
@@ -2053,6 +2071,7 @@ variables, configuration file, database, and workbook.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
 [Unreleased]: https://example.invalid/asi-kletz/compare/v0.24.2...HEAD
+[0.24.3]: https://example.invalid/asi-kletz/compare/v0.24.2...v0.24.3
 [0.24.2]: https://example.invalid/asi-kletz/compare/v0.24.1...v0.24.2
 [0.24.1]: https://example.invalid/asi-kletz/compare/v0.24.0...v0.24.1
 [0.24.0]: https://example.invalid/asi-kletz/compare/v0.23.0...v0.24.0

@@ -174,9 +174,9 @@ def test_a_legacy_name_with_no_email_is_kept_until_people_are_saved(seeded, stan
     """The live database of 2026-10-29 holds a placeholder or a bare name per role: it keeps loading and
     exporting verbatim, flagged, and is replaced the moment people are saved for that role."""
     legacy = seeded.execute("create", entity="parameter", data={"name": "tech_lead_functional_safety",
-                                                                "value": "Darsh Patel"})
-    assert legacy.ok and legacy.data["value"] == "Darsh Patel" and legacy.data["people"] is None
-    assert legacy.warnings == ["tech_lead_functional_safety: a role holds people (Name <email>; ...); 'Darsh Patel' "
+                                                                "value": "Ida Moss"})
+    assert legacy.ok and legacy.data["value"] == "Ida Moss" and legacy.data["people"] is None
+    assert legacy.warnings == ["tech_lead_functional_safety: a role holds people (Name <email>; ...); 'Ida Moss' "
                                "is kept as a legacy value with no email yet"]
     placeholder = seeded.execute("create", entity="parameter", data={"name": "fusa_engineer", "value": LEGACY})
     assert placeholder.ok and placeholder.data["value"] == LEGACY
@@ -231,8 +231,8 @@ def test_the_cli_sets_people_as_text_and_as_json(tmp_path, capsys):
     assert code == 1 and res["errors"] == ["fusa_engineer, line 1 ('Ben Ray'): no email; write Name <email>"]
     code, res = run(capsys, "--db", db, "--compact", "list", "parameter")
     assert code == 0 and [r["people"] for r in res["data"]] == [[ANN, BEN], [BEN]]
-    code, res = run(capsys, "--db", db, "create", "parameter", "--set", "name=robot_chief", "--set", "value=Rod DeMay")
-    assert code == 0 and res["data"]["value"] == "Rod DeMay" and res["warnings"][0].endswith("no email yet")
+    code, res = run(capsys, "--db", db, "create", "parameter", "--set", "name=robot_chief", "--set", "value=Max Stone")
+    assert code == 0 and res["data"]["value"] == "Max Stone" and res["warnings"][0].endswith("no email yet")
 
 
 # -- the export ---------------------------------------------------------------------------------------------
@@ -264,10 +264,10 @@ def test_the_export_renders_people_inline_in_the_markdown_and_the_word_original(
 
 def test_people_round_trip_through_the_dump_and_the_workbook(seeded, tmp_path):
     assert seeded.execute("create", entity="parameter", data={"name": "fusa_engineer", "people": [BEN, ANN]}).ok
-    assert seeded.execute("create", entity="parameter", data={"name": "robot_chief", "value": "Rod DeMay"}).ok
+    assert seeded.execute("create", entity="parameter", data={"name": "robot_chief", "value": "Max Stone"}).ok
     assert seeded.execute("create", entity="parameter", data={"name": "vehicle_type", "value": "Wheel Loader"}).ok
     expected = [(r["name"], r["value"], r["people"]) for r in seeded.execute("list", entity="parameter").data]
-    assert expected == [("fusa_engineer", None, [ANN, BEN]), ("robot_chief", "Rod DeMay", None),
+    assert expected == [("fusa_engineer", None, [ANN, BEN]), ("robot_chief", "Max Stone", None),
                         ("vehicle_type", "Wheel Loader", None)]
     # the JSON dump carries the array; the load parses, validates and sorts it (no guard runs on a load)
     dump = tmp_path / "dump.json"
@@ -292,7 +292,7 @@ def test_people_round_trip_through_the_dump_and_the_workbook(seeded, tmp_path):
     assert exported.ok, exported.errors
     ws = load_workbook(exported.data["path"])["Parameters"]
     assert [c.value for c in ws[1]] == ["Name", "Standard", "Value", "People", "Note", "uid"]
-    assert json.loads(ws["D2"].value) == [ANN, BEN] and ws["C2"].value is None and ws["C3"].value == "Rod DeMay"
+    assert json.loads(ws["D2"].value) == [ANN, BEN] and ws["C2"].value is None and ws["C3"].value == "Max Stone"
     with Brain(tmp_path / "xl.db") as third:
         imported = third.execute("import", format="excel", path=exported.data["path"], entity="parameter",
                                  mode="replace")
@@ -310,7 +310,7 @@ def test_a_schema_8_database_gains_the_people_column_and_keeps_every_legacy_valu
     added, no email is invented, every role is still filled verbatim and reported as legacy."""
     db = tmp_path / "kletz.db"
     with Brain(db) as before:
-        for name, value in (("fusa_engineer", "Roy Mendoza"), ("tech_lead_functional_safety", LEGACY),
+        for name, value in (("fusa_engineer", "Ann Lee"), ("tech_lead_functional_safety", LEGACY),
                             ("vehicle_type", "Wheel Loader")):
             before.service("parameter").repo.create({"name": name, "standard": "", "value": value, "uid": None})
         before.storage.stamp_uids(before.registry)
@@ -322,11 +322,11 @@ def test_a_schema_8_database_gains_the_people_column_and_keeps_every_legacy_valu
         assert after.migration["created"] == [] and after.migration["altered"] == {"parameter": ["people"]}
         rows = after.execute("list", entity="parameter").data
         assert [(r["name"], r["value"], r["people"]) for r in rows] == [
-            ("fusa_engineer", "Roy Mendoza", None), ("tech_lead_functional_safety", LEGACY, None),
+            ("fusa_engineer", "Ann Lee", None), ("tech_lead_functional_safety", LEGACY, None),
             ("vehicle_type", "Wheel Loader", None),
         ]
         assert after.execute("create", entity=PLAN, data={"order": 1, "deliverable": "Safety Plan", "ref_qf_17": 1}).ok
         preview = after.execute("plan", action="parameters", row=1)
-        assert preview.ok and preview.data["standards"][0]["values"]["fusa_engineer"] == "Roy Mendoza"
+        assert preview.ok and preview.data["standards"][0]["values"]["fusa_engineer"] == "Ann Lee"
         assert preview.data["standards"][0]["legacy_roles"] == ["fusa_engineer"]
         assert after.storage.audit_tail(1)[0]["action"] != "update"  # the migration edits no row

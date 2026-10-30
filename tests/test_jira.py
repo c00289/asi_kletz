@@ -320,7 +320,7 @@ def test_login_clears_the_session_then_signs_in_in_the_browser(brain, monkeypatc
             events.append("whoami")
             if self.fail is not None:
                 raise self.fail
-            return {"account_id": "a1", "display_name": "Roy Mendoza"}
+            return {"account_id": "a1", "display_name": "Ann Lee"}
 
         def close(self) -> None:
             events.append("close")

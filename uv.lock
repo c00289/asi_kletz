@@ -51,7 +51,7 @@ dev = [
 
 [[package]]
 name = "asi-gutenberg"
-version = "0.9.1"
+version = "0.9.2"
 source = { editable = "../asi_gutenberg" }
 dependencies = [
     { name = "asi-escher" },
@@ -74,7 +74,7 @@ dev = [
 
 [[package]]
 name = "asi-hopper"
-version = "0.1.10"
+version = "0.1.11"
 source = { editable = "../asi_hopper" }
 dependencies = [
     { name = "keyring" },
@@ -95,7 +95,7 @@ dev = [
 
 [[package]]
 name = "asi-kletz"
-version = "0.24.2"
+version = "0.24.3"
 source = { editable = "." }
 dependencies = [
     { name = "asi-escher" },
