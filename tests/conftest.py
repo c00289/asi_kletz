@@ -41,19 +41,33 @@ CS_ENTITIES = [
     "control_structure", "cs_controller", "cs_algorithm", "cs_process_model_entry", "cs_edge", "cs_signal", "cs_note",
 ]
 STPA_ENTITIES = ["stpa_analysis", "stpa_loss", "stpa_hazard", "stpa_uca", "stpa_scenario", "stpa_constraint"]
-ENTITIES = [PLAN, "sprint", "sprint_item", "week", "holiday", "parameter", *CS_ENTITIES, *STPA_ENTITIES]
+# 0.28.0: the nine HARA entities follow the STPA ones
+HARA_ENTITIES = [
+    "hara", "hara_vehicle", "hara_function", "hara_use_case", "hara_failure_mode", "hara_assumption", "hara_rating",
+    "hara_assessment", "hara_approval",
+]
+ENTITIES = [PLAN, "sprint", "sprint_item", "week", "holiday", "parameter", *CS_ENTITIES, *STPA_ENTITIES, *HARA_ENTITIES]
 CS_TABLES = [
     "control_structures", "cs_controllers", "cs_algorithms", "cs_process_model_entries", "cs_edges", "cs_signals",
     "cs_notes",
 ]
 STPA_TABLES = ["stpa_analyses", "stpa_losses", "stpa_hazards", "stpa_ucas", "stpa_scenarios", "stpa_constraints"]
-TABLES = {"safety_plan", "sprint", "sprint_item", "week", "holiday", "parameter", *CS_TABLES, *STPA_TABLES}
-TABLES_0_8_4 = TABLES - {"holiday", "parameter", *CS_TABLES, *STPA_TABLES}  # what the 0.8.4 fixture database holds
+HARA_TABLES = [
+    "haras", "hara_vehicles", "hara_functions", "hara_use_cases", "hara_failure_modes", "hara_assumptions",
+    "hara_ratings", "hara_assessments", "hara_approvals",
+]
+TABLES = {
+    "safety_plan", "sprint", "sprint_item", "week", "holiday", "parameter", *CS_TABLES, *STPA_TABLES, *HARA_TABLES,
+}
+# what the 0.8.4 fixture database holds
+TABLES_0_8_4 = TABLES - {"holiday", "parameter", *CS_TABLES, *STPA_TABLES, *HARA_TABLES}
 EMPTY_COUNTS = dict.fromkeys(ENTITIES, 0)  # every entity empty: what `status` and `dump` report on a fresh database
 SHEETS = [
     "Safety Plan", "Sprints", "Sprint Items", "Weekly Status", "Holidays", "Parameters",
     "CS structures", "CS controllers", "CS algorithms", "CS process model", "CS edges", "CS signals", "CS notes",
     "STPA analyses", "STPA losses", "STPA hazards", "STPA UCAs", "STPA scenarios", "STPA constraints",
+    "HARA", "HARA vehicles", "HARA functions", "HARA use cases", "HARA failure modes", "HARA assumptions",
+    "HARA ratings", "HARA assessments", "HARA approvals",
 ]
 # the real session probe (0.23.0), kept here because the autouse fixture below replaces it on the class; the one
 # test of the probe itself puts it back with a stub Hopper

@@ -12,6 +12,81 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.28.0] - 2026-10-30
+
+The owner, 2026-10-30: "before we work on stpa lets parametrize the hara ... the workbook is complicated as
+hell". The dissection in Roy's Brain (work product playground/hara/dissection) had found what the wheel loader
+HARA workbook is: 26 sheets, 24,000 formulas, six kinds of sheet, one chain of ids and **one computation**, the
+MPLr of an assessment row looked up by (function, use case, failure mode) in the rating table under the
+document's vehicle code; a computation the workbook never finished (its second generation keyed on an empty
+vehicle code, its first pointed three of four context sheets at the foundation vehicle's column). Schema
+version 11 to 12: nine tables added, nothing existing changed.
+
+### Added
+- **The HARA as data** (`schema/definitions.py`): `hara` (the document: name, slug, system, status, the
+  **vehicle code** every MPLr is read for, the vehicle name, the slug of the STPA analysis holding step 1, the
+  Document Information and Cover parameters, the source workbook, its SHA-256 and the generation read),
+  `hara_vehicle` (the ISO 19014 annex letters of the Scope sheet), `hara_function` (base or work implement,
+  the vehicles it applies to, the Function List's cumulative and vehicle-specific MPLr, the Vocabulary's
+  definition), `hara_use_case`, `hara_failure_mode`, `hara_assumption`, `hara_rating` (the judgment, once per
+  function x use case x failure mode: a JSON object of annex letter to MPLr, typed as `G: b` lines, and the
+  foundation vehicle's cumulative column), `hara_assessment` (one row of a context sheet: context, hazard,
+  scenario and event codes, function, use case, failure mode, the **calculated `mplr`**, the workbook's
+  `stated_mplr` kept as evidence, the typed cumulative hazard MPLr, comment, SG global id, the safety goal
+  `SC-n`, the typed SG MPLr) and `hara_approval` (an approver **role**'s Y / N on a hazardous event; the
+  workbook headed those columns "Role: Name", the name is never read). Lookups `hara_status`, `hara_context`
+  (BF-BUC, BF-WIUC, WIF-BUC, WIF-WIUC), `hara_function_kind`, `hara_assumption_source`, `hara_decision`;
+  `stpa_source_kind` gains `workbook`. Nine sheets in the workbook export and the JSON dump.
+- **The rules** (`services/hara_service.py`, rule objects attached by `Brain.service` as the STPA ones are): a
+  part names a HARA that exists; a vehicle's letter, a function's, use case's and failure mode's name and a
+  rating's key are unique within the HARA; `mplr` is calculated and refused on a create or an update; an
+  assessment's hazard and scenario follow from its event code (`H-1.1.1` is a row of `H-1.1` of `H-1`); the
+  MPLr values are normalised to the scale (`QM`, `a` to `e`; `-` is no key, empty an empty cell); a HARA with
+  parts is deleted with `--cascade` or not at all, and takes along the STPA analysis read with it when its step
+  3 never began. Every change publishes `hara.changed`.
+- **The one computation**, finished: `HaraService.recompute` writes the `mplr` of every assessment row from the
+  rating table and the HARA's vehicle code (`G` the large wheel loaders' column, `cumulative` the foundation
+  vehicle's; a trailing asterisk on a use case is forgiven, the workbook's exact match answered `-` for those);
+  it runs after every change of a vehicle code, a rating or an assessment row and after a load, so the column
+  is never stale. `hazard_summary` derives the Summary sheet (the highest MPLr per hazard and context, the
+  highest overall, PLr, AgPLr and SIL by the usual correspondence) beside what the workbook typed; `check`
+  counts, per context, the rows whose computed MPLr agrees with the stated one, differs, has no rating key or
+  no stated value, with examples, and the hazards whose Summary line moved; `validate` names what the
+  assessment rows use that the lists do not hold.
+- **The reader** (`hara/workbook_reader.py`, openpyxl, cached values): every sheet by name, the Document
+  Information pairs, the Cover's title and revision, the Scope's letters, the Function List with an annex letter
+  per column and the Use Case List naming the vehicles, the rating table RA(ISO 19014) widened by RA(for all
+  vehicles) where the former has no letter (function-level rows without a use case are not a key and are
+  skipped with a warning), the four context sheets of one **generation** (1: the sheets Document Information
+  names, whose MPLr formula answered a rating; 2: the hidden HARA-n twins, whose formula answered a use-case
+  name because the vehicle code was empty), the Hazardous Events' approvals by role, and **step 1** for the STPA
+  analysis: losses, hazards with their scenarios `H-n.m` and events `H-n.m.k` as dotted hazards (an id the
+  workbook's `LEFT()` cut short, `H-2.3.10` read as `H-2.3.1`, is repaired from the text; a Relation cell that
+  disagrees with the code is a warning), the system-level constraints `SC-n` with the safety goal sentence as
+  their text, every row cited to its sheet and cell. A person's name is never read (the Responsible is a role
+  parameter in the Brain). The vehicle code is Document Information's, else guessed from the vehicle name
+  against the Scope sheet with a warning, else `--vehicle`.
+- **The factory** (`hara/hara_factory.py`, `brain.hara_factory`): builders `blank`, `from_workbook` (`--from`,
+  `--vehicle`, `--generation`, `--analysis` to point at a step 1 already in Kletz) and `clone`; `export` writes
+  the HARA back in the workbook's own shape (`<slug>.xlsx`: Document Information, Scope, Function List, Use Case
+  List, Failure modes, Assumption List, Loss, Hazard List, Scenarios List, Hazardous Events with the approvals
+  by role, RA(ISO 19014), one `HARA(<context>)` sheet per context with the computed MPLr beside the stated one
+  and the differing cells pinkish red, System-Level Constraint, the derived Summary) and a Markdown report
+  (`<slug>.md`: parameters, counts, Summary, check).
+- **The `hara` verb** (`commands/hara.py`): `list | get | builders | new <builder> | recompute | summary | check |
+  validate | export | delete`, a HARA named by id, uid or slug; the parts through the generic verbs.
+- **The HARA screen** (`gui/hara_screen.py`, registered after STPA analyses): the HARAs, the derived Summary
+  (a hazard whose computed MPLr is not the typed one in the accent colour), one tab per part (an assessment
+  whose computed MPLr is not the stated one in the accent colour), the Report tab, and the buttons New from
+  workbook… / Recompute MPLr / Check / Validate / Export… / Delete. A HARAS tile on the Dashboard.
+- Tests: `test_hara.py` on a synthetic workbook in the owner's sheet shapes (the reader, both generations, the
+  load, the computation, the Summary, the check, the rules, the cascade, the export, the CLI, the dump round
+  trip, the 0.23.0 database gaining the nine tables, the screen); the pins of the entity list and the schema
+  version moved to 28 and 12.
+
+### Changed
+- README: *What is in 0.28.0* and the HARA section. `docs/plan.md`: the status line, the row, the domain note.
+
 ## [0.27.3] - 2026-10-30
 
 The owner, 2026-10-30, after a relaunch that met "Virtual environment not found": "constant improvement...

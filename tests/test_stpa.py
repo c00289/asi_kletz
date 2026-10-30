@@ -196,15 +196,15 @@ def small_structure(brain) -> dict:
 
 # -- entities --------------------------------------------------------------------------------------
 def test_the_six_entities_are_registered_with_their_sheets_and_lookups(brain):
-    assert len(brain.registry) == 19 and set(s.name for s in brain.registry) >= set(STPA_ENTITIES)
+    assert len(brain.registry) == 28 and set(s.name for s in brain.registry) >= set(STPA_ENTITIES)
     sheets = [brain.registry.get(e).sheet for e in STPA_ENTITIES]
     assert sheets == ["STPA analyses", "STPA losses", "STPA hazards", "STPA UCAs", "STPA constraints", "STPA scenarios"]
     assert all(brain.registry.get(e).field_names[-1] == "uid" for e in STPA_ENTITIES)
     assert all("cite" in brain.registry.get(e).field_names for e in PART_ENTITIES)
     assert brain.lookups["stpa_uca_category"] == ("not_providing", "providing", "timing_order", "duration")
-    assert brain.lookups["stpa_source_kind"] == ("confluence", "hand")
+    assert brain.lookups["stpa_source_kind"] == ("confluence", "hand", "workbook")  # workbook since 0.28.0
     assert brain.lookups["stpa_status"] == ("Draft", "Reviewed", "Baselined")
-    assert SCHEMA_VERSION == 11 and brain.status()["schema_version"] == 11
+    assert SCHEMA_VERSION == 12 and brain.status()["schema_version"] == 12
     assert brain.status()["evidence_dir"].endswith("evidence")
 
 
@@ -787,7 +787,7 @@ def test_dump_load_and_the_workbook_carry_the_six_entities(loaded, tmp_path):
     dump = tmp_path / "dump.json"
     assert brain.execute("dump", out=str(dump)).ok
     payload = json.loads(dump.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 11 and {len(payload["entities"][e]) for e in PART_ENTITIES} == {2, 5, 8, 6, 10}
+    assert payload["schema_version"] == 12 and {len(payload["entities"][e]) for e in PART_ENTITIES} == {2, 5, 8, 6, 10}
     assert brain.execute("stpa", action="delete", target="conveyor_gate", cascade=True).ok
     loaded_back = brain.execute("load", path=str(dump), mode="merge")
     assert loaded_back.ok, loaded_back.errors
@@ -815,12 +815,12 @@ def test_a_schema_10_database_opens_as_0_24_0_with_the_six_stpa_tables_added(tmp
     con.close()
     assert "stpa_analyses" not in tables and "safety_plan" in tables and len(before["safety_plan"]) == 3
     with Brain(db) as b:
-        assert b.migration["created"][-6:] == STPA_TABLES  # after the seven control-structure tables
+        assert b.migration["created"][-15:-9] == STPA_TABLES  # after the seven CS tables, before the nine HARA tables
         assert b.migration["altered"] == {} and b.migration["uids_stamped"] == EMPTY_COUNTS
         versions = [
             m["app_version"] for m in b.storage.fetchall("SELECT app_version FROM schema_migrations ORDER BY version")
         ]
-        assert versions == ["0.23.0", __version__] and b.status()["schema_version"] == 11
+        assert versions == ["0.23.0", __version__] and b.status()["schema_version"] == 12
         assert b.execute("stpa", action="list").data == []
         assert b.execute("list", entity="safety_plan_row").data[0]["deliverable"] == "Safety Plan"
         made = b.execute("stpa", action="new", target="from_bundle", **{"from": str(bundle)}, name="Conveyor Gate")

@@ -6,6 +6,7 @@ from . import (  # noqa: F401  (registers the built-in commands)
     cs,
     generate,
     gui,
+    hara,
     holiday,
     jira,
     people,

@@ -1,6 +1,6 @@
 # ASI Kletz — Plan
 
-**Status:** 0.27.3 delivered
+**Status:** 0.28.0 delivered
 **Started:** 2026-10-27
 **Owner:** FuSa engineer
 
@@ -41,6 +41,10 @@ workbook headers so the sheet round-trips.
 | Entity | Source sheet | Fields | Notes |
 |---|---|---|---|
 | `SafetyPlanRow` | Safety Plan | order, pdp_phase, lifecycle_phase, deliverable, work_product_location, location flags (3), work_product_reference, reference flags (23), author, author flags (17), verification flags (3), gate_reviewer, reviewer flags (7), deadline, status | 63 columns; the table shows all of them, the matrix one flag group at a time |
+
+Since 0.28.0 the HARA (ISO 19014) is data too: nine `hara_*` entities, the rating table written once and the
+MPLr of every assessment row calculated from it under the HARA's vehicle code, the Summary derived; the
+workbook is a view (see the README's HARA section).
 
 Lookups: `pdp_phase` (1 to 6), `lifecycle_phase` (the ten safety lifecycle phases),
 `plan_status` (Pending, Ongoing, Blocked, Alternative, Out-of-Scope, Done). Lookups are soft:
@@ -201,12 +205,14 @@ implementation produced by a factory.
 | 0.27.1 | A refused Gutenberg rendering no longer fails the export: the Markdown and the filled Word original go on, a warning names the refusal; the lock takes asi_gutenberg 0.10.1 (a tall table row continues on the next page) | done 2026-10-30 |
 | 0.27.2 | The export button says `Exporting… (Word prints the PDF)` while the export is in flight; closing the window during an export asks first (`busy_text`) | done 2026-10-30 |
 | 0.27.3 | `gui.ps1` syncs the environment before it starts the window; a sync that cannot run is a warning; no change to the package | done 2026-10-30 |
+| 0.28.0 | The HARA as data (schema version 12): nine `hara_*` entities, the rating table once and the MPLr of every assessment row calculated from it under the vehicle code, the Summary derived, `hara check` against the workbook's typed values, the workbook reader (step 1 into an STPA analysis), the `hara` verb, the HARA screen and tile; the owner's "lets parametrize the hara" of 2026-10-30 | done 2026-10-30 |
 | later | Approval mode, form puppeting, import diff preview, date picker | planned |
 
 ---
 
 ## 9. Change log
 
+- 2026-10-30 0.28.0: the status line and the section 8 row for 0.28.0, the HARA as data; section 2's note on the HARA.
 - 2026-10-30 0.27.3: the status line and the section 8 row for 0.27.3, the launcher that syncs first.
 - 2026-10-30 0.27.2: the status line and the section 8 row for 0.27.2, the visible busy state and the close dialog.
 - 2026-10-30 0.27.1: the status line and the section 8 row for 0.27.1, the export that survives a refused rendering.

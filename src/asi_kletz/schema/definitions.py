@@ -1,8 +1,10 @@
 """The built-in entities: the Safety Plan, since 0.8.0 the sprints, sprint items and weeks of
 the Weekly Activity Tracker, since 0.10.0 the holidays the sprint planner skips, since 0.14.0 the
-parameters of the standards, and since 0.24.0 the STPA control structures and the STPA analyses (the
+parameters of the standards, since 0.24.0 the STPA control structures and the STPA analyses (the
 owner, 2026-10-29: "control structures were supposed to go into Kletz and not Dewey ... move everything
-to Kletz").
+to Kletz"), and since 0.28.0 the HARA: the reference lists, the rating table and the assessment rows of
+the ISO 19014 risk assessment, the MPLr of every row computed here, never typed (the owner, 2026-10-30:
+"lets parametrize the hara ... the workbook is complicated as hell").
 
 Importing this module registers the entities and their lookups with the default registries.
 Column labels are the exact workbook headers so the Excel export reproduces the familiar sheet
@@ -463,7 +465,7 @@ CS_ENTITIES = (
 # (<anchor url>)``, editable, the one thing a report prints beside the object
 # (asi_hopper/docs/confluence-integration-plan.md, section 7.1). The four UCA categories are the four columns
 # of a context table, in the table's order.
-STPA_SOURCE_KINDS = ("confluence", "hand")
+STPA_SOURCE_KINDS = ("confluence", "hand", "workbook")  # 0.28.0: step 1 read from a HARA workbook
 STPA_UCA_CATEGORIES = ("not_providing", "providing", "timing_order", "duration")
 default_lookups.register("stpa_status", CS_STATUSES)
 default_lookups.register("stpa_source_kind", STPA_SOURCE_KINDS)
@@ -607,4 +609,228 @@ STPA_CONSTRAINT = register_entity(EntitySchema(
 
 STPA_ENTITIES = (STPA_ANALYSIS, STPA_LOSS, STPA_HAZARD, STPA_UCA, STPA_SCENARIO, STPA_CONSTRAINT)
 
-ALL_ENTITIES = (SAFETY_PLAN_ROW, SPRINT, SPRINT_ITEM, WEEK, HOLIDAY, PARAMETER, *CS_ENTITIES, *STPA_ENTITIES)
+# -- HARA: the ISO 19014 risk assessment, parametrised (0.28.0) ------------------------------------------------
+# The owner, 2026-10-30: "lets parametrize the hara ... the workbook is complicated as hell". The wheel loader
+# HARA workbook (26 sheets, 24,000 formulas) reduces to six kinds of sheet, one chain of ids and one lookup
+# (Roy's Brain, work product playground/hara/dissection). Here it is nine tables and one rule. A ``hara`` row is
+# the document: its parameters (the Document Information and Cover sheets) and the slug of the STPA analysis
+# that holds its step 1 (the losses, the hazards H-n, their scenarios H-n.m and hazardous events H-n.m.k, the
+# system-level constraints SC-n). The reference lists are ``hara_vehicle`` (the ISO 19014 annex letters),
+# ``hara_function``, ``hara_use_case``, ``hara_failure_mode`` and ``hara_assumption``. ``hara_rating`` is the
+# judgment, once per (function, use case, failure mode): the MPLr under every annex letter and the foundation
+# vehicle's cumulative one. ``hara_assessment`` is one row of the four context sheets (base or work implement
+# functions x base or work implement use cases): a hazardous event, a function, a use case, a failure mode;
+# its ``mplr`` is **calculated** from the rating table and the document's vehicle code (the rule the workbook's
+# second generation began and never finished: its vehicle code was empty), what the workbook typed is kept as
+# ``stated_mplr`` beside it, so ``hara check`` can say where they differ. ``hara_approval`` is the Y / N of an
+# approver **role** on a hazardous event: the workbook headed those columns "Role: Name"; the name stays in the
+# workbook, never here (the Brain shows roles, never people).
+HARA_STATUSES = CS_STATUSES
+HARA_CONTEXTS = ("BF-BUC", "BF-WIUC", "WIF-BUC", "WIF-WIUC")
+HARA_FUNCTION_KINDS = ("base", "work_implement")
+HARA_ASSUMPTION_SOURCES = ("ISO 19014", "ASI")
+HARA_DECISIONS = ("Y", "N")
+# the MPLr scale (ISO 19014), lowest first; "-" is no rating found, "" an empty rating cell
+MPLR_SCALE = ("QM", "a", "b", "c", "d", "e")
+# the other standards' terms for an MPLr, as the workbook's Summary states them: PLr (ISO 13849) the same
+# letter, AgPLr (ISO 25119) the same letter and no term for QM, SIL (IEC 61508) by the usual correspondence
+MPLR_TO_PLR = {"QM": "QM", "a": "a", "b": "b", "c": "c", "d": "d", "e": "e"}
+MPLR_TO_AGPLR = {"QM": "-", "a": "a", "b": "b", "c": "c", "d": "d", "e": "e"}
+MPLR_TO_SIL = {"QM": "QM", "a": "-", "b": "1", "c": "1", "d": "2", "e": "3"}
+CUMULATIVE_CODE = "cumulative"  # the vehicle code that reads the foundation vehicle's cumulative column
+default_lookups.register("hara_status", HARA_STATUSES)
+default_lookups.register("hara_context", HARA_CONTEXTS)
+default_lookups.register("hara_function_kind", HARA_FUNCTION_KINDS)
+default_lookups.register("hara_assumption_source", HARA_ASSUMPTION_SOURCES)
+default_lookups.register("hara_decision", HARA_DECISIONS)
+
+HARA_REF = FieldSpec("hara", T, "hara", required=True, help="Slug of the HARA this row belongs to")
+
+HARA = register_entity(EntitySchema(
+    name="hara", table="haras", label="HARA", sheet="HARA",
+    description=(
+        "One hazard analysis and risk assessment (ISO 19014): the document's parameters, the vehicle code every "
+        "MPLr is computed for, and the STPA analysis that holds its losses, hazards and constraints."
+    ),
+    order_by=("name", "id"),
+    fields=(
+        FieldSpec("name", T, "name", required=True),
+        FieldSpec("slug", T, "slug", help="Stable key the parts point at; unique; from the name when not given"),
+        FieldSpec("system", T, "system", help="The system under analysis (Document Information: System Name)"),
+        FieldSpec("status", E, "status", lookup="hara_status"),
+        FieldSpec("vehicle_code", T, "vehicle code",
+                  help="The ISO 19014 annex letter the MPLr is read for (G: large wheel loaders), or "
+                       "`cumulative` for the foundation vehicle's column; empty: no MPLr is computed"),
+        FieldSpec("vehicle_name", T, "vehicle name"),
+        FieldSpec("analysis", T, "analysis",
+                  help="Slug of the STPA analysis holding step 1: the losses, hazards (H-n, H-n.m, H-n.m.k) and "
+                       "system-level constraints (SC-n)"),
+        FieldSpec("project", T, "project", group="document"),
+        FieldSpec("department", T, "department", group="document"),
+        FieldSpec("company", T, "company", group="document"),
+        FieldSpec("standard", T, "standard", group="document", help="Risk Assessment- ISO 19014"),
+        FieldSpec("supporting_document", T, "supporting document", group="document"),
+        FieldSpec("analysis_date", D, "analysis date", group="document"),
+        FieldSpec("revision", T, "revision", group="document", help="The revision mark on the cover"),
+        FieldSpec("description", M, "description", group="document", help="The system description paragraph"),
+        FieldSpec("scope", M, "scope", group="document", help="The scope sentence"),
+        FieldSpec("source", T, "source", group="source", help="The workbook the HARA was read from, or empty"),
+        FieldSpec("source_sha256", T, "source sha256", group="source"),
+        FieldSpec("source_generation", N, "source generation", group="source",
+                  help="1: the assessment sheets Document Information names; 2: the hidden HARA-n twins"),
+        NOTE,
+        uid_field(),
+    ),
+))
+
+HARA_VEHICLE = register_entity(EntitySchema(
+    name="hara_vehicle", table="hara_vehicles", label="HARA Vehicle", sheet="HARA vehicles",
+    description="An ISO 19014 annex vehicle (the Scope sheet): its letter, the ASI vehicle under it, the project.",
+    order_by=("hara", "order", "id"),
+    fields=(
+        HARA_REF,
+        FieldSpec("order", N, "order"),
+        FieldSpec("letter", T, "letter", required=True, help="The annex letter A to Z; unique within the HARA"),
+        FieldSpec("iso_vehicle", T, "ISO 19014 vehicle"),
+        FieldSpec("asi_vehicle", T, "ASI vehicle"),
+        FieldSpec("projects", T, "ASI projects"),
+        uid_field(),
+    ),
+))
+
+HARA_FUNCTION = register_entity(EntitySchema(
+    name="hara_function", table="hara_functions", label="HARA Function", sheet="HARA functions",
+    description=(
+        "A machine function (the Function List): base or work implement, the annex vehicles it applies to, "
+        "the function-level MPLr the list carries, the definition from the Vocabulary."
+    ),
+    order_by=("hara", "order", "id"),
+    fields=(
+        HARA_REF,
+        FieldSpec("order", N, "order"),
+        FieldSpec("name", T, "name", required=True, help="As the assessment rows spell it; unique within the HARA"),
+        FieldSpec("kind", E, "kind", lookup="hara_function_kind"),
+        FieldSpec("vehicles", J, "vehicles", help="Annex letters the function applies to, one per line"),
+        FieldSpec("cumulative_mplr", T, "cumulative MPLr", help="The Function List's Foundation Vehicle Cumulative"),
+        FieldSpec("specific_mplr", T, "specific MPLr", help="The Function List's '<vehicle> Specific MPLr'"),
+        FieldSpec("definition", M, "definition"),
+        uid_field(),
+    ),
+))
+
+HARA_USE_CASE = register_entity(EntitySchema(
+    name="hara_use_case", table="hara_use_cases", label="HARA Use Case", sheet="HARA use cases",
+    description="An ISO 19014 use case (the Use Case List): the annex vehicles it applies to, the definition.",
+    order_by=("hara", "order", "id"),
+    fields=(
+        HARA_REF,
+        FieldSpec("order", N, "order"),
+        FieldSpec("name", T, "name", required=True, help="As the assessment rows spell it; unique within the HARA"),
+        FieldSpec("base", B, "base", help="Applies to the base functions (the list's asterisk)"),
+        FieldSpec("vehicles", J, "vehicles", help="Annex letters the use case applies to, one per line"),
+        FieldSpec("definition", M, "definition"),
+        uid_field(),
+    ),
+))
+
+HARA_FAILURE_MODE = register_entity(EntitySchema(
+    name="hara_failure_mode", table="hara_failure_modes", label="HARA Failure Mode", sheet="HARA failure modes",
+    description="A failure mode (ISO 19014-5): failure to apply or release on demand, uncommanded activation "
+                "or deactivation.",
+    order_by=("hara", "order", "id"),
+    fields=(
+        HARA_REF,
+        FieldSpec("order", N, "order"),
+        FieldSpec("name", T, "name", required=True, help="As the assessment rows spell it; unique within the HARA"),
+        uid_field(),
+    ),
+))
+
+HARA_ASSUMPTION = register_entity(EntitySchema(
+    name="hara_assumption", table="hara_assumptions", label="HARA Assumption", sheet="HARA assumptions",
+    description="An assumption (the Assumption List): ISO 19014's per vehicle, or ASI's.",
+    order_by=("hara", "order", "id"),
+    fields=(
+        HARA_REF,
+        FieldSpec("order", N, "order"),
+        FieldSpec("source", E, "source", lookup="hara_assumption_source"),
+        FieldSpec("vehicle", T, "vehicle", help="The ISO 19014 vehicle, or All"),
+        FieldSpec("text", M, "text", required=True),
+        uid_field(),
+    ),
+))
+
+HARA_RATING = register_entity(EntitySchema(
+    name="hara_rating", table="hara_ratings", label="HARA Rating", sheet="HARA ratings",
+    description=(
+        "The judgment, once per (function, use case, failure mode): the MPLr under every annex letter and the "
+        "foundation vehicle's cumulative one (the RA(ISO 19014) sheet, widened by RA(for all vehicles))."
+    ),
+    order_by=("hara", "order", "id"),
+    fields=(
+        HARA_REF,
+        FieldSpec("order", N, "order"),
+        FieldSpec("function", T, "function", required=True),
+        FieldSpec("use_case", T, "use case", required=True),
+        FieldSpec("failure_mode", T, "failure mode", required=True),
+        FieldSpec("ratings", J, "ratings",
+                  help="A JSON object: annex letter to MPLr (QM, a to e); typed as `G: b` lines"),
+        FieldSpec("cumulative", T, "cumulative MPLr", help="The Foundation Vehicle Cumulative column"),
+        FieldSpec("comment", M, "comment"),
+        uid_field(),
+    ),
+))
+
+HARA_ASSESSMENT = register_entity(EntitySchema(
+    name="hara_assessment", table="hara_assessments", label="HARA Assessment", sheet="HARA assessments",
+    description=(
+        "One row of a context sheet: a hazardous event, a function, a use case, a failure mode; the MPLr "
+        "calculated from the rating table and the HARA's vehicle code, the workbook's typed value beside it."
+    ),
+    order_by=("hara", "context", "order", "id"),
+    fields=(
+        HARA_REF,
+        FieldSpec("context", E, "context", required=True, lookup="hara_context"),
+        FieldSpec("order", N, "order"),
+        FieldSpec("hazard", T, "hazard", help="H-n: the hazard the event refines (from the event code)"),
+        FieldSpec("scenario", T, "scenario", help="H-n.m: the scenario the event refines (from the event code)"),
+        FieldSpec("event", T, "hazardous event", required=True, help="H-n.m.k, a hazard of the STPA analysis"),
+        FieldSpec("function", T, "function"),
+        FieldSpec("use_case", T, "use case"),
+        FieldSpec("failure_mode", T, "failure mode"),
+        FieldSpec("mplr", T, "MPLr", calculated=True,
+                  help="Calculated: the rating of (function, use case, failure mode) under the HARA's vehicle code; "
+                       "`-` when the rating table has no such key, empty when the cell is empty"),
+        FieldSpec("stated_mplr", T, "stated MPLr", help="What the workbook's own formula answered, kept as evidence"),
+        FieldSpec("cumulative_mplr", T, "cumulative hazard MPLr", help="Typed on the hazard's first row"),
+        FieldSpec("comment", M, "comment"),
+        FieldSpec("sg_global_id", T, "SG global id"),
+        FieldSpec("safety_goal", T, "safety goal", help="SC-n: the system-level constraint of the hazard"),
+        FieldSpec("sg_mplr", T, "SG MPLr", help="Typed on the hazard's first row"),
+        uid_field(),
+    ),
+))
+
+HARA_APPROVAL = register_entity(EntitySchema(
+    name="hara_approval", table="hara_approvals", label="HARA Approval", sheet="HARA approvals",
+    description="An approver role's Y / N on a hazardous event (the Hazardous Events sheet); roles, never people.",
+    order_by=("hara", "order", "id"),
+    fields=(
+        HARA_REF,
+        FieldSpec("order", N, "order"),
+        FieldSpec("event", T, "hazardous event", required=True, help="H-n.m.k"),
+        FieldSpec("role", T, "role", required=True, help="robot_chief, software_lead, ...: a role slug, never a name"),
+        FieldSpec("decision", E, "decision", lookup="hara_decision"),
+        FieldSpec("comment", M, "comment"),
+        uid_field(),
+    ),
+))
+
+HARA_ENTITIES = (
+    HARA, HARA_VEHICLE, HARA_FUNCTION, HARA_USE_CASE, HARA_FAILURE_MODE, HARA_ASSUMPTION, HARA_RATING,
+    HARA_ASSESSMENT, HARA_APPROVAL,
+)
+
+ALL_ENTITIES = (
+    SAFETY_PLAN_ROW, SPRINT, SPRINT_ITEM, WEEK, HOLIDAY, PARAMETER, *CS_ENTITIES, *STPA_ENTITIES, *HARA_ENTITIES,
+)

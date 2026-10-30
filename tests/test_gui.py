@@ -17,9 +17,9 @@ from tests.conftest import PLAN, REPO_ROOT
 
 # the registered screens, in navigation order: the list is the design, not a cap
 SCREENS = ["dashboard", "jira_live", "safety_plan", "safety_plan_matrix", "sprint_board", "tracker", "holidays",
-           "parameters", "control_structures", "stpa", "transfer"]
+           "parameters", "control_structures", "stpa", "hara", "transfer"]
 TITLES = ["Dashboard", "JIRA Live Data", "Safety Plan", "Safety Plan Matrix", "Sprint Board", "Weekly Status",
-          "Holidays", "Parameters", "Control structures", "STPA analyses", "Export / Import"]
+          "Holidays", "Parameters", "Control structures", "STPA analyses", "HARA", "Export / Import"]
 # the identity column of the Safety Plan table: frozen on the left since 0.7.2; since 0.8.4 the three identity
 # fields are one stacked column; since 0.9.0 ``id`` and ``order`` are no columns at all (docs/hidden-identity-plan.md)
 FROZEN_PLAN = ["plan"]

@@ -23,6 +23,7 @@ from .services import (
     ConfluenceService,
     ControlStructureService,
     EntityService,
+    HaraService,
     HolidayService,
     JiraService,
     PlanScheduleService,
@@ -227,6 +228,8 @@ class Brain:
         # 0.24.0: STPA lives here (the owner: "move everything to Kletz"); the factories come on first use
         self.control_structures = ControlStructureService(self)  # the structures as wholes; the rules per entity
         self.stpa = StpaService(self)  # the analyses as wholes; the rules per entity; the refresh and the link
+        # 0.28.0: the HARA (the owner: "lets parametrize the hara"); the rules per entity; the one computation
+        self.hara = HaraService(self)
         self.tracker = TrackerService(self)  # the Weekly Activity Tracker text, in and out
         self.holidays = HolidayService(self)  # the holidays the planner skips, loaded from a JSON list
         self.dispatcher = Dispatcher(self)
@@ -313,6 +316,15 @@ class Brain:
         return self._stpa_factory
 
     @property
+    def hara_factory(self):
+        """The ``HaraFactory`` on this Brain (built on first use; see ``asi_kletz.hara.hara_factory``)."""
+        if not hasattr(self, "_hara_factory"):
+            from .hara.hara_factory import HaraFactory
+
+            self._hara_factory = HaraFactory(self)
+        return self._hara_factory
+
+    @property
     def evidence_dir(self) -> str:
         """Where ``confluence evidence`` writes its Hopper page bundles (0.23.0): ``evidence_dir`` in kletz.toml
         (resolved against the file), else ``evidence/`` beside the database (the working directory for
@@ -346,9 +358,17 @@ class Brain:
                 service.after = self.schedule.on_change  # a change here can move a deadline
             # 0.24.0: a control structure's or an STPA analysis's entity carries its own rules (the guard, the
             # load, the cascade on delete, the cs.changed / stpa.changed event); the services attach them
-            rules = self.control_structures.rules_for(schema.name) or self.stpa.rules_for(schema.name)
+            rules = (
+                self.control_structures.rules_for(schema.name)
+                or self.stpa.rules_for(schema.name)
+                or self.hara.rules_for(schema.name)
+            )
             if rules is not None:
                 rules.attach(service)
+            if schema.name in ("hara", "hara_rating", "hara_assessment"):
+                # 0.28.0: a change here can move a calculated MPLr (a vehicle code, a rating, an assessment row,
+                # a file loaded): the HARA is recomputed, as the plan's schedule is
+                service.after = self.hara.on_change(schema.name)
             self._services[schema.name] = service
         return self._services[schema.name]
 

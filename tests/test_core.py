@@ -8,7 +8,17 @@ import pytest
 from asi_kletz import Brain, __version__
 from asi_kletz.errors import CommandError, NotFound, ValidationError
 from asi_kletz.schema import UID, UID_PATTERN
-from tests.conftest import CS_TABLES, DB_0_8_4, EMPTY_COUNTS, ENTITIES, PLAN, STPA_TABLES, TABLES, TABLES_0_8_4
+from tests.conftest import (
+    CS_TABLES,
+    DB_0_8_4,
+    EMPTY_COUNTS,
+    ENTITIES,
+    HARA_TABLES,
+    PLAN,
+    STPA_TABLES,
+    TABLES,
+    TABLES_0_8_4,
+)
 
 
 def test_crud_round_trip(brain):
@@ -77,9 +87,25 @@ def test_schema_and_status_commands(seeded):
     full = seeded.execute("schema").data
     assert [e["name"] for e in full["entities"]] == ENTITIES
     assert set(full["lookups"]) == {
-        "pdp_phase", "lifecycle_phase", "plan_status", "sprint_status", "item_status", "item_kind", "week_section",
-        "holiday_status", "cs_status", "cs_controller_kind", "cs_edge_kind", "stpa_status", "stpa_source_kind",
+        "pdp_phase",
+        "lifecycle_phase",
+        "plan_status",
+        "sprint_status",
+        "item_status",
+        "item_kind",
+        "week_section",
+        "holiday_status",
+        "cs_status",
+        "cs_controller_kind",
+        "cs_edge_kind",
+        "stpa_status",
+        "stpa_source_kind",
         "stpa_uca_category",
+        "hara_status",
+        "hara_context",
+        "hara_function_kind",
+        "hara_assumption_source",
+        "hara_decision",
     }
     assert full["commands"]
     one = seeded.execute("schema", entity="Safety Plan").data
@@ -216,11 +242,18 @@ def test_a_0_8_4_database_opens_as_0_9_0_with_every_row_stamped(tmp_path):
     assert len(before["schema_migrations"]) == 1 and not any(n.startswith("ix_") for n in _indexes(db))
 
     with Brain(db) as brain:
-        # 0.10.0, 0.14.0 and the thirteen STPA tables of 0.24.0; the four of 0.8.4 altered
-        assert brain.migration["created"] == ["holiday", "parameter", *CS_TABLES, *STPA_TABLES]
+        # 0.10.0, 0.14.0, the thirteen STPA tables of 0.24.0, the nine HARA tables of 0.28.0; the four of 0.8.4 altered
+        assert brain.migration["created"] == ["holiday", "parameter", *CS_TABLES, *STPA_TABLES, *HARA_TABLES]
         altered = {table: [UID] for table in TABLES_0_8_4}
         altered["safety_plan"] = [
-            "points", "default_points", "sprint", "sprint_start", "sprint_end", "jira_key", "urls", UID,
+            "points",
+            "default_points",
+            "sprint",
+            "sprint_start",
+            "sprint_end",
+            "jira_key",
+            "urls",
+            UID,
         ]
         altered["sprint_item"] = ["plan_uid", UID]  # 0.13.0: the plan row's uid beside its id
         assert brain.migration["plan_uids_filled"] == 0  # the fixture has no item

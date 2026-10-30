@@ -71,11 +71,12 @@ def test_registry_aliases_and_fingerprint():
     with pytest.raises(NotFound):
         default_registry.get("unicorns")
     assert default_registry.fingerprint() == default_registry.fingerprint()
-    assert default_registry.names() == ENTITIES  # the nineteen of 0.24.0, in registration order
+    assert default_registry.names() == ENTITIES  # the twenty-eight of 0.28.0, in registration order
     assert set(default_lookups) == {
         "pdp_phase", "lifecycle_phase", "plan_status", "sprint_status", "item_status", "item_kind", "week_section",
         "holiday_status", "cs_status", "cs_controller_kind", "cs_edge_kind", "stpa_status", "stpa_source_kind",
-        "stpa_uca_category",
+        "stpa_uca_category", "hara_status", "hara_context", "hara_function_kind", "hara_assumption_source",
+        "hara_decision",
     }
 
 

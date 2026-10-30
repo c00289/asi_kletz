@@ -15,7 +15,7 @@ def test_json_dump_and_load_modes(seeded, tmp_path):
     dumped = seeded.execute("dump", out=str(out))
     assert dumped.ok and dumped.data["entities"] == {**EMPTY_COUNTS, PLAN: 3}
     payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 11 and list(payload["entities"]) == ENTITIES
+    assert payload["schema_version"] == 12 and list(payload["entities"]) == ENTITIES
 
     uids = {r["id"]: r["uid"] for r in payload["entities"][PLAN]}
     assert len(uids) == 3 and all(uids.values())  # the dump carries the hidden identity like any field

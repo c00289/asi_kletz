@@ -33,6 +33,7 @@ LINK_TITLE = "Work product links (click to open the plan)"
 # the parts have no tile of their own, the two screens count them. A click opens the screen.
 STPA_TILES = (
     ("control_structure", "CS STRUCTURES", "control_structures"), ("stpa_analysis", "STPA ANALYSES", "stpa"),
+    ("hara", "HARAS", "hara"),  # 0.28.0
 )
 STPA_TITLE = "STPA (click to open the screen)"
 

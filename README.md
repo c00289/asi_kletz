@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.27.3**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.28.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -26,7 +26,28 @@ Confluence, read only, through the same door, so a deliverable can name its page
 tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 0.24.0 it is the home of STPA
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
-tool by the owner's decision of 2026-10-29.
+tool by the owner's decision of 2026-10-29. Since 0.28.0 it also holds the **HARA**, the ISO 19014 risk
+assessment, as data: the rating table once, the MPLr of every assessment row computed from it (see [HARA](#hara)).
+
+## What is in 0.28.0
+
+**The HARA, parametrised.** The owner, 2026-10-30: "before we work on stpa lets parametrize the hara ... the
+workbook is complicated as hell". The dissection in Roy's Brain had reduced the wheel loader HARA workbook (26
+sheets, 73,000 cells, 24,000 formulas) to six kinds of sheet, one chain of ids and one computation: the MPLr of
+an assessment row is a lookup of (function, use case, failure mode) in the rating table, the answer taken from
+the column of the document's vehicle code. The workbook never finished that computation (its second generation
+keyed on a vehicle code nobody filled in; its first pointed three of four context sheets at the foundation
+vehicle's column and one at the wheel loader's). Kletz finishes it: nine tables (`hara`, `hara_vehicle`,
+`hara_function`, `hara_use_case`, `hara_failure_mode`, `hara_assumption`, `hara_rating`, `hara_assessment`,
+`hara_approval`), the rating written once in `hara_rating` and the `mplr` of every assessment row **calculated**
+from it under the HARA's vehicle code, recomputed after every change; the workbook's typed value kept beside it
+as `stated_mplr`, so `hara check` says, per context, how many rows agree and how many the workbook rated from
+another column; the Summary sheet derived (`hara summary`), never typed; step 1 (the losses, the hazards with
+their scenarios and hazardous events, the system-level constraints) read into an STPA analysis of the same slug,
+so the STPA work that follows starts from it. `hara new from_workbook --from <xlsx>` reads a HARA workbook (the
+approvers' names are never read: roles only); `hara export` writes it back in the workbook's own shape with the
+computed MPLr beside the stated one. A HARA screen and a Dashboard tile. Schema version 11 to 12, nine tables
+added, nothing existing changed. See [HARA](#hara).
 
 ## What is in 0.27.3
 
@@ -1554,6 +1575,84 @@ shows it in the Report tab and asks before `--apply` runs on the Tk thread.
 (`tests/fixtures/conveyor-gate-stpa.md`, the exact Markdown shape the server renders, and the quirkier
 `conveyor-gate-stpa-quirks.md`) and a synthetic bundle built around it; asi_hopper's own Confluence fixtures
 are synthetic too. A run against the real page happens on the owner's machine and is recorded as counts.
+
+## HARA
+
+The hazard analysis and risk assessment (ISO 19014) of a vehicle is, in the owner's team, an Excel workbook: the
+function list, the use case list, the four failure modes, a rating table of MPLr per (function, use case, failure
+mode) and annex vehicle, and four hidden context sheets (base or work implement functions x base or work
+implement use cases) with one row per hazardous event x function x use case x failure mode, each row's MPLr a
+formula into the rating table. Since 0.28.0 Kletz holds it as data and does the computation; the workbook (and
+the Markdown report) is a view written from the database.
+
+**Entities** (schema version 12). One `hara` row is the document: name, slug, system, status, **vehicle code**
+(the annex letter whose column the MPLr is read from, `G` for the large wheel loaders, or `cumulative` for the
+foundation vehicle's column), vehicle name, the slug of the STPA `analysis` holding step 1, the Document
+Information and Cover parameters (project, department, company, standard, supporting document, analysis date,
+revision, description, scope), the source workbook, its SHA-256 and the generation read. Every part names its
+HARA by slug:
+
+| Entity | Sheet | Fields beyond `hara` and `order` |
+|---|---|---|
+| `hara_vehicle` | HARA vehicles | letter (A to Z, unique), ISO 19014 vehicle, ASI vehicle, projects |
+| `hara_function` | HARA functions | name (unique), kind (base, work_implement), vehicles (letters), cumulative MPLr, specific MPLr, definition |
+| `hara_use_case` | HARA use cases | name (unique), base (the list's asterisk), vehicles (letters), definition |
+| `hara_failure_mode` | HARA failure modes | name (unique) |
+| `hara_assumption` | HARA assumptions | source (ISO 19014, ASI), vehicle, text |
+| `hara_rating` | HARA ratings | function, use case, failure mode (unique together), ratings (a JSON object, letter to MPLr, typed as `G: b` lines), cumulative MPLr, comment |
+| `hara_assessment` | HARA assessments | context (BF-BUC, BF-WIUC, WIF-BUC, WIF-WIUC), hazard, scenario, event (`H-1.1.1`), function, use case, failure mode, **MPLr (calculated)**, stated MPLr, cumulative hazard MPLr, comment, SG global id, safety goal (`SC-1`), SG MPLr |
+| `hara_approval` | HARA approvals | event, role (a slug, never a name), decision (Y, N), comment |
+
+**The one computation.** `mplr` is calculated and refused on a create or an update: `HaraService.recompute`
+writes it for every assessment row from the rating table and the vehicle code (`-` when the table has no such
+key, empty when the cell is empty, a trailing asterisk on a use case forgiven), after every change of a vehicle
+code, a rating or an assessment row and after a load. `hara summary` derives the Summary sheet: per hazard and
+context the highest MPLr of its rows, the highest overall, PLr (the same letter), AgPLr (the same letter, none
+for QM) and SIL (a none, b and c 1, d 2, e 3), beside what the workbook typed on each context's first row.
+`hara check` counts, per context, the rows whose computed MPLr agrees with the stated one, differs, has no key
+or no stated value, with examples, and the hazards whose Summary line moved. On the wheel loader's rev 2.1 under
+vehicle `G` the context sheet the workbook had read from column G agrees on every stated row; the three it had
+read from the foundation vehicle's column differ on most, which is the finding of the dissection in numbers.
+
+**The reader** (`hara/workbook_reader.py`) reads the cached values of a HARA workbook: every sheet by name,
+the Document Information pairs, the Scope's letters, the Function List with an annex letter per column, the Use
+Case List naming the vehicles, the rating table `RA(ISO 19014)` widened by `RA(for all vehicles)` where the
+former has no letter, the four context sheets of one generation (1, the default: the sheets Document Information
+names; 2: the hidden `HARA-n` twins), the approvals by role (`Robot Chief: <name>` becomes `robot_chief`; the
+name is never read), and step 1 for the STPA analysis: the losses, the hazards with their scenarios `H-n.m` and
+events `H-n.m.k` as dotted hazards, the system-level constraints `SC-n`, every row cited to its sheet and cell.
+An id the workbook's `LEFT()` cut short (`H-2.3.10` read as `H-2.3.1`) is repaired from the text; a Relation
+cell that disagrees with the code is a warning. The vehicle code is Document Information's, else guessed from the
+vehicle name against the Scope sheet (a warning says so), else `--vehicle`.
+
+**The factory** (`asi_kletz.hara.HaraFactory`, `brain.hara_factory`):
+
+| Builder | Reads | Options |
+|---|---|---|
+| `blank` | nothing | `--name`, `--system`, `--vehicle` |
+| `from_workbook` | a HARA workbook: **the primary builder** | `--from <xlsx>`, `--vehicle <letter>`, `--generation 1\|2`, `--analysis <slug>` (a step 1 already in Kletz), `--name`, `--slug` |
+| `clone` | an existing HARA, the same STPA analysis | `--from <id-or-slug>`, `--name` |
+
+**Verbs**:
+
+```powershell
+asi-kletz hara builders
+asi-kletz hara new from_workbook --from "..\asi_standards\haras\wheel-loader\source\WL RA_rev2.1.xlsx" --name "WL HARA rev 2.1" --slug wl_hara_2_1
+asi-kletz hara list
+asi-kletz hara get wl_hara_2_1                 # the row, the counts, every part
+asi-kletz hara summary wl_hara_2_1             # the Summary sheet, derived
+asi-kletz hara check wl_hara_2_1               # computed against the workbook's typed values
+asi-kletz hara validate wl_hara_2_1
+asi-kletz hara recompute wl_hara_2_1           # after a change made outside the verbs
+asi-kletz hara export wl_hara_2_1 --out out\hara          # <slug>.xlsx (the workbook shape) and <slug>.md
+asi-kletz update hara 1 --set vehicle_code=cumulative     # the MPLr follows
+asi-kletz update hara_rating 12 --set "ratings=G: c; B: b"
+asi-kletz hara delete wl_hara_2_1 --cascade    # the parts, and the step-1 analysis when its step 3 never began
+```
+
+The **HARA screen** (registered after STPA analyses) lists the HARAs, shows the derived Summary and one tab per
+part (a row whose computed MPLr is not the workbook's in the accent colour), and runs the verbs behind New from
+workbook… / Recompute MPLr / Check / Validate / Export… / Delete; the Dashboard counts the HARAs in a tile.
 
 ## One at a time
 

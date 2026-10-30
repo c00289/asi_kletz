@@ -29,7 +29,7 @@ from asi_kletz.stpa import ControlStructureFactory, read_dataset_folder, read_dr
 from asi_kletz.stpa.drawio_reader import group_algorithms, group_entries, parse_entry, render_entry, unwrap
 from asi_kletz.stpa.factory import DEFAULT_FORMATS, FORMATS, TEMPLATE_BUILDER
 from asi_kletz.version import SCHEMA_VERSION, __version__
-from tests.conftest import CS_TABLES, DB_0_23_0, EMPTY_COUNTS, STPA_TABLES
+from tests.conftest import CS_TABLES, DB_0_23_0, EMPTY_COUNTS, HARA_TABLES, STPA_TABLES
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PRIVATE_DATASETS = REPO_ROOT.parent / "asi_standards" / "control-structures" / "wheel-loader" / "datasets"
@@ -145,7 +145,7 @@ def competent_ocr(monkeypatch):
 
 # -- entities and the JSON lists ---------------------------------------------------------------
 def test_the_seven_entities_are_registered_with_their_sheets():
-    assert [s.name for s in default_registry][-13:-6] == list(CS_ENTITIES)  # the six STPA entities follow
+    assert [s.name for s in default_registry][-22:-15] == list(CS_ENTITIES)  # six STPA and nine HARA entities follow
     sheets = [default_registry.get(e).sheet for e in CS_ENTITIES]
     assert sheets == ["CS structures", "CS controllers", "CS algorithms", "CS process model", "CS edges", "CS signals",
                       "CS notes"]
@@ -156,7 +156,7 @@ def test_the_seven_entities_are_registered_with_their_sheets():
     assert all(default_registry.get(e).fields[-1].name == "uid" for e in CS_ENTITIES)
     assert default_registry.get("cs_controller").field("kind").lookup == "cs_controller_kind"
     assert FORMATS == ("drawio", "png", "svg") and DEFAULT_FORMATS == ("drawio", "png")
-    assert SCHEMA_VERSION == 11
+    assert SCHEMA_VERSION == 12
 
 
 def test_json_fields_hold_lists(brain, tmp_path):
@@ -798,11 +798,11 @@ def test_a_schema_10_database_opens_as_0_24_0_with_the_thirteen_tables_added(tmp
     assert "control_structures" not in tables and len(before["safety_plan"]) == 3 and len(before["parameter"]) == 1
     with Brain(db) as b:
         # the seven control-structure tables and the six STPA tables after them, nothing altered, no row touched
-        assert b.migration["created"] == [*CS_TABLES, *STPA_TABLES]
+        assert b.migration["created"] == [*CS_TABLES, *STPA_TABLES, *HARA_TABLES]
         assert b.migration["altered"] == {} and b.migration["uids_stamped"] == EMPTY_COUNTS
         migrations = b.storage.fetchall("SELECT app_version FROM schema_migrations ORDER BY version")
         versions = [m["app_version"] for m in migrations]
-        assert versions == ["0.23.0", __version__] and b.status()["schema_version"] == SCHEMA_VERSION == 11
+        assert versions == ["0.23.0", __version__] and b.status()["schema_version"] == SCHEMA_VERSION == 12
         assert b.execute("cs", action="list").data == [] and b.execute("stpa", action="list").data == []
         assert b.execute("list", entity="safety_plan_row").data[0]["deliverable"] == "Safety Plan"
         made = b.control_structures.create_from_dataset(synthetic(), "test")[0]
@@ -821,8 +821,8 @@ def test_the_parts_have_no_table_screen_and_one_tile(brain):
     from asi_kletz.gui.dashboard import STPA_TILES
     from asi_kletz.gui.screens import CONTROL_STRUCTURES_SCREEN, STPA_SCREEN, build_default_screens
 
-    assert [t[0] for t in STPA_TILES] == ["control_structure", "stpa_analysis"]  # the structures, not the parts
-    assert [t[2] for t in STPA_TILES] == [CONTROL_STRUCTURES_SCREEN, STPA_SCREEN]
+    assert [t[0] for t in STPA_TILES] == ["control_structure", "stpa_analysis", "hara"]  # the wholes, not the parts
+    assert [t[2] for t in STPA_TILES] == [CONTROL_STRUCTURES_SCREEN, STPA_SCREEN, "hara"]
     factory = build_default_screens(brain)
     keys = [key for key, _title in factory.items()]
     assert not any(key.startswith("entity:") or key.startswith("cs_") for key in keys)

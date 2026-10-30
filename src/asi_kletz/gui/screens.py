@@ -20,6 +20,7 @@ PLAN_ENTITY = "safety_plan_row"
 # screen of their own, these two paint them (`/screen {"show": "control_structures"}`, `{"show": "stpa"}`)
 CONTROL_STRUCTURES_SCREEN = "control_structures"
 STPA_SCREEN = "stpa"
+HARA_SCREEN = "hara"  # 0.28.0: the nine HARA entities share this one screen (`{"show": "hara"}`)
 
 # -- the plan as a stack (0.8.3 on the matrix, 0.8.4 on the table) ------------------------------------
 # Owner, 2026-10-28: the PDP phase, the lifecycle phase and the deliverable side by side crowded the
@@ -405,7 +406,7 @@ class ScreenFactory:
 def build_default_screens(brain: Brain) -> ScreenFactory:
     """The screens of the window, in navigation order: Dashboard, JIRA Live Data, Safety Plan,
     Safety Plan Matrix, Sprint Board, Weekly Status, Holidays, Parameters, Control structures, STPA
-    analyses, Export / Import.
+    analyses, HARA, Export / Import.
 
     A screen is added by registration here; the list is the design, not a cap. Registering
     another entity still gives it a table, commands, JSON and a workbook sheet, never a screen
@@ -414,6 +415,7 @@ def build_default_screens(brain: Brain) -> ScreenFactory:
     from .control_structure_screen import ControlStructureScreen
     from .dashboard import DashboardScreen
     from .entity_screen import EntityScreen
+    from .hara_screen import HaraScreen
     from .jira_live_screen import JiraLiveScreen
     from .matrix_screen import SafetyPlanMatrixScreen
     from .sprint_board_screen import SprintBoardScreen
@@ -435,5 +437,6 @@ def build_default_screens(brain: Brain) -> ScreenFactory:
     factory.register("parameters", "Parameters", lambda master, window: EntityScreen(master, window, parameter))
     factory.register(CONTROL_STRUCTURES_SCREEN, "Control structures", ControlStructureScreen)
     factory.register(STPA_SCREEN, "STPA analyses", StpaScreen)
+    factory.register(HARA_SCREEN, "HARA", HaraScreen)
     factory.register("transfer", "Export / Import", TransferScreen)
     return factory
