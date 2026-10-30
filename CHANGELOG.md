@@ -12,6 +12,16 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.24.2] - 2026-10-29
+
+The lock follows the siblings: the family's pass-two sweep of 2026-10-29 relocks every consumer to what its
+producers committed that day. No code change; schema version unchanged (11).
+
+### Changed
+- `uv.lock` takes asi_kletz 0.24.2, asi_escher 0.2.2 and asi_gutenberg 0.9.1 (the siblings' own sweeps of the
+  same day, committed on their `main`, which is what CI checks out; 0.24.1 had left them at 0.2.1 and 0.9.0);
+  asi_hopper 0.1.10 as before. Nothing here uses what changed in either.
+
 ## [0.24.1] - 2026-10-29
 
 A broken-windows sweep of the repository at the end of 2026-10-29 (0.15.1 to 0.24.0 shipped that day); no
@@ -2042,7 +2052,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://example.invalid/asi-kletz/compare/v0.24.1...HEAD
+[Unreleased]: https://example.invalid/asi-kletz/compare/v0.24.2...HEAD
+[0.24.2]: https://example.invalid/asi-kletz/compare/v0.24.1...v0.24.2
 [0.24.1]: https://example.invalid/asi-kletz/compare/v0.24.0...v0.24.1
 [0.24.0]: https://example.invalid/asi-kletz/compare/v0.23.0...v0.24.0
 [0.23.0]: https://example.invalid/asi-kletz/compare/v0.22.0...v0.23.0
