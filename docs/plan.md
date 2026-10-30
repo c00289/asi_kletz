@@ -1,6 +1,6 @@
 # ASI Kletz — Plan
 
-**Status:** 0.27.2 delivered
+**Status:** 0.27.3 delivered
 **Started:** 2026-10-27
 **Owner:** FuSa engineer
 
@@ -200,12 +200,14 @@ implementation produced by a factory.
 | 0.27.0 | A timestamp suffix on every file a person opens (`io/stamp.py`: workbook, plan export, document, tracker build; the JSON dump keeps its exact name); the Excel export marks the gaps pinkish red like the Word export (the placeholder link, no URL, no ticket) and counts them | done 2026-10-30 |
 | 0.27.1 | A refused Gutenberg rendering no longer fails the export: the Markdown and the filled Word original go on, a warning names the refusal; the lock takes asi_gutenberg 0.10.1 (a tall table row continues on the next page) | done 2026-10-30 |
 | 0.27.2 | The export button says `Exporting… (Word prints the PDF)` while the export is in flight; closing the window during an export asks first (`busy_text`) | done 2026-10-30 |
+| 0.27.3 | `gui.ps1` syncs the environment before it starts the window; a sync that cannot run is a warning; no change to the package | done 2026-10-30 |
 | later | Approval mode, form puppeting, import diff preview, date picker | planned |
 
 ---
 
 ## 9. Change log
 
+- 2026-10-30 0.27.3: the status line and the section 8 row for 0.27.3, the launcher that syncs first.
 - 2026-10-30 0.27.2: the status line and the section 8 row for 0.27.2, the visible busy state and the close dialog.
 - 2026-10-30 0.27.1: the status line and the section 8 row for 0.27.1, the export that survives a refused rendering.
 - 2026-10-30 0.27.0: the status line and the section 8 row for 0.27.0, the stamps and the sheet's gaps.

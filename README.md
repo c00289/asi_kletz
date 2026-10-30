@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.27.2**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.27.3**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,20 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.27.3
+
+The owner, 2026-10-30, after a relaunch that met "Virtual environment not found": "constant improvement...
+this should apply to dewey and kletz". An install made while the window was open half-applies (the window
+holds the environment's files), and the next launch found no launcher.
+
+`gui.ps1` now runs `uv sync --quiet` before it starts the window (when `uv` is on PATH), so a launch
+after a sibling's release or a half-applied install heals itself. The cause of those half-applied
+installs: the repos live under OneDrive, which holds a freshly written folder for a moment while it
+uploads it, and an install that lands in that moment fails with "Access is denied" on a `.dist-info`
+folder; so the sync is tried up to three times, two seconds apart. A sync that still cannot run is a
+warning, and the window starts on the environment as it is. asi_dewey 0.11.3 does the same. No change
+to the package.
 
 ## What is in 0.27.2
 

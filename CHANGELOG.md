@@ -12,6 +12,22 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.27.3] - 2026-10-30
+
+The owner, 2026-10-30, after a relaunch that met "Virtual environment not found": "constant improvement...
+this should apply to dewey and kletz". An install made while the window was open half-applies (the window
+holds the environment's files), and the next launch found no launcher.
+Schema version unchanged (11).
+
+### Changed
+- **`gui.ps1` syncs the environment before it starts the window** (`uv sync --quiet` when `uv` is on PATH),
+  so a launch after a sibling's release or a half-applied install heals itself. The repos live under
+  OneDrive, which holds a freshly written folder for a moment while it uploads it, and an install that
+  lands in that moment fails with "Access is denied" on a `.dist-info` folder, so the sync is tried up to
+  three times, two seconds apart. A sync that still cannot run is a warning, not a stop: the window starts
+  on the environment as it is. No change to the package.
+- README: *What is in 0.27.3*. `docs/plan.md`: the status line and the row.
+
 ## [0.27.2] - 2026-10-30
 
 The owner, 2026-10-30: "exported safety plan successfully but the second time i clicked export crickets".
@@ -2219,7 +2235,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.27.2...HEAD
+[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.27.3...HEAD
+[0.27.3]: https://github.com/c00289/asi_kletz/compare/v0.27.2...v0.27.3
 [0.27.2]: https://github.com/c00289/asi_kletz/compare/v0.27.1...v0.27.2
 [0.27.1]: https://github.com/c00289/asi_kletz/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/c00289/asi_kletz/compare/v0.26.1...v0.27.0
