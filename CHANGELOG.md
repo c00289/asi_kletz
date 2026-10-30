@@ -12,6 +12,25 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.27.2] - 2026-10-30
+
+The owner, 2026-10-30: "exported safety plan successfully but the second time i clicked export crickets".
+The export's Markdown, Gutenberg PDF and filled Word file appear within seconds; Word's print of the PDF
+takes the better part of a minute; the second press met a greyed button whose only explanation was a
+status-bar line, and the window was closed over the print, which left Word's PDF beside the files as
+`<name>.printing.pdf` and the Result unreported. Schema version unchanged (11).
+
+### Changed
+- **The export button says why a press does nothing** (`gui/entity_screen.py`): `Exporting… (Word prints the
+  PDF)` (`EXPORT_BUSY`) while the export is in flight, its own name again when the Result lands; the
+  screen remembers the deliverable's name (`export_name`) and offers `busy_text()`.
+- **Closing the window during an export asks first** (`gui/main_window.py:close`): every screen's
+  `busy_text` is read; one in flight is put to a Yes / No dialog naming it and what closing leaves behind;
+  a refusal keeps the window. A non-interactive window closes as before.
+- Tests: the export test asserts the busy and restored texts;
+  `test_closing_the_window_during_an_export_asks_first`.
+- README: *What is in 0.27.2*. `docs/plan.md`: the status line and the row.
+
 ## [0.27.1] - 2026-10-30
 
 The owner, 2026-10-30, a dialog titled "plan failed" on Export document…: `LayoutError: Flowable <Table 4
@@ -2200,7 +2219,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.27.1...HEAD
+[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.27.2...HEAD
+[0.27.2]: https://github.com/c00289/asi_kletz/compare/v0.27.1...v0.27.2
 [0.27.1]: https://github.com/c00289/asi_kletz/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/c00289/asi_kletz/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/c00289/asi_kletz/compare/v0.26.0...v0.26.1

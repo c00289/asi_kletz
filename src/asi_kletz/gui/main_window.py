@@ -494,8 +494,20 @@ class MainWindow(tk.Tk):
             self._refresh_job = None
 
     def close(self) -> None:
-        """Stop the server and clear the session file, then destroy the root. Idempotent."""
+        """Stop the server and clear the session file, then destroy the root. Idempotent.
+
+        0.27.2: a screen with work in flight (``busy_text``: the Safety Plan's export while Word prints) is
+        asked about first; closing over it leaves Word's print beside the files as ``<name>.printing.pdf`` and
+        the Result unreported, which is what the owner met on 2026-10-30.
+        """
         if self._closed:
+            return
+        busy = [text for text in (getattr(s, "busy_text", lambda: None)() for s in self._screens.values()) if text]
+        if busy and not self.confirm(
+            "An export is still running",
+            "\n".join(busy) + "\n\nClose anyway? Word's print is then left beside the files as "
+            "<name>.printing.pdf and the export is never reported. The status bar says when it is done.",
+        ):
             return
         self._closed = True
         trace.note("close", via=trace.caller())

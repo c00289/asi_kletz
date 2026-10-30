@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from asi_kletz.commands import Result, default_command_factory
+from asi_kletz.gui.entity_screen import EXPORT_BUSY, EXPORT_BUTTON
 from asi_kletz.schema import FieldSpec, FieldType
 from tests.conftest import PLAN, REPO_ROOT
 
@@ -2032,12 +2033,15 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
     fetch = screen.export_document()
     assert fetch is not None and screen.export_fetch is fetch
     assert str(screen.export_button.cget("state")) == "disabled"
+    assert screen.export_button.cget("text") == EXPORT_BUSY  # 0.27.2: the button says why a press does nothing
+    assert screen.busy_text() == "Word is still printing the export of Safety Plan."
     assert window.status_text().startswith("Exporting Safety Plan to ")
     assert screen.export_document() is None  # a second press while one runs
     assert window.status_text().startswith("An export is already running")
     _pump_until(window, lambda: screen.export_fetch is None)
     assert screen.last_export is fetch.result and fetch.result.ok
-    assert str(screen.export_button.cget("state")) == "normal"
+    assert str(screen.export_button.cget("state")) == "normal" and screen.export_button.cget("text") == EXPORT_BUTTON
+    assert screen.busy_text() is None
     status = window.status_text()
     assert re.match(r"Exported qf-17-test_(\d{8}-\d{6})\.md, qf-17-test_\1\.pdf, qf-17-test_\1\.docx to ", status)
     # row 2 has no key, no points and no default (nothing loaded them): its key, points and status stay unfilled
@@ -2083,6 +2087,47 @@ def test_a_failed_export_is_reported_and_frees_the_button(window, seeded, tmp_pa
     assert not fetch.result.ok and "Word went away" in "; ".join(fetch.result.errors)
     assert window.status_text().startswith("Error: ") and "Word went away" in window.status_text()
     assert str(screen.export_button.cget("state")) == "normal" and screen.last_export is fetch.result
+    assert screen.export_button.cget("text") == EXPORT_BUTTON
+
+
+def test_closing_the_window_during_an_export_asks_first(window, seeded, tmp_path, monkeypatch):
+    """0.27.2, the owner: "exported safety plan successfully but the second time i clicked export crickets".
+    The files had appeared within seconds, Word was still printing, the second press met a greyed button, and
+    the window was closed over the print (Word's PDF left as ``.printing.pdf``, the Result never reported).
+    Closing now asks while an export is in flight; a refusal keeps the window; once done, it closes freely."""
+    from tests.test_standards import SOURCE
+
+    root = tmp_path / "standards"
+    (root / "qf-17-test").mkdir(parents=True)
+    (root / "qf-17-test" / "qf-17-test.md").write_text(SOURCE, encoding="utf-8")
+    monkeypatch.setenv("ASI_KLETZ_STANDARDS", str(root))
+    screen = window.show("safety_plan")
+    screen.select(1)
+    gate = threading.Event()
+
+    def slow(self, row_id, out_dir=None, standard=None, actor="python"):
+        gate.wait(10)
+        return {"row": row_id, "order": 1, "out_dir": str(out_dir), "exports": [], "statuses": {}, "warnings": []}
+
+    monkeypatch.setattr(type(seeded.standards), "export", slow)
+    asked: list[tuple[str, str]] = []
+
+    def refuse(title, message):
+        asked.append((title, message))
+        return False
+
+    monkeypatch.setattr(window, "confirm", refuse)
+    fetch = screen.export_document()
+    assert fetch is not None and screen.busy_text().startswith("Word is still printing the export of Safety Plan")
+    window.close()
+    assert not window._closed and window.winfo_exists()  # refused: the window stays
+    assert asked and asked[0][0] == "An export is still running" and "printing.pdf" in asked[0][1]
+    gate.set()
+    _pump_until(window, lambda: screen.export_fetch is None)
+    assert screen.busy_text() is None and len(asked) == 1
+    monkeypatch.setattr(window, "confirm", lambda title, message: (_ for _ in ()).throw(AssertionError("asked")))
+    window.close()
+    assert window._closed
 
 
 def _pump_until(window, condition, limit: float = 30.0) -> None:

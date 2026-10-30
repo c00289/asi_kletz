@@ -44,6 +44,7 @@ HANDLES = ("id", "order")  # the handles have no column anywhere (0.9.0): the st
 # details form: the Export document… button and the row's standards, the Document parameters box, the row's own
 # values as the export fills them, then the form as before.
 EXPORT_BUTTON = "Export document…"
+EXPORT_BUSY = "Exporting… (Word prints the PDF)"   # 0.27.2: the button itself says why a press does nothing
 SAVE_PARAMETERS = "Save parameters"
 SELECT_A_ROW = "Select a deliverable to see its standards"
 # 0.19.0: a role in the Document parameters box is a small text box, one person per line as ``Name <email>``,
@@ -98,6 +99,7 @@ class EntityScreen(Screen):
         self.jira_statuses: dict[str, str | None] = {}  # the statuses the last export of this session fetched
         self.ticket_loader: Any = None  # the Load tickets fetch in flight, made on the first press (0.15.0)
         self.export_fetch: BackgroundFetch | None = None  # the plan export in flight, off the Tk thread (0.25.0)
+        self.export_name = ""  # the deliverable the export in flight is for (0.27.2: the close dialog names it)
         self.last_export: Any = None  # its Result, for the tests and the automation
         self.lookup_buttons: dict[str, ttk.Button] = {}  # the pane's Look up button per role (0.20.0)
         self.lookup_window: PeopleLookup | None = None  # the Outlook search window, one at a time (0.20.0)
@@ -518,7 +520,11 @@ class EntityScreen(Screen):
         name = str((self.by_id.get(row_id) or {}).get("deliverable") or f"row {row_id}")
         fetch = BackgroundFetch(self.window, "plan", action="export", row=row_id, out=folder).start()
         self.export_fetch = fetch
-        self.export_button.configure(state="disabled")
+        self.export_name = name
+        # 0.27.2, the owner: "the second time i clicked export crickets". The files appear within seconds, the
+        # Word print takes the better part of a minute, and a greyed button with a status line was too quiet:
+        # the button now says so itself until the Result lands.
+        self.export_button.configure(state="disabled", text=EXPORT_BUSY)
         self.window.set_status(f"Exporting {name} to {folder}… (Word prints the PDF; this takes a minute)")
 
         def poll() -> None:
@@ -526,8 +532,10 @@ class EntityScreen(Screen):
                 self.after(POLL_MS, poll)
                 return
             self.export_fetch = None
+            self.export_name = ""
             result = fetch.result
             self.last_export = result
+            self.export_button.configure(text=EXPORT_BUTTON)
             if self.standards:
                 self.export_button.configure(state="normal")
             self.window.report(result, "plan export")
@@ -545,6 +553,12 @@ class EntityScreen(Screen):
 
         self.after(POLL_MS, poll)
         return fetch
+
+    def busy_text(self) -> str | None:
+        """What the window must not close over without asking (0.27.2): the export in flight, by name."""
+        if self.export_fetch is None:
+            return None
+        return f"Word is still printing the export of {self.export_name or 'the selected deliverable'}."
 
     # -- data -----------------------------------------------------------
     def refresh(self) -> None:

@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.27.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.27.2**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,17 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.27.2
+
+The owner, 2026-10-30: "exported safety plan successfully but the second time i clicked export crickets".
+The export's Markdown, Gutenberg PDF and filled Word file appear within seconds; Word's print of the PDF
+takes the better part of a minute; the second press met a greyed button whose only explanation was a
+status-bar line, and the window was closed over the print, which left Word's PDF beside the files as
+`<name>.printing.pdf` and the Result unreported. Two changes. The Export document… button reads
+`Exporting… (Word prints the PDF)` until the Result lands, then its own name again. And closing the window
+while an export is in flight asks first (`busy_text` on the Safety Plan screen, read by `close`): a refusal
+keeps the window; the status bar says when the export is done, as before.
 
 ## What is in 0.27.1
 
