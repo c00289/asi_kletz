@@ -12,6 +12,40 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.26.0] - 2026-10-29
+
+The owner, 2026-10-29, on the exported QF-17 Safety Plan: "when the link is microsoft.com because of default,
+or blank, highlight in pinkish red instead of blue; and when no Jira ticket is attached also highlight as
+pinkish red." Schema version unchanged (11).
+
+### Added
+- **The gaps in pinkish red** (`services/standards_service.py`, asi_gutenberg 0.10.0's attention mark):
+  `row_values(rows, statuses, warnings, warn)` collects in `warn`, beside the values, the names whose value is
+  a gap rather than an answer: `row_N_jira_key` when it is `no ticket attached`, `row_N_status` when it is
+  `status not fetched (sign in to Jira)`, `row_N_url` when the first URL is the placeholder (`url_kind ==
+  "placeholder"`, the configured hosts respected). `value_set` carries per standard `warn` (the gaps among the
+  names the standard uses) and `warn_urls` (the placeholder URLs among its `row_N_url` values); `plan
+  parameters` prints them, so an agent sees the gaps without building. `export` hands both to
+  `build(..., warn=, warn_urls=)` and `fill_docx(..., warn=, warn_urls=)` and each export entry carries them:
+  in the filled Word original and the PDF Word prints, `no ticket attached` and `status not fetched` are shaded
+  pinkish red `#F4C2C2` instead of green, a deliverable name over the placeholder URL is still a hyperlink to
+  it but dark red `#B71C1C` over pinkish red instead of blue, a deliverable with no URL at all is its plain name
+  shaded pinkish red; every other filled value stays green and every real link blue. The exported Markdown
+  writes the gaps `!!…!!` and `[!!name!!](url)`.
+- Tests: `test_the_row_values_name_the_gaps` (`tests/test_standards.py`: the no-ticket key, the unfetched
+  status, the placeholder URL and a row with no URL in `row_values`; `plan parameters` listing `warn` and
+  `warn_urls` only for the names the standard uses); `test_export_links_the_deliverable_and_passes_the_
+  abridged_headers` rewritten for the three colours on the synthetic Word original (the placeholder-linked
+  deliverable name dark red over pinkish red and still a hyperlink to the placeholder, a Confluence-linked
+  one blue, the no-ticket key pinkish red, a ticket's key and status green, the points green, the Markdown's
+  marks); `test_without_word_the_abridged_headers_are_a_warning` asserts a deliverable with no URL is its
+  plain name shaded pinkish red; the Word-original and the two Markdown export tests assert the new marks.
+  The Excel export is unchanged. 482 tests, 481 before.
+
+### Changed
+- `uv.lock`: asi-gutenberg 0.10.0 (the attention mark, `warn` and `warn_urls`).
+- README: *What is in 0.26.0*; Standards and export (*Three colours*).
+
 ## [0.25.1] - 2026-10-29
 
 The owner, 2026-10-29: "when exporting the safety plan I noticed that the Jira status was gobbledygook, probably
@@ -2099,7 +2133,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.25.1...HEAD
+[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/c00289/asi_kletz/compare/v0.25.1...v0.26.0
 [0.25.1]: https://github.com/c00289/asi_kletz/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/c00289/asi_kletz/compare/v0.24.3...v0.25.0
 [0.24.3]: https://github.com/c00289/asi_kletz/compare/v0.24.2...v0.24.3

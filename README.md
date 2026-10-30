@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.25.1**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.26.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,19 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.26.0
+
+The owner, 2026-10-29, on the exported QF-17: "when the link is microsoft.com because of default, or blank,
+highlight in pinkish red instead of blue; and when no Jira ticket is attached also highlight as pinkish
+red." The export now paints three colours: green (`#A0D8A0`) on every value Kletz or a person filled; blue
+(`#CFE2F3` under Word's hyperlink blue) on a deliverable name that links to a real work product URL; and
+pinkish red (`#F4C2C2`, asi_gutenberg 0.10.0's attention mark) on what is still a gap: a deliverable name
+whose first URL is the placeholder (`https://www.microsoft.com/`; still a link to it, in dark red
+`#B71C1C`), a deliverable with no URL at all (the plain name, shaded), `no ticket attached` in the Jira key
+cell and `status not fetched (sign in to Jira)` in the status cell. `plan parameters` and `plan export`
+list the gaps per standard as `warn` (the parameter names) and `warn_urls` (the placeholder URLs), and the
+exported Markdown writes them `!!…!!`, so an agent sees them too. Schema version unchanged (11).
 
 ## What is in 0.25.1
 
@@ -745,6 +758,27 @@ file; `$ASI_KLETZ_STANDARDS` overrides it; `status` reports it). Two kinds of pa
   QF-17 source names `row_N_url` as the target of the deliverable's own name, `[Safety Plan]({{ row_N_url }})`,
   so the exported Word original and its PDF show the name as a blue hyperlink to that URL (asi_gutenberg 0.9.0:
   Word's Hyperlink style over a pale blue shading, never the green mark); a row with no URL keeps the plain name.
+
+**Three colours** (0.26.0; the owner: "when the link is microsoft.com because of default, or blank, highlight
+in pinkish red instead of blue; and when no Jira ticket is attached also highlight as pinkish red"). In the
+exported Word original and its PDF, and in Gutenberg's renderings alike:
+
+- **green** (`#A0D8A0`, asi_gutenberg's `mark_bg`): a value that was filled, by a person (`vehicle_type`, a
+  role) or by Kletz (the points, the sprint end, a Jira key, a fetched status, a URL written as text);
+- **blue** (`#CFE2F3` under Word's hyperlink blue `#0563C1`, `link_bg`): a deliverable name that is a link to a
+  real work product URL (Confluence, Jira, SharePoint, any host but the placeholder);
+- **pinkish red** (`#F4C2C2`, `warn_bg`; asi_gutenberg 0.10.0's attention mark `!!…!!`): a gap. A deliverable
+  name whose first URL is the placeholder (`url_kind == "placeholder"`, `https://www.microsoft.com/`) is still
+  a link to it but in dark red (`#B71C1C`, `warn_fg`) over pinkish red; a deliverable with no URL at all is its
+  plain name, shaded; `no ticket attached` in the Jira key cell and `status not fetched (sign in to Jira)` in
+  the status cell are shaded the same. Everything else keeps its colour.
+
+`row_values` names the gaps beside the values; `plan parameters` and each entry of `plan export` carry them
+per standard as `warn` (the parameter names among the standard's: `row_2_jira_key`, `row_5_status`,
+`row_1_url`) and `warn_urls` (the placeholder URLs among the `row_N_url` values); the export hands both to
+asi_gutenberg's `build` and `fill_docx`, and the exported Markdown writes the gaps `!!no ticket attached!!`
+and `[!!Safety Plan!!](https://www.microsoft.com/)`. Attach the ticket, replace the placeholder (`plan urls
+--replace`, `confluence link`) or sign in to Jira, and export again: the cell turns green or blue.
 
 **Abridged headers** (0.21.0): when the standard's folder holds `abridged-headers.json` (a JSON object, verbatim
 column heading to short form; the QF-17's maps its ten plan headings to `PDP`, `Lifecycle`, `Deliverable`,

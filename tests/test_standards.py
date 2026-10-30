@@ -141,6 +141,7 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
         "row_2_jira_key": "no ticket attached", "row_2_status": "",  # 0.25.1: readable, never a placeholder
     }
     assert std["filled"] == 10 and std["unfilled"] == []
+    assert std["warn"] == ["row_2_jira_key"] and std["warn_urls"] == []  # 0.26.0: the gaps, named
     assert preview.data["statuses"] == {"HWL-2554": "In Progress"} and stub.calls == ["HWL-2554"] and stub.closed
     assert any("row(s) 2, 3 have no Jira key" in w for w in preview.warnings)
 
@@ -158,7 +159,8 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
                  "==3== points"):
         assert mark in text, mark
     assert "{{ row_2_points }}" not in text and "{{ row_2_status }}" not in text  # the default is the weight used
-    assert "==no ticket attached==<br>" in text  # row 2 has no ticket: the cell says so (0.25.1)
+    assert "!!no ticket attached!!<br>" in text  # row 2 has no ticket: the cell says so (0.25.1), a gap (0.26.0)
+    assert "==no ticket attached==" not in text and built["warn"] == ["row_2_jira_key"] and built["warn_urls"] == []
     assert any("have no Jira key" in w for w in result.warnings)
     entry = seeded.storage.audit_tail(1)[0]
     assert entry["action"] == "export" and entry["actor"] == "me" and entry["payload"]["standards"] == ["qf-17-test"]
@@ -185,7 +187,40 @@ def test_export_offline_leaves_the_status_unfilled_with_one_warning(seeded, stan
     [built] = result.data["exports"]
     text = Path(built["files"]["md"]).read_text(encoding="utf-8")
     assert "row_1_status" not in built["unfilled"] and "{{ row_1_status }}" not in text
-    assert "==status not fetched (sign in to Jira)==" in text  # 0.25.1: the cell says why, never a placeholder
+    assert "!!status not fetched (sign in to Jira)!!" in text  # 0.25.1: the cell says why; 0.26.0: a gap
+    assert built["warn"] == ["row_1_status", "row_2_jira_key"]
+
+
+def test_the_row_values_name_the_gaps(seeded, standards, monkeypatch):
+    """0.26.0, the owner: "when the link is microsoft.com because of default, or blank, highlight in pinkish
+    red instead of blue; and when no Jira ticket is attached also highlight as pinkish red." ``row_values``
+    collects in ``warn`` the key that says no ticket, the status that could not be read and the url that is
+    the placeholder; a row with no url leaves ``row_N_url`` out (the fill paints its empty link); a real
+    url, a real key and a fetched status are not gaps. ``plan parameters`` lists ``warn`` and ``warn_urls``
+    per standard, only the names the standard uses."""
+    from asi_kletz.services.standards_service import STATUS_NOT_FETCHED
+
+    assert seeded.execute("update", entity=PLAN, id=1, data={"urls": ["https://www.microsoft.com/"]}).ok
+    assert seeded.execute("update", entity=PLAN, id=2, set=["ref_qf_17=1", "jira_key=HWL-7"]).ok
+    assert seeded.execute("update", entity=PLAN, id=2, data={"urls": ["https://asirobots.atlassian.net/wiki/x"]}).ok
+    assert seeded.execute("update", entity=PLAN, id=3, set=["jira_key=HWL-8"]).ok
+    rows = seeded.execute("list", entity=PLAN).data
+    gaps: list[str] = []
+    values = seeded.standards.row_values(rows, {"HWL-7": None, "HWL-8": "Done"}, [], gaps)
+    assert values["row_1_jira_key"] == "no ticket attached" and values["row_1_url"] == "https://www.microsoft.com/"
+    assert values["row_2_status"] == STATUS_NOT_FETCHED and values["row_3_status"] == "Done"
+    assert "row_3_url" not in values
+    assert gaps == ["row_1_jira_key", "row_1_url", "row_2_status"]
+    _stub(seeded, monkeypatch, {"HWL-7": "Open", "HWL-8": "Done"})
+    preview = seeded.execute("plan", action="parameters", row=1)
+    assert preview.ok, preview.errors
+    [std] = preview.data["standards"]
+    assert std["warn"] == ["row_1_jira_key"] and std["warn_urls"] == []  # the test standard has no row_N_url
+    source = standards / "qf-17-test" / "qf-17-test.md"
+    linked = source.read_text(encoding="utf-8").replace("| Safety Plan |", "| [Safety Plan]({{ row_1_url }}) |")
+    source.write_text(linked, encoding="utf-8")
+    [std] = seeded.execute("plan", action="parameters", row=1).data["standards"]
+    assert std["warn"] == ["row_1_jira_key", "row_1_url"] and std["warn_urls"] == ["https://www.microsoft.com/"]
 
 
 def test_export_default_out_is_the_config_out(seeded, standards):

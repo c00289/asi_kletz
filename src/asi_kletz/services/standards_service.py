@@ -20,6 +20,11 @@ of the parameter being a string it is now an array of human names sorted alphabe
 email alongside name." A role parameter (``schema.people.is_role``) holds ``people``; its ``value`` is a
 legacy string written before 0.19.0 (a name with no email yet), kept, printed verbatim and replaced the moment
 people are saved. A role renders inline as ``Ann Lee (ann@...), Ben Ray (ben@...)``.
+
+0.26.0, the owner: "when the link is microsoft.com because of default, or blank, highlight in pinkish red
+instead of blue; and when no Jira ticket is attached also highlight as pinkish red." ``row_values`` names the
+gaps beside the values (``warn``), ``value_set`` carries them per standard with the placeholder urls
+(``warn_urls``), and ``export`` hands both to asi_gutenberg 0.10.0, which paints them.
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ from ..generate import plan_queries as pq
 from ..generate.plan_schedule import SOURCE_FLOOR, weight_of
 from ..schema.definitions import NO_TICKET, ROLE_SLUGS
 from ..schema.people import PeopleError, is_role, parse_people, people_json, people_of, render_people
-from ..schema.urls import urls_of
+from ..schema.urls import url_kind, urls_of
 
 if TYPE_CHECKING:
     from ..brain import Brain
@@ -281,10 +286,17 @@ class StandardsService:
         return out
 
     def row_values(
-        self, rows: list[dict[str, Any]], statuses: dict[str, str | None], warnings: list[str] | None = None
+        self, rows: list[dict[str, Any]], statuses: dict[str, str | None], warnings: list[str] | None = None,
+        warn: list[str] | None = None,
     ) -> dict[str, str]:
         """``row_N_points``, ``row_N_sprint_end``, ``row_N_jira_key``, ``row_N_status``, ``row_N_url`` and
-        ``row_N_urls`` for every plan row that has an order.
+        ``row_N_urls`` for every plan row that has an order; ``warn`` (0.26.0) collects, beside the values, the
+        names whose value is a gap rather than an answer: ``row_N_jira_key`` when it is ``no ticket attached``,
+        ``row_N_status`` when it is ``status not fetched (sign in to Jira)``, ``row_N_url`` when the url is the
+        placeholder (``url_kind == "placeholder"``). The export paints them pinkish red (the owner, 2026-10-29:
+        "when the link is microsoft.com because of default, or blank, highlight in pinkish red instead of
+        blue; and when no Jira ticket is attached also highlight as pinkish red"); a row with no url at all
+        leaves ``row_N_url`` unfilled, and the fill paints the deliverable's name, its empty link, the same.
 
         The points are the weight the schedule used for the row, as ``plan_schedule.weight_of`` resolves it
         (the owner's revision of 2026-10-29): the chosen ``points`` when set, else the row's
@@ -300,6 +312,7 @@ class StandardsService:
         """
         values: dict[str, str] = {}
         floored: list[str] = []
+        gaps = warn if warn is not None else []
         for row in rows:
             order = row.get("order")
             if order is None:
@@ -314,14 +327,21 @@ class StandardsService:
             key = (row.get("jira_key") or "").strip().upper()
             if key:
                 values[f"row_{order}_jira_key"] = key.split(":", 1)[0].strip()
-                values[f"row_{order}_status"] = str(statuses[key]) if statuses.get(key) else STATUS_NOT_FETCHED
+                if statuses.get(key):
+                    values[f"row_{order}_status"] = str(statuses[key])
+                else:
+                    values[f"row_{order}_status"] = STATUS_NOT_FETCHED
+                    gaps.append(f"row_{order}_status")
             else:  # 0.25.1: a readable cell, never a placeholder, where there is no ticket or no session
                 values[f"row_{order}_jira_key"] = NO_TICKET
                 values[f"row_{order}_status"] = ""
+                gaps.append(f"row_{order}_jira_key")
             urls = urls_of(row.get("urls"))
             if urls:
                 values[f"row_{order}_url"] = urls[0]
                 values[f"row_{order}_urls"] = "\n".join(urls)
+                if url_kind(urls[0], self.brain.url_hosts) == "placeholder":
+                    gaps.append(f"row_{order}_url")
         if floored and warnings is not None:
             warnings.append(
                 f"row(s) {', '.join(floored)} have neither points nor a default: their points stay unfilled"
@@ -344,24 +364,31 @@ class StandardsService:
             return {}
 
     def value_set(self, row_id: int, standard: str | None = None) -> dict[str, Any]:
-        """What an export of ``row_id`` would fill, per standard, without building anything."""
+        """What an export of ``row_id`` would fill, per standard, without building anything; per standard also
+        ``warn``, the names among its values that are gaps (0.26.0: the export paints them pinkish red), and
+        ``warn_urls``, the placeholder urls among its ``row_N_url`` values (a link to one is pinkish red, still
+        a link), so an agent reading ``plan parameters`` sees the gaps."""
         row = self.brain.service(pq.PLAN_ENTITY).get(row_id)
         standards = [self.load(standard)] if standard else self.for_row(row)
         if not standards:
             raise CommandError(NO_STANDARD.format(root=self.root()) + f" (row {row_id})")
         rows = pq.all_rows(self.brain)
         warnings: list[str] = []
+        gaps: list[str] = []
         statuses = self.jira_statuses(rows, warnings)
-        row_values = self.row_values(rows, statuses, warnings)
+        row_values = self.row_values(rows, statuses, warnings, gaps)
         out = []
         for std in standards:
             values = {**self.document_values(std), **row_values}
             used = {name: values[name] for name in std.parameters if name in values}
             summary = self.role_summary(std)
             warnings.extend(self.role_warnings(std.folder, summary))
+            warn = [name for name in gaps if name in used]
+            warn_urls = sorted({used[name] for name in warn if name.endswith("_url")})
             out.append({
                 **std.to_dict(), "values": used, **summary,
                 "filled": len(used), "unfilled": [name for name in std.parameters if name not in values],
+                "warn": warn, "warn_urls": warn_urls,
             })
         return {"row": row_id, "order": row.get("order"), "standards": out, "statuses": statuses, "warnings": warnings}
 
@@ -385,7 +412,13 @@ class StandardsService:
         (the tables split, by first heading) and ``pages`` (Word's count when it ran, else the rendering's);
         without Word the Word file keeps the verbatim repeating header and a warning says so. The deliverable
         names the source links (``[Safety Plan]({{ row_N_url }})``) come out as blue hyperlinks to the row's
-        first work product URL (asi_gutenberg 0.9.0)."""
+        first work product URL (asi_gutenberg 0.9.0).
+
+        0.26.0: the gaps are pinkish red (asi_gutenberg 0.10.0's attention mark, ``warn`` and ``warn_urls`` of
+        ``value_set`` handed to ``build`` and ``fill_docx``): ``no ticket attached`` and ``status not fetched``
+        shaded ``warn_bg`` instead of green, a deliverable name over the placeholder url still a link but dark
+        red over ``warn_bg`` instead of blue, a deliverable with no url at all shaded ``warn_bg``; every other
+        filled value green, every real link blue. The Markdown keeps ``!!…!!`` for those."""
         import json
 
         from asi_gutenberg import build, fill_docx, from_markdown
@@ -400,6 +433,7 @@ class StandardsService:
             paths = build(
                 from_markdown(source), str(target), name=std["folder"],
                 params=std["values"], strict_params=False, mark_params=True,
+                warn=std["warn"], warn_urls=std["warn_urls"],
             )
             issues = [str(i) for i in paths.pop("issues", [])]
             unfilled = sorted(i[len(UNFILLED):] for i in issues if i.startswith(UNFILLED))
@@ -415,6 +449,7 @@ class StandardsService:
                 filled = fill_docx(
                     std["template"], source, std["values"], str(target / f"{std['folder']}.docx"),
                     strict=False, mark=True, pdf=True, abridged_headers=mapping,
+                    warn=std["warn"], warn_urls=std["warn_urls"],
                 )
                 files["docx"] = filled.docx
                 exact["docx"] = True
@@ -433,6 +468,7 @@ class StandardsService:
             built.append({
                 "standard": std["folder"], "title": std["title"], "files": files, "primary": files.get("pdf"),
                 "pages": pages, "abridged": abridged, "filled": std["filled"], "unfilled": unfilled,
+                "warn": std["warn"], "warn_urls": std["warn_urls"],
                 "template": std.get("template"), "abridged_headers": std.get("abridged_headers"), "exact": exact,
                 "issues": [i for i in issues if not i.startswith(UNFILLED)],
             })

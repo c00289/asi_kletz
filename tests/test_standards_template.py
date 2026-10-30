@@ -14,6 +14,8 @@ from tests.test_standards import _stub, standards_dir
 
 WINWORD = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Microsoft Office/root/Office16/WINWORD.EXE"
 GREEN = "A0D8A0"  # asi_gutenberg 0.7.2 THEME["mark_bg"], the owner's "nice green, not neon, not forest"
+PINK = "F4C2C2"  # asi_gutenberg 0.10.0 THEME["warn_bg"], the owner's "pinkish red" for a gap
+DARK_RED = "B71C1C"  # asi_gutenberg 0.10.0 THEME["warn_fg"], the text of a link to the placeholder
 
 
 def _fill_of(run) -> str | None:
@@ -93,6 +95,9 @@ def test_export_fills_the_word_original_when_the_standard_has_one(seeded, standa
     assert shaded == ["Wheel Loader", "the contractor"]  # 0.17.0: the filled values shaded the theme's green
     status_runs = [r.text for p in table.cell(1, 2).paragraphs for r in p.runs if _fill_of(r) == green]
     assert status_runs == ["HWL-2554", "In Progress"]
+    no_ticket = [(r.text, _fill_of(r)) for p in table.cell(2, 2).paragraphs for r in p.runs if r.text]
+    assert no_ticket == [("no ticket attached", PINK)]  # 0.26.0: a gap, pinkish red, never green
+    assert built["warn"] == ["row_2_jira_key"] and built["warn_urls"] == []
     assert not any(_fill_of(r) == green for r in author.runs[:1])  # the template's own text is not
     assert "==Wheel Loader==" in Path(built["files"]["md"]).read_text(encoding="utf-8")  # the source keeps them
     if WINWORD.is_file():
@@ -177,24 +182,50 @@ def _linked_standard(standards: Path) -> Path:
 
 def _links_of(cell) -> list[tuple[str, str, str | None, str | None]]:
     """Every hyperlink of a Word cell: (target, text, character style, shading fill)."""
+    return [(target, text, style, fill) for target, text, style, _colour, fill in _coloured_links_of(cell)]
+
+
+def _coloured_links_of(cell) -> list[tuple[str, str, str | None, str | None, str | None]]:
+    """Every hyperlink of a Word cell: (target, text, character style, text colour, shading fill)."""
     from docx.oxml.ns import qn
 
     out = []
     for h in cell._tc.iter(qn("w:hyperlink")):
         rpr = h.find(qn("w:r") + "/" + qn("w:rPr"))
         style = rpr.find(qn("w:rStyle")) if rpr is not None else None
+        colour = rpr.find(qn("w:color")) if rpr is not None else None
         shd = rpr.find(qn("w:shd")) if rpr is not None else None
         text = "".join(t.text or "" for t in h.iter(qn("w:t")))
         out.append((cell.part.rels[h.get(qn("r:id"))].target_ref, text,
                     style.get(qn("w:val")) if style is not None else None,
+                    colour.get(qn("w:val")) if colour is not None else None,
                     shd.get(qn("w:fill")) if shd is not None else None))
     return out
 
 
+def _cell_fills(cell) -> list[tuple[str, str | None]]:
+    """Every run of a cell with text, inside and outside its hyperlinks: (text, shading fill)."""
+    from docx.oxml.ns import qn
+
+    out = []
+    for r in cell._tc.iter(qn("w:r")):
+        text = "".join(t.text or "" for t in r.findall(qn("w:t")))
+        if text:
+            shd = r.find(qn("w:rPr") + "/" + qn("w:shd"))
+            out.append((text, shd.get(qn("w:fill")) if shd is not None else None))
+    return out
+
+
+CONFLUENCE = "https://asirobots.atlassian.net/wiki/pages/viewpage.action?pageId=399343803"
+
+
 def test_export_links_the_deliverable_and_passes_the_abridged_headers(seeded, standards, tmp_path, monkeypatch):
-    """0.21.0: the deliverable cell of a row with a URL is a blue hyperlink to its first URL; a row without
-    one keeps the plain name; ``abridged-headers.json`` beside the source goes to the fill as the mapping
-    and the export carries what Word did (``abridged``, ``pages``), here with the Word session replaced."""
+    """0.21.0: the deliverable cell of a row with a URL is a hyperlink to its first URL, blue when it is a real
+    one; 0.26.0: pinkish red, dark red text, still a link, when it is the placeholder (the owner: "when the
+    link is microsoft.com because of default ... highlight in pinkish red instead of blue"); the no-ticket
+    key pinkish red, the points green; ``abridged-headers.json`` beside the source goes to the fill as the
+    mapping and the export carries what Word did (``abridged``, ``pages``), here with the Word session
+    replaced."""
     from importlib import import_module
 
     import docx
@@ -207,7 +238,9 @@ def test_export_links_the_deliverable_and_passes_the_abridged_headers(seeded, st
     for data in PARAMETERS:
         assert seeded.execute("create", entity="parameter", data=data).ok
     assert seeded.execute("update", entity=PLAN, id=1, data={"urls": [MS, "https://dms.example.com/doc/17"]}).ok
-    _stub(seeded, monkeypatch, {})
+    assert seeded.execute("update", entity=PLAN, id=2, set=["ref_qf_17=1", "jira_key=HWL-7", "points=2"]).ok
+    assert seeded.execute("update", entity=PLAN, id=2, data={"urls": [CONFLUENCE]}).ok
+    _stub(seeded, monkeypatch, {"HWL-7": "Open"})
     sessions: list[dict] = []
 
     def fake_session(docx_path, pdf_path, plan=None, timeout=180, read_only_recommended=False):
@@ -227,17 +260,23 @@ def test_export_links_the_deliverable_and_passes_the_abridged_headers(seeded, st
     assert built["exact"] == {"docx": True, "pdf": True} and Path(built["primary"]) == out / "qf-17-test.pdf"
     [session] = sessions
     assert session["plan"] == [{"index": 1, "first": "Deliverable", "short": ["Del.", "Duration", "Status"]}]
-    assert any("unfilled parameter row_2_url" in w for w in result.warnings)
+    assert built["warn"] == ["row_1_jira_key", "row_1_url"]
+    assert built["warn_urls"] == [MS]
     word = docx.Document(built["files"]["docx"])
     table = word.tables[0]
     assert table.cell(1, 0).text == "Safety Plan"
-    assert _links_of(table.cell(1, 0)) == [(MS, "Safety Plan", "Hyperlink", BLUE)]  # the first URL, blue
-    assert not any(s.get(qn("w:fill")) == GREEN for s in table.cell(1, 0)._tc.iter(qn("w:shd")))  # not green
-    assert table.cell(2, 0).text == "HARA" and _links_of(table.cell(2, 0)) == []  # no URL: the plain name
-    assert not any(True for _ in table.cell(2, 0)._tc.iter(qn("w:shd")))
+    # the first URL is the placeholder: still a hyperlink to it, dark red over pinkish red, not blue (0.26.0)
+    assert _coloured_links_of(table.cell(1, 0)) == [(MS, "Safety Plan", "Hyperlink", DARK_RED, PINK)]
+    assert not any(s.get(qn("w:fill")) in (GREEN, BLUE) for s in table.cell(1, 0)._tc.iter(qn("w:shd")))
+    assert table.cell(2, 0).text == "HARA"  # a real URL: blue, Word's own hyperlink colour
+    assert _coloured_links_of(table.cell(2, 0)) == [(CONFLUENCE, "HARA", "Hyperlink", "0563C1", BLUE)]
+    assert _cell_fills(table.cell(1, 2)) == [("no ticket attached", PINK)]  # the key: a gap
+    assert _cell_fills(table.cell(2, 2)) == [("HWL-7", GREEN), ("Open", GREEN)]  # a ticket: green
+    assert ("2", GREEN) in _cell_fills(table.cell(2, 1))  # the points: green
     assert "Hyperlink" in [s.name for s in word.styles]
     md = Path(built["files"]["md"]).read_text(encoding="utf-8")
-    assert f"[Safety Plan]({MS})" in md and "[HARA]({{ row_2_url }})" in md  # the url never marked
+    assert f"[!!Safety Plan!!]({MS})" in md and f"[HARA]({CONFLUENCE})" in md  # the url never marked
+    assert "!!no ticket attached!!<br>" in md and "==HWL-7==<br>==Open==" in md
 
 
 def test_without_word_the_abridged_headers_are_a_warning(seeded, standards, tmp_path, monkeypatch):
@@ -263,12 +302,18 @@ def test_without_word_the_abridged_headers_are_a_warning(seeded, standards, tmp_
     assert any("abridged headers need Word" in w and "keeps the verbatim header on every page" in w
                for w in result.warnings)
     assert any("pdf through Word failed: no Word here; the PDF is Gutenberg's rendering" in w for w in result.warnings)
+    assert any("unfilled parameter row_2_url" in w for w in result.warnings)
     import docx
     from docx.oxml.ns import qn
 
     word = docx.Document(built["files"]["docx"])
     assert len(word.tables) == 1 and word.tables[0].rows[0]._tr.find(".//" + qn("w:tblHeader")) is not None
-    assert _links_of(word.tables[0].cell(1, 0)) == [(MS, "Safety Plan", "Hyperlink", BLUE)]
+    assert _links_of(word.tables[0].cell(1, 0)) == [(MS, "Safety Plan", "Hyperlink", PINK)]  # the placeholder
+    # no URL at all: the plain name, no link, shaded pinkish red (the owner: "or blank")
+    assert word.tables[0].cell(2, 0).text == "HARA" and _links_of(word.tables[0].cell(2, 0)) == []
+    assert _cell_fills(word.tables[0].cell(2, 0)) == [("HARA", PINK)]
+    md = Path(built["files"]["md"]).read_text(encoding="utf-8")
+    assert "[HARA]({{ row_2_url }})" in md  # the Markdown keeps the blank; the renderings paint it as a gap
 
 
 @pytest.mark.skipif(not WINWORD.is_file(), reason="Word is not installed here")
