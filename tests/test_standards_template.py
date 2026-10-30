@@ -361,7 +361,7 @@ def test_a_refused_gutenberg_rendering_still_fills_the_word_original(seeded, sta
     [built] = result.data["exports"]
     md = Path(built["files"]["md"]).read_text(encoding="utf-8")
     assert _stamped(built["files"]["md"], out, "qf-17-test", "md") and "!!no ticket attached!!" in md  # filled, marked
-    assert "pdf" not in built["files"] or built["exact"]["pdf"] is True  # Gutenberg's own PDF is not there to fall back on
+    assert "pdf" not in built["files"] or built["exact"]["pdf"] is True  # no Gutenberg PDF to fall back on
     assert _stamped(built["files"]["docx"], out, "qf-17-test", "docx") and built["exact"]["docx"] is True
     assert isinstance(built["unfilled"], list) and "vehicle_type" in built["unfilled"]  # nothing set it here
     assert any("could not render its own PDF and Word file (RuntimeError: LayoutError" in w for w in result.warnings)
