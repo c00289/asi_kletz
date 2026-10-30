@@ -205,7 +205,7 @@ class ExcelExporter(Exporter):
                     if value is None:
                         if spec.name == "jira_key":  # 0.20.0, the owner: say so instead of an empty cell
                             cell.value = NO_TICKET
-                            if has_urls:  # a gap on the Safety Plan only: a meeting or a question has no ticket by nature
+                            if has_urls:  # a Safety Plan gap only: a meeting or a question has no ticket by nature
                                 self._gap(cell)
                                 gaps["no_ticket"] += 1
                             widths[col - 1] = max(widths[col - 1], len(NO_TICKET))
