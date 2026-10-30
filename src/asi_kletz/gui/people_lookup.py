@@ -17,7 +17,7 @@ from tkinter import ttk
 from typing import TYPE_CHECKING, Any
 
 from ..commands import Result
-from .jira_live_screen import POLL_MS, WAIT_FETCH_TIMEOUT, BackgroundFetch
+from .background import POLL_MS, WAIT_FETCH_TIMEOUT, BackgroundFetch
 
 if TYPE_CHECKING:
     from .main_window import MainWindow

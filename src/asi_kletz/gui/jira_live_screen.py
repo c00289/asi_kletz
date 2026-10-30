@@ -27,7 +27,7 @@ from typing import Any
 
 from ..commands import Result
 from ..services.jira_service import AUTOFETCH_DEFAULT, LIVE_LIMIT
-from .background import POLL_MS, WAIT_FETCH_TIMEOUT, BackgroundFetch  # noqa: F401  (re-exported for the windows)
+from .background import POLL_MS, WAIT_FETCH_TIMEOUT, BackgroundFetch
 from .screens import Screen, fit_columns
 
 ALL = "(all)"

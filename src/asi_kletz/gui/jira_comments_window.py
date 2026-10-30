@@ -20,7 +20,8 @@ from tkinter import ttk
 from typing import TYPE_CHECKING, Any
 
 from ..commands import Result
-from .jira_live_screen import POLL_MS, WAIT_FETCH_TIMEOUT, BackgroundFetch, local_clock
+from .background import POLL_MS, WAIT_FETCH_TIMEOUT, BackgroundFetch
+from .jira_live_screen import local_clock
 from .screens import ScrollableFrame
 
 if TYPE_CHECKING:

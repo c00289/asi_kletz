@@ -28,10 +28,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from .definitions import ROLE_SLUGS
+from .lists import typed_items
 
 PERSON_LINE = re.compile(r"^(?P<name>[^<>]*?)\s*<(?P<email>[^<>]*)>$")
 EMAIL = re.compile(r"^[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]+$")
-SEPARATORS = re.compile(r"[;\r\n]+")
 WRITE = "write Name <email>"
 
 
@@ -73,28 +73,11 @@ def sort_people(people: Iterable[Person]) -> list[Person]:
 
 
 def _items(value: Any) -> list[Any]:
-    """The raw entries behind ``value``: a list as given; text split on ``;`` and line breaks, or parsed when
-    it is a JSON array."""
-    if value is None:
-        return []
-    if isinstance(value, (list, tuple)):
-        return list(value)
-    if isinstance(value, Person):
+    """The raw entries behind ``value``: one person as given; else ``lists.typed_items`` (a list as given; text
+    split on ``;`` and line breaks, or parsed when it is a JSON array)."""
+    if isinstance(value, (Person, dict)):
         return [value]
-    if isinstance(value, dict):
-        return [value]
-    text = str(value).replace("\xa0", " ").strip()
-    if not text:
-        return []
-    if text.startswith("["):
-        try:
-            parsed = json.loads(text)
-        except ValueError as exc:
-            raise PeopleError([f"not a JSON array of people: {exc}"]) from None
-        if not isinstance(parsed, list):
-            raise PeopleError(["not a JSON array of people"])
-        return parsed
-    return [part.strip() for part in SEPARATORS.split(text) if part.strip()]
+    return typed_items(value, "people", PeopleError)
 
 
 def _person(item: Any, where: str) -> Person:

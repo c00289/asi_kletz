@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 
 SPRINT, ITEM, WEEK, HOLIDAY = "sprint", "sprint_item", "week", "holiday"
 VELOCITY_WINDOW = 3  # closed sprints averaged
-OPEN_ITEM_STATUSES = ("To Do", "In Progress")
 
 
 def parse_date(value: Any, name: str = "date") -> dt.date:
@@ -109,10 +108,6 @@ def done(rows: list[dict[str, Any]]) -> int:
 
 def unpointed(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [r for r in rows if not r.get("points") and r.get("status") != "Carried"]
-
-
-def open_items(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [r for r in rows if r.get("status") in OPEN_ITEM_STATUSES or not r.get("status")]
 
 
 def days_left(sprint: dict[str, Any], as_of: dt.date) -> int | None:

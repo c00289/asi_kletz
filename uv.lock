@@ -74,7 +74,7 @@ dev = [
 
 [[package]]
 name = "asi-hopper"
-version = "0.1.9"
+version = "0.1.10"
 source = { editable = "../asi_hopper" }
 dependencies = [
     { name = "keyring" },
@@ -95,7 +95,7 @@ dev = [
 
 [[package]]
 name = "asi-kletz"
-version = "0.24.0"
+version = "0.24.1"
 source = { editable = "." }
 dependencies = [
     { name = "asi-escher" },

@@ -25,7 +25,8 @@ from collections.abc import Iterable
 from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
-SEPARATORS = re.compile(r"[;\r\n]+")
+from .lists import typed_items
+
 SCHEMES = ("http", "https")
 WRITE = "write an absolute http(s) URL, one per line"
 
@@ -39,24 +40,9 @@ class UrlsError(ValueError):
 
 
 def _items(value: Any) -> list[Any]:
-    """The raw entries behind ``value``: a list as given; text split on ``;`` and line breaks, or parsed when
-    it is a JSON array."""
-    if value is None:
-        return []
-    if isinstance(value, (list, tuple)):
-        return list(value)
-    text = str(value).replace("\xa0", " ").strip()
-    if not text:
-        return []
-    if text.startswith("["):
-        try:
-            parsed = json.loads(text)
-        except ValueError as exc:
-            raise UrlsError([f"not a JSON array of URLs: {exc}"]) from None
-        if not isinstance(parsed, list):
-            raise UrlsError(["not a JSON array of URLs"])
-        return parsed
-    return [part.strip() for part in SEPARATORS.split(text) if part.strip()]
+    """The raw entries behind ``value``: ``lists.typed_items`` (a list as given; text split on ``;`` and line
+    breaks, or parsed when it is a JSON array)."""
+    return typed_items(value, "URLs", UrlsError)
 
 
 def is_url(text: Any) -> bool:

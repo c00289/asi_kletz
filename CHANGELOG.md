@@ -12,6 +12,34 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.24.1] - 2026-10-29
+
+A broken-windows sweep of the repository at the end of 2026-10-29 (0.15.1 to 0.24.0 shipped that day); no
+behaviour changes. Schema version unchanged (11).
+
+### Removed
+- `generate/charts.py:is_chart` and `generate/sprint_queries.py:open_items` (with `OPEN_ITEM_STATUSES`): no
+  caller in the source or the tests.
+
+### Changed
+- `schema/lists.py:typed_items` is the one reading of a typed list (a JSON array, or text split on `;` and line
+  breaks) that `schema/people.py` and `schema/urls.py` each carried as their own `_items`; the people reader
+  keeps its one-person case, the URL reader is the call. The messages and the errors are what they were.
+- The comments window, the Look up and Find page windows and the ticket loader import `BackgroundFetch`,
+  `POLL_MS` and `WAIT_FETCH_TIMEOUT` from `gui/background.py`, where 0.24.0 put them, instead of through the
+  JIRA Live Data screen's re-export, which is gone.
+
+### Fixed
+- README: no "What is in" section for 0.14.1, 0.15.1, 0.15.2, 0.15.3, 0.16.0, 0.16.1 and 0.17.0, although
+  every other release has one; the Layout tree lacked the `stpa/` package, the services added since 0.15.3,
+  `gui/background.py`, `people_lookup.py`, `page_lookup.py`, `trace.py` and the two 0.24.0 screens, and its
+  `tests/` line named seventeen of the thirty test modules.
+- CHANGELOG: no compare links for 0.22.0, 0.23.0 and 0.24.0, and `[Unreleased]` compared against 0.19.0.
+- `docs/plan.md` said "0.15.3 delivered" while section 8 stopped at 0.15.0; the rows for 0.15.1 to 0.24.0
+  are there now.
+- `uv.lock` takes asi_kletz 0.24.1 and asi_hopper 0.1.10 (the sibling's own sweep of the same day, committed on its
+  `main`, which is what CI checks out); asi_escher stays 0.2.1 and asi_gutenberg 0.9.0.
+
 ## [0.24.0] - 2026-10-29
 
 STPA moves to Kletz. The owner, 2026-10-29: "control structures were supposed to go into Kletz and not Dewey";
@@ -2014,7 +2042,11 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://example.invalid/asi-kletz/compare/v0.19.0...HEAD
+[Unreleased]: https://example.invalid/asi-kletz/compare/v0.24.1...HEAD
+[0.24.1]: https://example.invalid/asi-kletz/compare/v0.24.0...v0.24.1
+[0.24.0]: https://example.invalid/asi-kletz/compare/v0.23.0...v0.24.0
+[0.23.0]: https://example.invalid/asi-kletz/compare/v0.22.0...v0.23.0
+[0.22.0]: https://example.invalid/asi-kletz/compare/v0.21.0...v0.22.0
 [0.21.0]: https://example.invalid/asi-kletz/compare/v0.20.0...v0.21.0
 [0.20.0]: https://example.invalid/asi-kletz/compare/v0.19.0...v0.20.0
 [0.19.0]: https://example.invalid/asi-kletz/compare/v0.18.1...v0.19.0

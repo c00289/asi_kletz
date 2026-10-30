@@ -80,10 +80,6 @@ class Chart:
         return summary
 
 
-def is_chart(obj: Any) -> bool:
-    return isinstance(obj, Chart)
-
-
 def sprint_for(brain: Brain, params: dict[str, str]) -> dict[str, Any]:
     """The sprint a ``sprint`` param names, else the active one; ``CommandError`` when there is neither."""
     value = params.get("sprint")

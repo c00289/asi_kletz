@@ -1,6 +1,6 @@
 # ASI Kletz — Plan
 
-**Status:** 0.15.3 delivered
+**Status:** 0.24.1 delivered
 **Started:** 2026-10-27
 **Owner:** FuSa engineer
 
@@ -180,12 +180,24 @@ implementation produced by a factory.
 | 0.13.0 | Sprint items point at plan rows by uid too (`sprint_item.plan_uid`, hidden, schema version 7; filled on open; the uid wins; a file's uid re-resolves the id; the scheduler pins by uid; see [hidden-identity-plan.md](hidden-identity-plan.md) open question 1), continuous integration (`.github/workflows/ci.yml`), the lock in step with the version | done 2026-10-28 |
 | 0.14.0 | Standards and export (schema version 8): `jira_key` on the plan row, the `parameter` entity and screen, `standards_dir`, `services/standards_service.py`, the `standards` verb, `plan export` / `plan parameters` through asi_gutenberg's parameters, the standards pane at the top of the Safety Plan's details | done 2026-10-29 |
 | 0.15.0 | The exported points are the weight the schedule used (chosen, else the default; neither stays unfilled); a Jira ticket picker on every work product (`JiraPickerWidget`, `FieldSpec.picker`, Load tickets through the live screen's fetch path, `TicketLoader`); `plan tickets` | done 2026-10-29 |
+| 0.15.1 to 0.15.3 | A plan out of phase order paints whole (`pdp:2#2`, 0.15.1); the mouse wheel over a combobox never picks a value (0.15.2); the broken-windows sweep (0.15.3) | done 2026-10-29 |
+| 0.16.0, 0.16.1 | The export writes the Word original filled in place (asi_gutenberg 0.7.0 `fill_docx`, `Standard.template`, `exact`), the PDF Word's own print; a failed print keeps Gutenberg's PDF (0.16.1) | done 2026-10-29 |
+| 0.17.0 | The Word original filled with green marks; `row_N_jira_key` stacked over the status | done 2026-10-29 |
+| 0.18.0, 0.18.1 | Sprints on the owner's law (Tuesday to Monday, 14 days, Sprint 31 = 2026-10-27, 8 points): the cadence guard, `sprint plan` in fortnights, `sprint align`; `sprint_days` ignored; `gui.log` and `faulthandler` (0.18.1) | done 2026-10-29 |
+| 0.19.0 | The people of a role: `parameter.people` (schema version 9), `schema/people.py`, the two editors one person per line | done 2026-10-29 |
+| 0.20.0 | Work product URLs per deliverable (`safety_plan_row.urls`, schema version 10), `schema/urls.py`, the Outlook Look up (`people lookup`), `plan urls --placeholder`, the Work product columns of the export | done 2026-10-29 |
+| 0.21.0 | The deliverable's name a hyperlink in the exported QF-17 and the Excel sheet; `abridged-headers.json` wired into the Word print | done 2026-10-29 |
+| 0.22.0 | URL kinds (`schema/urls.py:url_kind`, `[urls] hosts`), `plan urls --audit` and `--replace`; Phase A of asi_hopper's Confluence integration plan | done 2026-10-29 |
+| 0.23.0 | Confluence read only through Hopper: the `confluence` verb (search, page, link, evidence, check), `evidence_dir`, `[confluence] space`, the Find page window, the Work product links tiles; Phase B | done 2026-10-29 |
+| 0.24.0 | STPA moves to Kletz (schema version 11): the thirteen control-structure and STPA entities, the rules, the two factories (`stpa/`), the `cs` and `stpa` verbs, the two screens, the STPA tiles, `control_structures_dir`; see [control-structure-plan.md](control-structure-plan.md) | done 2026-10-29 |
+| 0.24.1 | The end-of-day sweep: two uncalled functions gone, `lists.typed_items` shared by the people and URL readers, the documents put straight | done 2026-10-29 |
 | later | Approval mode, form puppeting, import diff preview, date picker | planned |
 
 ---
 
 ## 9. Change log
 
+- 2026-10-29 0.24.1: the status line (0.15.3 to 0.24.1) and the section 8 rows for 0.15.1 to 0.24.1, which the day's releases had not added.
 - 2026-10-28 0.8.1: the section 8 row for the tracker screens and the dashboard strip.
 - 2026-10-28 0.10.0: the section 8 rows for the hidden identity (0.9.0) and the sprint planner (0.10.0).
 - 2026-10-28 0.11.0: the section 8 row for the points and the calculated sprint and deadline.

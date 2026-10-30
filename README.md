@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.24.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.24.1**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,13 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.24.1
+
+The end-of-day sweep of 2026-10-29, no behaviour change: two functions nothing called are gone, the people and
+the URL readers share one `typed_items` (`schema/lists.py`), the windows import `BackgroundFetch` from
+`gui/background.py` directly, and the documents are put straight (the sections below for every patch of the
+day, the Layout tree, the CHANGELOG's compare links, `docs/plan.md`'s delivery table).
 
 ## What is in 0.24.0
 
@@ -225,6 +232,63 @@ is no setting any more (ignored with a warning; `status` reports `sprint_length_
 gone from `sprint plan`. The rule of 2026-10-28 (10 business days, holidays stretching the dates) is
 superseded; the holiday table stays for the burndown and for the `Holidays:` line a planned sprint carries.
 
+## What is in 0.17.0
+
+The owner, 2026-10-29, on the exported QF-17: "bring back the color formatting for parameters and make it a
+nice green, not neon, not forest ... please include the prefix before the colon of the assigned Jira ticket
+name stacked with a line break, with points at the top and the status at the bottom." The Word original is
+filled with marks again (asi_gutenberg 0.7.2's `mark_bg`, the theme's green; 0.16.0 wrote it unmarked), and
+a new row parameter, `row_N_jira_key` (the deliverable's key, upper-cased, the part before a colon), is what
+the QF-17 source stacks over `row_N_status` in the Status column, the points staying at the top of the
+Expected Duration/Deadline cell. Since 0.21.0 the deliverable's own name is a blue link instead of a green
+mark; the parameters keep the green.
+
+## What is in 0.16.1
+
+The family's integration review of 2026-10-29. An export whose Word print failed (no Word on the machine,
+as on the CI runner; a COM failure) named a PDF that was gone, because asi_gutenberg 0.7.0 removed its own
+rendering before asking Word; 0.7.1 prints to a working name and replaces the target only once the print is
+there, so the 0.16.0 promise holds: when Word cannot print, the PDF stays Gutenberg's rendering, with a
+warning. The extra role lines of a filled cell take the template's run formatting too.
+
+## What is in 0.16.0
+
+**The export writes the Word original filled in place.** The owner, 2026-10-29, on the exported QF-17: "can
+we make it exactly like the template? I still want all the columns to pop up in every page but otherwise we
+need to match the template exactly." A standard whose folder holds exactly one `.docx` under `source/` (the
+controlled original, preserved byte for byte in asi_standards) names it as its template, and `plan export`
+writes that original with the source's text put into its own runs by asi_gutenberg 0.7.0's `fill_docx`:
+every style, header, footer, table, column width and page orientation the template's, every table's first
+row repeating at the top of each page it spans, a value changed only where the source changed it. The PDF is
+Word's own print of that file (Windows with Word); when Word cannot print, the PDF stays Gutenberg's
+rendering and a warning says so. Each export entry carries `template` and `exact` (`{"docx": bool, "pdf":
+bool}`); the Safety Plan pane's export status says what was exact. See [Standards and
+export](#standards-and-export).
+
+## What is in 0.15.3
+
+A broken-windows sweep after the 0.15.x patches, no behaviour change: `EntitySchema.all_columns` and
+`SqlRepository.bulk_insert` (no caller) are gone; the README's Configuration section names the `Parameters`
+sheet, the Layout tree the `tracker/` package and the services added since 0.8.0; the CHANGELOG's compare
+links run to 0.15.2; `uv.lock` takes 0.15.3, asi_hopper 0.1.6 and asi_escher 0.1.2.
+
+## What is in 0.15.2
+
+The owner, 2026-10-29: "we might have found a bug in the Jira ticketing system". The audit log showed a plan
+row saved with its PDP phase and lifecycle phase each one step past its value while a Jira ticket was being
+attached: Tk 8.6 binds the mouse wheel on every combobox to "select the next value", so scrolling the form
+with the pointer passing over a phase, status or Jira ticket box silently changed it. The window drops that
+class binding once at start: the wheel scrolls, a value changes only by a pick or a keystroke.
+
+## What is in 0.15.1
+
+The owner, 2026-10-29, after attaching Jira tickets: "as I was flipping through screens at some point the
+deliverables scroller got stuck and I could only see the first couple of rows". A plan out of phase order
+(the first row saved under PDP phase 2, rows 2-7 under phase 1, phase 2 opening again at row 8) gave the
+second opening of a group the same Treeview iid, the insert raised and every stacked screen stopped at the
+rows painted before it. A group that opens again takes the iid `pdp:2#2` (`#3` for a third opening); the
+Safety Plan table, the matrix and its frozen pane paint the whole plan.
+
 ## What is in 0.15.0
 
 **The exported points are the weight the schedule used, and every work product picks its Jira ticket**
@@ -240,6 +304,13 @@ be typed; a cleared box clears the key; the picked ticket's status shows beside 
 **Load tickets** button that runs the live screen's own fetch (worker thread, one sign-in on a rejected
 session, the Result shared with the live screen). `plan tickets` lists every work product with its key and
 the ones still without one. No schema change.
+
+## What is in 0.14.1
+
+The owner, 2026-10-29: "the report was portrait; we should strive to make the Word product as close as
+possible to the original." The export no longer turns the whole document landscape: the standard's source
+carries its own page turns (asi_gutenberg 0.6.0 `section` blocks before and after the plan table), so the
+PDF and the Word file are portrait with the table on landscape pages, as the QF-17 original is.
 
 ## What is in 0.14.0
 
@@ -1720,19 +1791,32 @@ src/asi_kletz/
   prefs.py            prefs.json: the per-person, per-machine preferences (the latched theme)
   locks.py            the family lock: SlotLock, PrimaryGuard, PrimaryToolBusy (one primary tool at a time)
   schema/             FieldSpec, EntitySchema, lookups, registry, definitions (the Safety Plan)
+                      (definitions: the nineteen entities; people, urls and lists: the typed lists of 0.19.0, 0.20.0 and 0.24.0)
   models/             ModelFactory (dataclasses from schemas)
   storage/            Storage interface, SQLite backend, migrations, audit log, StorageFactory
   repositories/       SqlRepository, RepositoryFactory
   services/           EntityService (validated CRUD), TransferService (dump/load/export/import), JiraService (read only),
-                      HolidayService, SprintService, PlanScheduleService, TrackerService, StandardsService
-  commands/           Result, Command, CommandFactory, Dispatcher, built-in verbs
+                      HolidayService, SprintService, PlanScheduleService, TrackerService, StandardsService,
+                      OutlookService (the Look up, 0.20.0), WorkProductService (the URLs, 0.20.0 and 0.22.0),
+                      ConfluenceService (read only, 0.23.0), ControlStructureService and StpaService (the rules, 0.24.0)
+  commands/           Result, Command, CommandFactory, Dispatcher, built-in verbs (crud, plan, sprint, tracker, holiday,
+                      standards, people, jira, confluence, cs, stpa, generate, transfer, theme, gui, session)
   io/                 JSON and Excel exporters and importers behind factories
-  generate/           DiagramFactory, DocumentFactory, Spec, Param, the catalogs, plan_queries, figures
+  generate/           DiagramFactory, DocumentFactory, Spec, Param, the catalogs, plan_queries, sprint_queries, plan_schedule,
+                      charts, figures
+  stpa/               the control-structure and STPA factories (factory, stpa_factory), the draw.io reader and the
+                      Confluence page reader (0.24.0)
   tracker/            the Weekly Activity Tracker's grammar (format: parse and render) and business-day arithmetic (business_days)
   automation/         CLI (with forwarding), EventBus, script runner, the local server (server.py), the session file (session.py)
-  gui/                tkinter: MainWindow (owns the server), ScreenFactory, WidgetFactory, themes, the family palette, the screens, the comments window
-tests/                pytest suite (schema, core, transfer, CLI, generate, theme, jira, locks, GUI, server, session,
-                      business days, holiday, schedule, sprint, standards, tracker)
+  gui/                tkinter: MainWindow (owns the server), ScreenFactory, WidgetFactory, themes, the family palette;
+                      the eleven screens (dashboard, jira_live_screen, entity_screen for the Safety Plan, Holidays and
+                      Parameters, matrix_screen, sprint_board_screen, tracker_screen, control_structure_screen, stpa_screen,
+                      transfer_screen); the comments window, the Look up (people_lookup) and Find page (page_lookup)
+                      windows, the ticket loader; background (BackgroundFetch, the worker thread) and trace (gui.log)
+tests/                pytest suite, one module per concern: schema, core, transfer, CLI, generate, theme, jira, locks, GUI,
+                      server, session, business days, holiday, schedule, sprint, standards (and the template), tracker,
+                      trace, people, outlook, work products, URL kinds, confluence (verb and window), links and lookup,
+                      control structures (model and screen), STPA
 ```
 
 ## Tests
