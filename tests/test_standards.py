@@ -138,8 +138,9 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
         "row_1_points": "5", "row_1_sprint_end": "2026-11-09", "row_1_jira_key": "HWL-2554",
         "row_1_status": "In Progress",
         "row_2_points": "3", "row_2_sprint_end": "2026-11-09",  # row 2: the panel's default, the weight used
+        "row_2_jira_key": "no ticket attached", "row_2_status": "",  # 0.25.1: readable, never a placeholder
     }
-    assert std["filled"] == 8 and std["unfilled"] == ["row_2_jira_key", "row_2_status"]
+    assert std["filled"] == 10 and std["unfilled"] == []
     assert preview.data["statuses"] == {"HWL-2554": "In Progress"} and stub.calls == ["HWL-2554"] and stub.closed
     assert any("row(s) 2, 3 have no Jira key" in w for w in preview.warnings)
 
@@ -147,8 +148,8 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
     result = seeded.execute("plan", action="export", row=1, out=str(out), actor="me")
     assert result.ok, result.errors
     [built] = result.data["exports"]
-    assert built["standard"] == "qf-17-test" and built["filled"] == 8
-    assert built["unfilled"] == ["row_2_jira_key", "row_2_status"]
+    assert built["standard"] == "qf-17-test" and built["filled"] == 10
+    assert built["unfilled"] == []
     assert set(built["files"]) == {"md", "pdf", "docx"} and all(Path(p).is_file() for p in built["files"].values())
     assert Path(built["primary"]).name == "qf-17-test.pdf" and built["pages"]
     text = Path(built["files"]["md"]).read_text(encoding="utf-8")
@@ -156,8 +157,9 @@ def test_export_fills_the_document_and_the_row_values(seeded, standards, tmp_pat
                  "==HWL-2554==<br>",
                  "==3== points"):
         assert mark in text, mark
-    assert "{{ row_2_points }}" not in text and "{{ row_2_status }}" in text  # the default is the weight used
-    assert any("unfilled parameter row_2_status" in w for w in result.warnings)
+    assert "{{ row_2_points }}" not in text and "{{ row_2_status }}" not in text  # the default is the weight used
+    assert "==no ticket attached==<br>" in text  # row 2 has no ticket: the cell says so (0.25.1)
+    assert any("have no Jira key" in w for w in result.warnings)
     entry = seeded.storage.audit_tail(1)[0]
     assert entry["action"] == "export" and entry["actor"] == "me" and entry["payload"]["standards"] == ["qf-17-test"]
     assert seeded.events.last(1)[0]["topic"] == "plan.exported"
@@ -181,8 +183,9 @@ def test_export_offline_leaves_the_status_unfilled_with_one_warning(seeded, stan
     assert sum("Jira statuses skipped" in w for w in result.warnings) == 1
     assert any("no Atlassian session" in w and "HWL-2554" in w for w in result.warnings)
     [built] = result.data["exports"]
-    assert "row_1_status" in built["unfilled"] and "{{ row_1_status }}" in Path(built["files"]["md"]).read_text(
-        encoding="utf-8")
+    text = Path(built["files"]["md"]).read_text(encoding="utf-8")
+    assert "row_1_status" not in built["unfilled"] and "{{ row_1_status }}" not in text
+    assert "==status not fetched (sign in to Jira)==" in text  # 0.25.1: the cell says why, never a placeholder
 
 
 def test_export_default_out_is_the_config_out(seeded, standards):

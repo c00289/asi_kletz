@@ -2036,7 +2036,7 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
     status = window.status_text()
     assert status.startswith("Exported qf-17-test.md, qf-17-test.pdf, qf-17-test.docx to ")
     # row 2 has no key, no points and no default (nothing loaded them): its key, points and status stay unfilled
-    assert status.endswith("; 3 parameter(s) still unfilled") and seeded.out_dir in status
+    assert status.endswith("; 1 parameter(s) still unfilled") and seeded.out_dir in status
     assert (Path(seeded.out_dir) / "qf-17-test.pdf").is_file()
     text = (Path(seeded.out_dir) / "qf-17-test.md").read_text(encoding="utf-8")
     assert "==Dozer==" in text and "==5== points" in text and "==In Progress==" in text

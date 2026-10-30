@@ -12,6 +12,19 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.25.1] - 2026-10-29
+
+The owner, 2026-10-29: "when exporting the safety plan I noticed that the Jira status was gobbledygook, probably
+because the connector wasn't plugged into Jira." It was the placeholder `{{ row_N_status }}` left in the cell
+when the status read failed for want of an Atlassian session. Schema version unchanged (11).
+
+### Changed
+- **The row parameters always read as prose** (`services/standards_service.py:row_values`): a row without a
+  ticket fills `row_N_jira_key` with `no ticket attached` (the Excel export's words) and `row_N_status` with
+  nothing; a row whose status could not be read fills `row_N_status` with `status not fetched (sign in to
+  Jira)`; neither is reported as unfilled any more. The warnings naming the rows without a key and the
+  skipped statuses stay. Sign in once (`asi-hopper auth login`, or Load tickets) and export again.
+
 ## [0.25.0] - 2026-10-29
 
 The owner, 2026-10-29, late: "tool is open right now and frozen, please triage." The export was running on the
@@ -2086,7 +2099,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.25.1...HEAD
+[0.25.1]: https://github.com/c00289/asi_kletz/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/c00289/asi_kletz/compare/v0.24.3...v0.25.0
 [0.24.3]: https://github.com/c00289/asi_kletz/compare/v0.24.2...v0.24.3
 [0.24.2]: https://github.com/c00289/asi_kletz/compare/v0.24.1...v0.24.2

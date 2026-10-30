@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any
 from ..errors import CommandError, NotFound, ValidationError
 from ..generate import plan_queries as pq
 from ..generate.plan_schedule import SOURCE_FLOOR, weight_of
-from ..schema.definitions import ROLE_SLUGS
+from ..schema.definitions import NO_TICKET, ROLE_SLUGS
 from ..schema.people import PeopleError, is_role, parse_people, people_json, people_of, render_people
 from ..schema.urls import urls_of
 
@@ -43,6 +43,7 @@ PARAMETER = "parameter"
 ROW_PARAM = re.compile(r"^row_(\d+)_(points|sprint_end|jira_key|status|url|urls)$")
 PARAM_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 UNFILLED = "unfilled parameter: "
+STATUS_NOT_FETCHED = "status not fetched (sign in to Jira)"  # 0.25.1: what the Status cell says offline
 ABRIDGED_HEADERS = "abridged-headers.json"  # beside the source: verbatim column heading -> short form (0.21.0)
 ABRIDGE_NEEDS_WORD = "abridged headers"  # how asi_gutenberg's issue starts when Word could not run the pass
 NO_STANDARD = "No standard for this deliverable: its QMS references name none in {root}"
@@ -289,7 +290,9 @@ class StandardsService:
         (the owner's revision of 2026-10-29): the chosen ``points`` when set, else the row's
         ``default_points``; only a row with neither (the scheduler fell back to the floor) stays unfilled,
         with one warning naming the rows. So the points and the sprint end printed under them agree. The
-        status is the Jira status of the row's key; absent when unknown. The key is the row's ``jira_key``
+        status is the Jira status of the row's key, ``status not fetched (sign in to Jira)`` when the read
+        failed (0.25.1); a row without a ticket prints ``no ticket attached`` as its key and an empty status,
+        never a placeholder. The key is the row's ``jira_key``
         upper-cased, the part before a colon when one was typed (the owner, 2026-10-29: "the prefix before
         the colon of the assigned Jira ticket name", stacked over the status in the Status column). The url is
         the row's first work product URL (0.20.0, the owner: "on multiple urls just go to first"), the urls
@@ -311,8 +314,10 @@ class StandardsService:
             key = (row.get("jira_key") or "").strip().upper()
             if key:
                 values[f"row_{order}_jira_key"] = key.split(":", 1)[0].strip()
-            if key and statuses.get(key):
-                values[f"row_{order}_status"] = str(statuses[key])
+                values[f"row_{order}_status"] = str(statuses[key]) if statuses.get(key) else STATUS_NOT_FETCHED
+            else:  # 0.25.1: a readable cell, never a placeholder, where there is no ticket or no session
+                values[f"row_{order}_jira_key"] = NO_TICKET
+                values[f"row_{order}_status"] = ""
             urls = urls_of(row.get("urls"))
             if urls:
                 values[f"row_{order}_url"] = urls[0]

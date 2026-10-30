@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.25.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.25.1**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,14 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.25.1
+
+The owner, 2026-10-29: "when exporting the safety plan the Jira status was gobbledygook". With no Atlassian
+session the status read could not run and the fill left the placeholder text in the Status cell. The row
+parameters now always read as prose: a row without a ticket prints `no ticket attached` as its key and an
+empty status; a row whose status could not be read prints `status not fetched (sign in to Jira)`. Sign in
+once (`asi-hopper auth login`, or Load tickets in the window) and export again for the live statuses.
 
 ## What is in 0.25.0
 

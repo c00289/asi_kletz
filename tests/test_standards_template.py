@@ -85,7 +85,7 @@ def test_export_fills_the_word_original_when_the_standard_has_one(seeded, standa
     assert [p.text for p in table.cell(1, 2).paragraphs] == ["HWL-2554", "In Progress"]  # the key over the status
     assert [p.text for p in table.cell(2, 1).paragraphs] == ["3 points", "2026-11-09"]
     unfilled_cell = [p.text for p in table.cell(2, 2).paragraphs]
-    assert unfilled_cell == ["{{ row_2_jira_key }}", "{{ row_2_status }}"]  # unfilled stays
+    assert unfilled_cell == ["no ticket attached", ""]  # no ticket: the cell says so, never a placeholder (0.25.1)
     assert word.sections[0].footer.paragraphs[0].text == "Proprietary & Confidential"
     assert "==" not in word.paragraphs[0].text  # a mark is shading on the run, never text in the Word file
     green = GREEN
