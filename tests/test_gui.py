@@ -2021,9 +2021,18 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
     screen.select(2)
     screen.select(1)  # reselecting prefills the entries from the table
     assert screen.param_vars["vehicle_type"].get() == "Dozer"
-    # Export, non-interactive: into the config's out folder; the status line names the files and the unfilled
+    # Export, non-interactive: into the config's out folder, off the Tk thread (0.25.0): the button greys and
+    # the bar says Exporting until the Result lands; the status line then names the files and the unfilled
     assert not window.interactive
-    screen.export_document()
+    fetch = screen.export_document()
+    assert fetch is not None and screen.export_fetch is fetch
+    assert str(screen.export_button.cget("state")) == "disabled"
+    assert window.status_text().startswith("Exporting Safety Plan to ")
+    assert screen.export_document() is None  # a second press while one runs
+    assert window.status_text().startswith("An export is already running")
+    _pump_until(window, lambda: screen.export_fetch is None)
+    assert screen.last_export is fetch.result and fetch.result.ok
+    assert str(screen.export_button.cget("state")) == "normal"
     status = window.status_text()
     assert status.startswith("Exported qf-17-test.md, qf-17-test.pdf, qf-17-test.docx to ")
     # row 2 has no key, no points and no default (nothing loaded them): its key, points and status stay unfilled
@@ -2044,6 +2053,43 @@ def test_safety_plan_pane_exports_the_rows_standard(window, seeded, tmp_path, mo
 
 
 # -- the mouse wheel over a combobox (0.15.2) -----------------------------------------------------------------
+
+
+def test_a_failed_export_is_reported_and_frees_the_button(window, seeded, tmp_path, monkeypatch):
+    """The worker's failure comes back through ``report`` on the Tk thread: a status-bar error here (not
+    interactive), the button usable again, the row's values untouched."""
+    from tests.test_standards import SOURCE
+
+    root = tmp_path / "standards"
+    (root / "qf-17-test").mkdir(parents=True)
+    (root / "qf-17-test" / "qf-17-test.md").write_text(SOURCE, encoding="utf-8")
+    monkeypatch.setenv("ASI_KLETZ_STANDARDS", str(root))
+    screen = window.show("safety_plan")
+    screen.select(1)
+    assert str(screen.export_button.cget("state")) == "normal"
+
+    def boom(self, row_id, out_dir=None, standard=None, actor="python"):
+        raise RuntimeError("Word went away")
+
+    monkeypatch.setattr(type(seeded.standards), "export", boom)
+    fetch = screen.export_document()
+    assert fetch is not None and str(screen.export_button.cget("state")) == "disabled"
+    _pump_until(window, lambda: screen.export_fetch is None)
+    assert not fetch.result.ok and "Word went away" in "; ".join(fetch.result.errors)
+    assert window.status_text().startswith("Error: ") and "Word went away" in window.status_text()
+    assert str(screen.export_button.cget("state")) == "normal" and screen.last_export is fetch.result
+
+
+def _pump_until(window, condition, limit: float = 30.0) -> None:
+    """Run the Tk loop until ``condition()`` holds: what a person's idle window does while a worker runs."""
+    import time
+
+    deadline = time.monotonic() + limit
+    while not condition():
+        window.update()
+        if time.monotonic() > deadline:
+            raise AssertionError("the worker did not finish in time")
+        time.sleep(0.02)
 
 
 def test_mouse_wheel_over_a_combobox_never_picks_a_value(window, seeded):

@@ -7,7 +7,8 @@ at the foot of the navigation column is the same: it runs the ``theme`` verb, an
 repaints when the bus reports ``theme.changed``, whoever raised it. Three topics never refresh a
 screen: ``theme.changed`` repaints instead, ``jira.live`` changes no database row (the JIRA
 Live Data screen paints its own Result, which lives on the window as ``jira_live``) and neither does
-``cs.exported`` (files written, 0.24.0). Those two are also the topics published from a worker
+``cs.exported`` (files written, 0.24.0) nor ``plan.exported`` (0.25.0). Those are also the topics published
+from a worker
 thread (the Jira fetches and ``cs export`` run off the Tk thread through ``execute_quiet``,
 ``gui/background.py``), so their branch in ``_on_event`` must return without touching a widget.
 
@@ -470,12 +471,13 @@ class MainWindow(tk.Tk):
             if ThemeFactory.known(key) and ThemeFactory.canonical(key) != self.theme.key:
                 self.set_theme(key)
             return
-        if topic in ("jira.live", "cs.exported"):
+        if topic in ("jira.live", "cs.exported", "plan.exported"):
             # No database row changed: the live screen paints its own Result, an export wrote files. These
-            # handlers run on the worker thread that ran `jira live` or `cs export` (0.24.0), so they must
-            # return before any Tk call: the `after` below would be a cross-thread Tk call. No other verb
-            # runs off the Tk thread (`jira comments`, `confluence search`, `people lookup` and `stpa
-            # refresh` without --apply publish nothing), so no other topic reaches here from a worker.
+            # handlers run on the worker thread that ran `jira live`, `cs export` (0.24.0) or `plan export`
+            # (0.25.0), so they must return before any Tk call: the `after` below would be a cross-thread
+            # Tk call. No other verb runs off the Tk thread (`jira comments`, `confluence search`, `people
+            # lookup` and `stpa refresh` without --apply publish nothing), so no other topic reaches here
+            # from a worker.
             return
         if self._refresh_job is not None:
             return

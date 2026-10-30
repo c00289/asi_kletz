@@ -12,6 +12,22 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.25.0] - 2026-10-29
+
+The owner, 2026-10-29, late: "tool is open right now and frozen, please triage." The export was running on the
+Tk thread; with the Word print and the header split it takes a minute. Schema version unchanged (11).
+
+### Changed
+- **Export document… runs off the Tk thread** (`gui/entity_screen.py:export_document`, `gui/background.py`):
+  a `BackgroundFetch` of `plan export`, the button greyed and the status bar saying `Exporting … (Word prints
+  the PDF; this takes a minute)` meanwhile, a second press refused, the Result reported on the Tk thread
+  (`MainWindow.report`) when the worker finishes, the status line then naming the files, what was exact and
+  the unfilled count as before; `export_fetch` and `last_export` on the screen for the tests and the
+  automation. The non-interactive path is the same: `export_document()` returns the fetch.
+
+### Tests
+- The pane's export test pumps the Tk loop until the worker lands; `test_a_failed_export_is_reported_and_frees_the_button`.
+
 ## [0.24.3] - 2026-10-29
 
 The house rule: no real person's name enters a public repository. The owner's decision of 2026-10-29,
@@ -2070,7 +2086,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.24.3...HEAD
+[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/c00289/asi_kletz/compare/v0.24.3...v0.25.0
 [0.24.3]: https://github.com/c00289/asi_kletz/compare/v0.24.2...v0.24.3
 [0.24.2]: https://github.com/c00289/asi_kletz/compare/v0.24.1...v0.24.2
 [0.24.1]: https://github.com/c00289/asi_kletz/compare/v0.24.0...v0.24.1

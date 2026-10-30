@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.24.3**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.25.0**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,17 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.25.0
+
+The owner, 2026-10-29, late in the evening: the window "frozen" after Export document…. It was not: the
+export ran on the window's own thread, and with Word printing the PDF and splitting the plan table's
+header it takes a minute, during which nothing repaints. The export now runs on a worker thread like the
+Jira fetches and the control-structure export (`gui/entity_screen.py:export_document`, `BackgroundFetch`):
+the button greys, the status bar says `Exporting <deliverable> to <folder>… (Word prints the PDF; this
+takes a minute)`, a second press is refused, and the Result is reported on the Tk thread when it lands,
+the status line naming the files and the unfilled parameters as before. An agent reads the same Result
+through `plan export`.
 
 ## What is in 0.24.3
 

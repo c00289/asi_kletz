@@ -12,6 +12,7 @@ from ..generate.plan_schedule import SOURCE_DEFAULT, SOURCE_POINTS, weight_of
 from ..schema import EntitySchema, FieldSpec, FieldType
 from ..schema.people import is_role, people_lines, people_of, people_text
 from ..schema.urls import urls_text
+from .background import POLL_MS, BackgroundFetch
 from .screens import (
     INDENT,
     PDP_TAG,
@@ -96,6 +97,8 @@ class EntityScreen(Screen):
         self.param_initial: dict[str, str] = {}  # what each role's box showed when built: unchanged is not saved
         self.jira_statuses: dict[str, str | None] = {}  # the statuses the last export of this session fetched
         self.ticket_loader: Any = None  # the Load tickets fetch in flight, made on the first press (0.15.0)
+        self.export_fetch: BackgroundFetch | None = None  # the plan export in flight, off the Tk thread (0.25.0)
+        self.last_export: Any = None  # its Result, for the tests and the automation
         self.lookup_buttons: dict[str, ttk.Button] = {}  # the pane's Look up button per role (0.20.0)
         self.lookup_window: PeopleLookup | None = None  # the Outlook search window, one at a time (0.20.0)
         self.page_window: PageLookup | None = None  # the Confluence Find page window, one at a time (0.23.0)
@@ -488,31 +491,60 @@ class EntityScreen(Screen):
             self._refresh_standards(self.by_id.get(self.selected_id))  # the captions and the sorted lines
         self.window.set_status(f"Saved {saved} parameter(s)" if saved else "Parameters unchanged")
 
-    def export_document(self) -> None:
-        """The owner's first item: a folder, then ``plan export`` for the selected row into it."""
+    def export_document(self) -> BackgroundFetch | None:
+        """The owner's first item: a folder, then ``plan export`` for the selected row into it.
+
+        The export runs on a worker thread (0.25.0; the owner, 2026-10-29: the window "frozen" for the
+        minute the Word print and the header split take): the button greys, the status bar says
+        ``Exporting …``, and the Result is reported on the Tk thread when it lands, as the Jira screens and
+        the control-structure export do. A second press while one runs is refused.
+        """
         if self.selected_id is None or not self.standards:
             self.window.set_status("Select a deliverable with a standard to export")
-            return
+            return None
+        if self.export_fetch is not None:
+            self.window.set_status("An export is already running; the status bar says when it is done")
+            return None
         if self.window.interactive:
             folder = filedialog.askdirectory(
                 parent=self.window, initialdir=self.brain.out_dir, title="Folder for the exported document",
             )
             if not folder:
                 self.window.set_status("Export cancelled")
-                return
+                return None
         else:
             folder = self.brain.out_dir
-        result = self.window.run("plan", action="export", row=self.selected_id, out=folder)
-        if not result.ok:
-            return
-        self.jira_statuses.update(result.data.get("statuses") or {})
-        files = [Path(p).name for e in result.data["exports"] for p in e["files"].values()]
-        unfilled = sum(len(e["unfilled"]) for e in result.data["exports"])
-        exact = [fmt for e in result.data["exports"] for fmt, yes in (e.get("exact") or {}).items() if yes]
-        how = f" ({' and '.join(sorted(set(exact)))} the template exactly)" if exact else ""
-        self.window.set_status(f"Exported {', '.join(files)} to {folder}{how}; {unfilled} parameter(s) still unfilled")
-        row = self.by_id.get(self.selected_id)
-        self.row_values_var.set(self._row_values_text(row))
+        row_id = self.selected_id
+        name = str((self.by_id.get(row_id) or {}).get("deliverable") or f"row {row_id}")
+        fetch = BackgroundFetch(self.window, "plan", action="export", row=row_id, out=folder).start()
+        self.export_fetch = fetch
+        self.export_button.configure(state="disabled")
+        self.window.set_status(f"Exporting {name} to {folder}… (Word prints the PDF; this takes a minute)")
+
+        def poll() -> None:
+            if not fetch.done:
+                self.after(POLL_MS, poll)
+                return
+            self.export_fetch = None
+            result = fetch.result
+            self.last_export = result
+            if self.standards:
+                self.export_button.configure(state="normal")
+            self.window.report(result, "plan export")
+            if not result.ok:
+                return
+            self.jira_statuses.update(result.data.get("statuses") or {})
+            files = [Path(p).name for e in result.data["exports"] for p in e["files"].values()]
+            unfilled = sum(len(e["unfilled"]) for e in result.data["exports"])
+            exact = [fmt for e in result.data["exports"] for fmt, yes in (e.get("exact") or {}).items() if yes]
+            how = f" ({' and '.join(sorted(set(exact)))} the template exactly)" if exact else ""
+            self.window.set_status(
+                f"Exported {', '.join(files)} to {folder}{how}; {unfilled} parameter(s) still unfilled"
+            )
+            self.row_values_var.set(self._row_values_text(self.by_id.get(self.selected_id)))
+
+        self.after(POLL_MS, poll)
+        return fetch
 
     # -- data -----------------------------------------------------------
     def refresh(self) -> None:
