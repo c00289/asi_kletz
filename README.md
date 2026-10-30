@@ -3,7 +3,7 @@
 One of the [ASI FuSa tools](https://github.com/c00289/c00289/blob/main/README.md) by Roy Mendoza; the master README there lists every sibling.
 
 A functional-safety (FuSa) safety-plan tool for the Wheel Loader programme, with a command
-line and a tkinter desktop window on top. Version **0.26.0**, alpha. Named after Trevor Kletz,
+line and a tkinter desktop window on top. Version **0.26.1**, alpha. Named after Trevor Kletz,
 who taught industry to ask of every line of a plan what could go wrong.
 
 The idea, in one sentence: a database is the single source of truth, the Excel workbook is a
@@ -27,6 +27,13 @@ tell when it moved (see [Confluence (read only)](#confluence-read-only)). Since 
 next to the safety plan: the control structures (see [Control structures](#control-structures)) and the STPA
 step objects read from a Confluence page (see [STPA analyses](#stpa-analyses)), moved here from the sister
 tool by the owner's decision of 2026-10-29.
+
+## What is in 0.26.1
+
+The lock follows the sibling, no code change: `uv.lock` takes asi_escher 0.4.0, the release that draws gantt
+charts. Two work products in the owner's Brain read this plan through the asi-kletz command line and the
+scheduler (`plan_schedule.schedule`) and draw it with that version: the lifecycle phases as a chain dated by
+their sprints, and every deliverable as a bar under the sprint chain.
 
 ## What is in 0.26.0
 

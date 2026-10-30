@@ -1,6 +1,6 @@
 # ASI Kletz — Plan
 
-**Status:** 0.24.3 delivered
+**Status:** 0.26.1 delivered
 **Started:** 2026-10-27
 **Owner:** FuSa engineer
 
@@ -193,12 +193,17 @@ implementation produced by a factory.
 | 0.24.1 | The end-of-day sweep: two uncalled functions gone, `lists.typed_items` shared by the people and URL readers, the documents put straight | done 2026-10-29 |
 | 0.24.2 | The lock follows the siblings: asi_escher 0.2.2 and asi_gutenberg 0.9.1 (the family sweep's pass two); no code change | done 2026-10-29 |
 | 0.24.3 | The people in the fixtures, the tests and the examples are invented (the house rule: no real person in a public repository; the owner's decision of 2026-10-29); no code change | done 2026-10-29 |
+| 0.25.0 | Export document… runs on a worker thread (`BackgroundFetch`); the window no longer freezes for the Word print; a second press refused; the Result reported on the Tk thread | done 2026-10-29 |
+| 0.25.1 | The row parameters always read as prose: `no ticket attached`, `status not fetched (sign in to Jira)`; no placeholder left in an exported cell | done 2026-10-29 |
+| 0.26.0 | The gaps in pinkish red: `row_values` names them (`warn`, `warn_urls`), `plan parameters` lists them, the filled Word original and the PDF shade them `#F4C2C2`, a placeholder link dark red; asi_gutenberg 0.10.0 | done 2026-10-29 |
+| 0.26.1 | The lock follows the sibling: asi_escher 0.4.0 (the gantt kind, drawn by the Brain's sprint-dated work products); no code change | done 2026-10-30 |
 | later | Approval mode, form puppeting, import diff preview, date picker | planned |
 
 ---
 
 ## 9. Change log
 
+- 2026-10-30 0.26.1: the status line (0.24.3 to 0.26.1) and the section 8 rows for 0.25.0 to 0.26.1, which the day's releases had not added.
 - 2026-10-29 0.24.1: the status line (0.15.3 to 0.24.1) and the section 8 rows for 0.15.1 to 0.24.1, which the day's releases had not added.
 - 2026-10-29 0.24.2: the status line and the section 8 row for 0.24.2, the lock on the siblings.
 - 2026-10-29 0.24.3: the status line and the section 8 row for 0.24.3, the invented people.

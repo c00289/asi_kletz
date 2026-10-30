@@ -12,6 +12,18 @@ All notable changes to ASI Kletz are recorded here. The format follows
   long polling on `/events`.
 - Excel import diff preview; date picker widget.
 
+## [0.26.1] - 2026-10-30
+
+The lock follows the sibling, no code change: `uv.lock` takes asi_escher 0.4.0, the version that draws gantt
+charts (the `gantt` kind: tasks as bars on a day scale under named periods, a today line, dependencies as
+elbows), released 2026-10-30 for the two sprint-dated work products in the owner's Brain that read this plan
+through the asi-kletz command line and `plan_schedule.schedule`. Schema version unchanged (11).
+
+### Changed
+- `uv.lock`: asi-escher 0.4.0.
+- README: *What is in 0.26.1*. `docs/plan.md`: the status line and the section 8 rows for 0.25.0 to 0.26.1,
+  which the day's releases had not added.
+
 ## [0.26.0] - 2026-10-29
 
 The owner, 2026-10-29, on the exported QF-17 Safety Plan: "when the link is microsoft.com because of default,
@@ -2133,7 +2145,8 @@ variables, configuration file, database, and workbook.
   Jira tickets, QMS documents, people), their lookups, their sheets, and their screens.
 - The one-screen-per-entity navigation and the Jira and task panels of the dashboard.
 
-[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/c00289/asi_kletz/compare/v0.26.1...HEAD
+[0.26.1]: https://github.com/c00289/asi_kletz/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/c00289/asi_kletz/compare/v0.25.1...v0.26.0
 [0.25.1]: https://github.com/c00289/asi_kletz/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/c00289/asi_kletz/compare/v0.24.3...v0.25.0
